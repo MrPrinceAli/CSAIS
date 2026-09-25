@@ -193,3 +193,21 @@ def test_extract_target_organization_ignores_month_names():
 def test_extract_target_organization_does_not_cross_line_breaks():
     text = "Latest News\nAcme Corp was hacked last week."
     assert v03.extract_target_organization("", "", text) == "Acme Corp"
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "North Korean hacking group exploits PowerShell trick",
+        "North Korea-linked threat actors hijack devices",
+        "Russian-aligned threat group abuses Signal",
+        "The China-nexus threat actor deployed a web shell",
+    ],
+)
+def test_extract_threat_actor_rejects_nationality_descriptions(sentence):
+    assert v03.extract_threat_actor(sentence) == "UNKNOWN"
+
+
+def test_clean_name_drops_trailing_article():
+    assert v03._clean_name("Scattered Spider The") == "Scattered Spider"
+    assert v03._clean_name("The A") is None

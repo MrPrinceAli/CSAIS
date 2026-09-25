@@ -191,6 +191,8 @@ _GENERIC_NAME_WORDS = _REJECT_FIRST_WORDS | {
     "indian", "indonesian", "russian", "chinese", "iranian", "korean", "japanese",
     "german", "french", "dutch", "canadian", "african", "asian", "global", "local",
     "national", "international", "major", "windows", "linux", "android",
+    # Arah mata angin: "North Korean", "South Asian" bukan nama organisasi
+    "north", "south", "east", "west", "northern", "southern", "eastern", "western",
 }
 
 # Spasi di dalam nama: bukan baris baru, agar judul seksi di isi artikel
@@ -252,7 +254,9 @@ _ACTOR_PATTERNS = [
 
 
 _ADJECTIVE_COMPOUND = re.compile(
-    r"-(?:powered|based|linked|backed|sponsored|affiliated|related|driven)\b", re.I
+    r"-(?:powered|based|linked|backed|sponsored|affiliated|related|driven|aligned|"
+    r"nexus|speaking|born|led|owned|made)\b",
+    re.I,
 )
 
 
@@ -262,11 +266,16 @@ def _clean_name(name):
     words = name.split()
     while words and words[0].lower() in _ARTICLES:
         words.pop(0)
+    # Kata sandang di akhir berasal dari kalimat berikutnya ("for Sale A threat actor")
+    while words and words[-1].lower() in _ARTICLES:
+        words.pop()
     if not words or words[0].lower() in _REJECT_FIRST_WORDS:
         return None
     if all(word.lower() in _GENERIC_NAME_WORDS for word in words):
         return None
-    if _ADJECTIVE_COMPOUND.search(words[0]):  # "AI-powered", "China-based"
+    # "AI-powered", "China-based", "North Korea-linked", "Russian-aligned": kata
+    # sifat majemuk di mana pun posisinya berarti ini keterangan, bukan nama
+    if any(_ADJECTIVE_COMPOUND.search(word) for word in words):
         return None
     return " ".join(words)
 
