@@ -9,10 +9,18 @@ tabel ``v03_information_extraction`` beserta skor kepercayaan ekstraksi.
 
 import os
 import re
+from datetime import datetime
 
 from csais.config import DATABASE_FILE
 from csais.db import get_connection, get_timestamp
-from csais.text import normalize_text
+from csais.text import (
+    contains_keyword,
+    drop_overlapping_keywords,
+    find_keywords,
+    normalize_text,
+    remove_publisher,
+    split_publisher,
+)
 
 
 # --- Konfigurasi ---
@@ -24,8 +32,8 @@ ATTACK_TYPE_KEYWORDS = {
     # MALWARE
     "RANSOMWARE": ["ransomware", "ransom attack", "ransomware attack"],
     "MALWARE": [
-        "malware", "trojan", "worm", "spyware", "rootkit", "backdoor", "botnet",
-        "infostealer", "information stealer", "keylogger",
+        "malware", "trojan", "trojanized", "trojanised", "worm", "spyware", "rootkit",
+        "backdoor", "botnet", "infostealer", "information stealer", "keylogger",
     ],
     # CREDENTIAL / IDENTITY
     "ACCOUNT_TAKEOVER": ["account takeover", "account hijacking", "stolen account"],
@@ -58,7 +66,8 @@ ATTACK_TYPE_KEYWORDS = {
     ],
     "VULNERABILITY_EXPLOITATION": [
         "zero-day exploit", "zero day exploit", "actively exploited",
-        "vulnerability exploited", "exploitation",
+        "vulnerability exploited", "exploited in the wild", "vulnerability exploitation",
+        "exploit chain",
     ],
     # NETWORK
     "DDoS": [
@@ -251,12 +260,11 @@ COUNTRY_NAMES = {
 
 # --- Ekstraksi berbasis kata kunci ---
 def find_keyword_matches(text, keyword_dictionary):
-    """Kumpulkan kategori yang salah satu kata kuncinya muncul di dalam teks."""
+    """Kategori yang salah satu kata kuncinya muncul sebagai kata utuh di teks."""
     matches = []
     for category, keywords in keyword_dictionary.items():
         for keyword in keywords:
-            keyword_normalized = keyword.lower()
-            if keyword_normalized in text:
+            if contains_keyword(text, keyword):
                 matches.append(category)
                 break
     return matches
@@ -307,8 +315,7 @@ def extract_location(text):
     locations = []
     for country, keywords in COUNTRY_NAMES.items():
         for keyword in keywords:
-            keyword_normalized = keyword.lower()
-            if keyword_normalized in text:
+            if contains_keyword(text, keyword):
                 locations.append(country)
                 break
     if not locations:
@@ -316,63 +323,204 @@ def extract_location(text):
     return ", ".join(locations)
 
 
+# --- Pelaku ancaman yang sudah dikenal ---
+# Nama grup yang cukup khas untuk dicari langsung di teks. Nama umum seperti
+# "Play", "Royal", atau "Hive" hanya dicari bersama kata "ransomware".
+KNOWN_THREAT_ACTORS = [
+    "APT28", "Fancy Bear", "APT29", "Cozy Bear", "Midnight Blizzard", "APT41",
+    "Lazarus", "Lazarus Group", "Kimsuky", "Sandworm", "Volt Typhoon", "Salt Typhoon",
+    "MuddyWater", "Charming Kitten", "Scattered Spider", "LockBit", "Cl0p", "Clop",
+    "BlackCat", "ALPHV", "Black Basta", "RansomHub", "Qilin", "Rhysida", "BianLian",
+    "Hunters International", "8Base", "Conti", "REvil", "DarkSide", "INC Ransom",
+    "FunkSec", "KillNet", "NoName057(16)", "Anonymous Sudan", "Bjorka", "Brain Cipher",
+    "Akira ransomware", "Medusa ransomware", "Play ransomware", "Royal ransomware",
+    "Hive ransomware", "Cactus ransomware", "Interlock ransomware",
+]
+
+# Kata sandang di awal nama dibuang.
+_ARTICLES = {"a", "an", "the"}
+
+# Bila kata PERTAMA hasil tangkapan regex termasuk di sini, tangkapan itu bukan
+# nama (kata kerja judul berita, kata penunjuk, kata benda serangan, dll.).
+_REJECT_FIRST_WORDS = {
+    "this", "that", "these", "those", "it", "its", "their", "our", "his", "her",
+    "several", "many", "some", "two", "three", "four", "five", "new", "another",
+    "latest", "second", "third", "exclusive", "update", "breaking", "cyber",
+    "cyberattack", "cyberattacks", "ransomware", "hackers", "hacker", "attack",
+    "attacks", "attackers", "data", "breach", "after", "following", "amid", "why",
+    "how", "what", "when", "who", "notorious", "infamous", "prolific", "suspected",
+    "alleged", "takes", "take", "claims", "claim", "targets", "target", "exploits",
+    "exploit", "exploited", "hits", "hit", "uses", "use", "abuses", "abuse", "deploys",
+    "deploy", "leaks", "leak", "strikes", "strike", "steals", "steal", "targeting",
+    "exploiting", "using", "behind", "linked", "tied", "says", "said", "warns", "warn",
+    "reports", "report", "emerges", "returns", "expands", "shifts", "adds", "adopts",
+    "now", "activity", "operations", "operation", "members", "leader", "affiliate",
+    "affiliates", "victims", "victim", "list", "lists", "site", "sites", "website",
+    "infrastructure", "threat", "tactics", "techniques", "tools", "malware", "group",
+    "groups", "gang", "gangs", "name", "names", "police", "officials", "over", "more",
+    "than", "most", "top", "worst", "massive", "huge",
+}
+
+# Kata umum yang tidak boleh menjadi satu-satunya isi sebuah nama. Kata benda
+# lembaga boleh mengawali nama ("Bank of PNG", "University of X"), tetapi
+# "Hospital" atau "Dutch" sendirian bukan nama.
+_GENERIC_NAME_WORDS = _REJECT_FIRST_WORDS | {
+    "company", "companies", "government", "hospital", "hospitals", "school",
+    "schools", "university", "bank", "banks", "city", "county", "state", "council",
+    "systems", "services", "ministry", "department", "agency", "firm", "journalists",
+    "us", "u.s.", "uk", "u.k.", "european", "american", "british", "australian",
+    "indian", "indonesian", "russian", "chinese", "iranian", "korean", "japanese",
+    "german", "french", "dutch", "canadian", "african", "asian", "global", "local",
+    "national", "international", "major", "windows", "linux", "android",
+}
+
+_NAME_TOKEN = r"[A-Z][\w&.'’-]*"
+_NAME_CONNECTOR = r"(?:of|and|&|de|for|the|del|di)"
+_ORG_NAME = rf"({_NAME_TOKEN}(?:\s+(?:{_NAME_CONNECTOR}\s+)?{_NAME_TOKEN}){{0,5}})"
+_PASSIVE_VERBS = (
+    r"(?:(?:was|were|has been|have been|had been|is|are|gets|got)\s+)?"
+    r"(?:reportedly\s+|recently\s+|allegedly\s+)?"
+    r"(?:hit|attacked|breached|hacked|compromised|targeted|struck|disrupted|"
+    r"crippled|paralyzed|paralysed|forced)\b"
+)
+_SUFFERED_VERBS = (
+    r"(?:suffered|suffers|experienced|experiences|confirmed|confirms|disclosed|"
+    r"discloses|reported|reports|faced|faces|investigating|investigates|warns of|"
+    r"warned of|patches|patched|fixes|fixed|responding to|responds to)\s+"
+    r"(?:a\s+|an\s+)?(?:[A-Za-z][\w-]*\s+){0,3}?"
+    r"(?:cyber|cyber-attack|cyberattack|ransomware|data|security|hack|zero-day|"
+    r"zero day|vulnerability|exploitation|breach|attack|incident|intrusion|outage|"
+    r"malware|phishing|ddos)\b"
+)
+_ATTACK_NOUNS = (
+    r"(?:cyberattack|cyber attack|cyber-attack|ransomware attack|ransomware|hack|"
+    r"data breach|breach|attack|hackers|cybercriminals)"
+)
+_ACTIVE_VERBS = (
+    r"(?:hits|hit|targets|targeted|breaches|breached|attacks|attacked|strikes|"
+    r"struck|cripples|crippled|disrupts|disrupted|paralyzes|paralyses|"
+    r"compromises|compromised)"
+)
+_ORGANIZATION_PATTERNS = [
+    re.compile(rf"{_ORG_NAME}\s+{_PASSIVE_VERBS}"),
+    re.compile(rf"{_ORG_NAME}\s+{_SUFFERED_VERBS}"),
+    re.compile(
+        rf"{_ATTACK_NOUNS}\s+(?:on\s+|at\s+|against\s+|{_ACTIVE_VERBS}\s+)"
+        rf"(?:the\s+)?{_ORG_NAME}"
+    ),
+]
+
+# Kata pemicu tidak peka huruf besar (?i:...), tetapi nama pelaku harus diawali
+# huruf besar agar kata biasa di tengah kalimat tidak ikut tertangkap.
+_ACTOR_TERMS = (
+    r"(?i:threat actors?|threat groups?|hacking groups?|hacker groups?|"
+    r"ransomware groups?|ransomware gangs?|cybercrime groups?|cybercriminal groups?|"
+    r"apt groups?|hacktivist groups?|extortion groups?|ransomware operations?)"
+)
+_ACTOR_NAME = r"([A-Z][\w-]*(?:\s+[A-Z0-9][\w-]*){0,2})"
+_ACTOR_PATTERNS = [
+    re.compile(
+        rf"{_ACTOR_TERMS}\s+(?i:known as\s+|called\s+|named\s+|dubbed\s+|tracked as\s+)?"
+        rf"[\"“']?{_ACTOR_NAME}"
+    ),
+    re.compile(rf"{_ACTOR_NAME}\s+{_ACTOR_TERMS}"),
+    # Nama dengan huruf besar di tengah atau angka (LockBit, Cl0p, RansomHub)
+    re.compile(r"([A-Z][a-z]*[A-Z0-9][\w-]*)\s+(?i:ransomware)\b"),
+]
+
+
+_ADJECTIVE_COMPOUND = re.compile(
+    r"-(?:powered|based|linked|backed|sponsored|affiliated|related|driven)\b", re.I
+)
+
+
+def _clean_name(name):
+    """Rapikan nama hasil regex; None bila bukan nama (kata umum saja)."""
+    name = re.sub(r"\s+", " ", name).strip(" .,;:'\"“”’-")
+    words = name.split()
+    while words and words[0].lower() in _ARTICLES:
+        words.pop(0)
+    if not words or words[0].lower() in _REJECT_FIRST_WORDS:
+        return None
+    if all(word.lower() in _GENERIC_NAME_WORDS for word in words):
+        return None
+    if _ADJECTIVE_COMPOUND.search(words[0]):  # "AI-powered", "China-based"
+        return None
+    return " ".join(words)
+
+
 # --- Ekstraksi berbasis regex ---
-def extract_threat_actor(text):
-    """Ekstrak nama pelaku ancaman dari pola 'threat actor X' dan sejenisnya."""
-    patterns = [
-        r"threat actor ([a-z0-9\-_ ]{2,60})", r"threat group ([a-z0-9\-_ ]{2,60})",
-        r"ransomware group ([a-z0-9\-_ ]{2,60})", r"apt group ([a-z0-9\-_ ]{2,60})",
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, text, re.IGNORECASE)
-        if match:
-            actor = match.group(1).strip()
-            actor = re.split(r"[,.!?;:]", actor)[0]
-            return actor[:100]
+def extract_threat_actor(raw_text):
+    """Ekstrak nama pelaku ancaman dari teks asli (huruf besar dipertahankan)."""
+    actors = []
+    known = drop_overlapping_keywords(find_keywords(raw_text, KNOWN_THREAT_ACTORS))
+    for name in known:
+        actors.append(re.sub(r"\s+ransomware$", "", name))
+
+    for pattern in _ACTOR_PATTERNS:
+        for match in pattern.finditer(raw_text):
+            name = _clean_name(match.group(1))
+            if name and name.lower() not in {a.lower() for a in actors}:
+                actors.append(name[:100])
+            if len(actors) >= 3:
+                break
+
+    if not actors:
+        return "UNKNOWN"
+    return ", ".join(actors[:3])
+
+
+_COUNTRY_WORDS = {name.lower() for name in COUNTRY_NAMES} | {
+    keyword.lower() for keywords in COUNTRY_NAMES.values() for keyword in keywords
+}
+
+
+def extract_target_organization(headline, summary):
+    """Ekstrak nama organisasi target dari judul lalu ringkasan (tanpa nama media).
+
+    Nama negara tidak dihitung sebagai organisasi; itu urusan extract_location.
+    """
+    for text in (headline or "", summary or ""):
+        if not text:
+            continue
+        for pattern in _ORGANIZATION_PATTERNS:
+            for match in pattern.finditer(text):
+                name = _clean_name(match.group(1))
+                if name and name.lower() not in _COUNTRY_WORDS:
+                    return name[:150]
     return "UNKNOWN"
 
 
-def extract_target_organization(title, text):
-    """Ekstrak nama organisasi target dari pola kalimat serangan."""
-    search_text = f"{title} {text}"
-    patterns = [
-        r"([A-Z][A-Za-z0-9&.\- ]{2,80})\s+(?:was|were)\s+"
-        r"(?:hit|attacked|breached|hacked|compromised)",
-        r"([A-Z][A-Za-z0-9&.\- ]{2,80})\s+(?:suffered|experienced)\s+"
-        r"(?:a\s+)?(?:cyber|ransomware|data)\s+(?:attack|breach|incident)",
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, search_text, re.IGNORECASE)
-        if match:
-            organization = match.group(1).strip()
-            organization = re.sub(r"\s+", " ", organization)
-            return organization[:150]
-    return "UNKNOWN"
+def _valid_date(year, month, day):
+    """'YYYY-MM-DD' bila tanggal valid, selain itu None."""
+    try:
+        return datetime(int(year), int(month), int(day)).strftime("%Y-%m-%d")
+    except ValueError:
+        return None
 
 
 def extract_attack_date(text):
-    """Ekstrak tanggal serangan (format ISO, d/m/Y, atau d-m-Y)."""
-    patterns = [
-        r"\b(20\d{2}-\d{2}-\d{2})\b", r"\b(\d{1,2}/\d{1,2}/20\d{2})\b",
-        r"\b(\d{1,2}-\d{1,2}-20\d{2})\b",
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, text)
-        if match:
-            return match.group(1)
+    """Ekstrak tanggal serangan yang valid, dinormalisasi ke YYYY-MM-DD."""
+    for match in re.finditer(r"\b(20\d{2})-(\d{2})-(\d{2})\b", text):
+        date = _valid_date(match.group(1), match.group(2), match.group(3))
+        if date:
+            return date
+    for match in re.finditer(r"\b(\d{1,2})[/-](\d{1,2})[/-](20\d{2})\b", text):
+        first, second, year = match.group(1), match.group(2), match.group(3)
+        # Diasumsikan d/m/Y (lazim di Indonesia); m/d/Y bila d/m/Y tidak valid.
+        date = _valid_date(year, second, first) or _valid_date(year, first, second)
+        if date:
+            return date
     return "UNKNOWN"
 
 
 def extract_indicators(text):
     """Ekstrak indikator (CVE dan hash MD5/SHA1/SHA256) tanpa duplikat."""
     indicators = []
-    patterns = [
-        r"\bCVE-\d{4}-\d{4,7}\b", r"\b[A-Fa-f0-9]{32}\b", r"\b[A-Fa-f0-9]{40}\b",
-        r"\b[A-Fa-f0-9]{64}\b",
-    ]
-    for pattern in patterns:
-        matches = re.findall(pattern, text, re.IGNORECASE)
-        indicators.extend(matches)
+    for match in re.findall(r"\bCVE-\d{4}-\d{4,7}\b", text, re.IGNORECASE):
+        indicators.append(match.upper())
+    for pattern in (r"\b[A-Fa-f0-9]{32}\b", r"\b[A-Fa-f0-9]{40}\b", r"\b[A-Fa-f0-9]{64}\b"):
+        indicators.extend(match.lower() for match in re.findall(pattern, text))
     indicators = list(dict.fromkeys(indicators))
     if not indicators:
         return "UNKNOWN"
@@ -403,8 +551,11 @@ def extract_information(article_id, title, summary, content):
     attack_method = extract_attack_method(combined_text)
     target_sector = extract_target_sector(combined_text)
     location = extract_location(combined_text)
-    threat_actor = extract_threat_actor(combined_text)
-    target_organization = extract_target_organization(title, combined_text)
+    # Teks asli (huruf besar dipertahankan) tanpa nama media Google News
+    headline, publisher = split_publisher(title)
+    raw_summary = remove_publisher(summary, publisher)
+    threat_actor = extract_threat_actor(f"{headline}. {raw_summary}")
+    target_organization = extract_target_organization(headline, raw_summary)
     target_group = extract_target_group(combined_text)
     attack_date = extract_attack_date(combined_text)
     impact = extract_impact(combined_text)
@@ -497,6 +648,22 @@ def get_analyzed_articles():
     return total
 
 
+def get_remaining_candidates():
+    """Hitung kandidat V0.2 yang belum diekstrak oleh V0.3."""
+    connection = get_connection()
+    cursor = connection.cursor()
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM v02_relevance v
+        LEFT JOIN v03_information_extraction x ON v.article_id = x.article_id
+        WHERE v.relevance_label IN ('RELEVANT', 'UNCERTAIN')
+            AND x.article_id IS NULL
+        """)
+    total = cursor.fetchone()[0]
+    connection.close()
+    return total
+
+
 def get_next_batch():
     """Ambil batch artikel kandidat V0.2 yang belum diekstrak."""
     connection = get_connection()
@@ -528,10 +695,8 @@ def get_next_batch():
     return rows
 
 
-def save_extraction(result):
-    """Simpan hasil ekstraksi satu artikel ke tabel V0.3."""
-    connection = get_connection()
-    cursor = connection.cursor()
+def save_extraction(cursor, result):
+    """Simpan hasil ekstraksi satu artikel lewat cursor batch (tanpa commit)."""
     extracted_at = get_timestamp()
     cursor.execute(
         """
@@ -572,13 +737,13 @@ def save_extraction(result):
             extracted_at,
         ),
     )
-    connection.commit()
-    connection.close()
 
 
 def process_batch(rows):
-    """Ekstrak dan simpan informasi untuk satu batch artikel."""
+    """Ekstrak dan simpan informasi satu batch artikel dalam satu transaksi."""
     processed = 0
+    connection = get_connection()
+    cursor = connection.cursor()
     for row in rows:
         article_id = row[0]
         title = row[1] or ""
@@ -589,7 +754,7 @@ def process_batch(rows):
         relevance_score = row[6] or 0.0
 
         result = extract_information(article_id, title, summary, content)
-        save_extraction(result)
+        save_extraction(cursor, result)
         processed += 1
 
         # Tampilkan contoh hasil untuk 10 artikel pertama
@@ -607,6 +772,8 @@ def process_batch(rows):
             print(f"    Impact         : {result['impact']}")
             print(f"    Confidence     : {result['extraction_confidence']:.2f}")
 
+    connection.commit()
+    connection.close()
     return processed
 
 
@@ -654,7 +821,7 @@ def run():
     analyzed_articles = get_analyzed_articles()
     print(f"\nTotal V0.2 candidates : {total_candidates}")
     print(f"Sudah dianalisis     : {analyzed_articles}")
-    print(f"Belum dianalisis     : {total_candidates - analyzed_articles}")
+    print(f"Belum dianalisis     : {get_remaining_candidates()}")
 
     # Proses artikel per batch
     total_processed = 0

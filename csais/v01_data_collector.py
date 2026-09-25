@@ -1,24 +1,13 @@
 """V0.1 - Ringkasan data hasil crawl.
 
-Membaca seluruh artikel dari database, lalu menampilkan jumlah total,
-distribusi bahasa, dan 20 artikel pertama sebagai contoh.
+Menampilkan jumlah artikel, distribusi bahasa, dan beberapa artikel terawal
+sebagai contoh, tanpa memuat seluruh tabel ke memori.
 """
-
-import sqlite3
 
 from csais.config import DATABASE_FILE
 from csais.db import get_connection
 
-
-def load_articles():
-    """Ambil seluruh artikel, diurutkan berdasarkan tanggal terbit."""
-    conn = get_connection()
-    conn.row_factory = sqlite3.Row
-    articles = conn.execute(
-        "SELECT * FROM articles ORDER BY published_date ASC"
-    ).fetchall()
-    conn.close()
-    return articles
+SAMPLE_SIZE = 20
 
 
 def database_summary():
@@ -38,17 +27,34 @@ def database_summary():
     return total, languages
 
 
+def sample_articles(limit=SAMPLE_SIZE):
+    """Beberapa artikel terawal berdasarkan tanggal terbit."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT title, language, published_date, source_name, article_url
+        FROM articles
+        ORDER BY published_date ASC
+        LIMIT ?
+        """,
+        (limit,),
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+
 def run():
     """Tampilkan ringkasan database dan contoh data."""
     print("\n==================================================")
     print("   V0.1 - CYBER SOCIAL ATTACK DATA PROCESSING")
     print("==================================================")
 
-    articles = load_articles()
-    print(f"\nData dibaca dari database : {DATABASE_FILE}")
-    print(f"Total data tersedia : {len(articles)}")
-
     total, languages = database_summary()
+    print(f"\nData dibaca dari database : {DATABASE_FILE}")
+    print(f"Total data tersedia : {total}")
+
     print("\nDistribusi bahasa:")
     for language, count in languages:
         print(f"   {language}: {count}")
@@ -56,12 +62,13 @@ def run():
     print("\n==================================================")
     print("SAMPLE DATA")
     print("==================================================")
-    for index, article in enumerate(articles[:20], start=1):
-        print(f"\n{index}. {article['title']}")
-        print(f"   Language : {article['language']}")
-        print(f"   Published: {article['published_date']}")
-        print(f"   Source   : {article['source_name']}")
-        print(f"   URL      : {article['article_url']}")
+    samples = sample_articles()
+    for index, (title, language, published, source, url) in enumerate(samples, 1):
+        print(f"\n{index}. {title}")
+        print(f"   Language : {language}")
+        print(f"   Published: {published}")
+        print(f"   Source   : {source}")
+        print(f"   URL      : {url}")
 
     print("\n==================================================")
     print("V0.1 PROCESSING SELESAI")

@@ -13,7 +13,8 @@ requirements.txt        dependensi Python
 csais/
   config.py             lokasi database (bisa dioverride lewat CSAIS_DB_PATH)
   db.py                 koneksi SQLite dan timestamp bersama
-  text.py               normalisasi teks dan Jaccard bersama
+  text.py               normalisasi teks, pencocokan kata utuh, Jaccard bersama
+  reset.py              penghapusan hasil olahan V0.2 - V0.6 (dipakai --reset)
   crawler.py            crawler Google News RSS (historical + incremental)
   v01_data_collector.py          V0.1 ringkasan data
   v02_relevance_detection.py     V0.2 deteksi relevansi artikel
@@ -38,12 +39,21 @@ python3 -m venv .venv
 ## Menjalankan
 
 ```bash
-./.venv/bin/python main.py
+./.venv/bin/python main.py              # crawler (dengan konfirmasi) lalu V0.1 - V0.6
+./.venv/bin/python main.py --no-crawl   # lewati crawler
+./.venv/bin/python main.py --reset      # hapus hasil V0.2 - V0.6, proses ulang dari awal
 ```
 
 Crawler akan menanyakan apakah ingin menarik data baru (`y`) atau
-langsung memproses data yang sudah ada (`n`). Crawl membutuhkan koneksi
-internet dan bisa memakan waktu lama.
+langsung memproses data yang sudah ada (`n`). Bila `y`, periode historical
+30 hari yang belum lengkap dilengkapi dulu, lalu incremental crawl menarik
+3 hari terakhir. Crawl membutuhkan koneksi internet dan bisa memakan waktu
+lama. Checkpoint disimpan per hari, jadi run yang terputus bisa dilanjutkan
+tanpa mengulang kata kunci yang sudah selesai.
+
+`--reset` diperlukan setelah logika ekstraksi atau clustering berubah,
+karena setiap modul hanya memproses artikel yang belum pernah diolah.
+Tabel `articles` dan `crawl_state` tidak ikut dihapus.
 
 ## Melihat hasil
 

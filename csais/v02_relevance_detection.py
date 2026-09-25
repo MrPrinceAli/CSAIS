@@ -12,7 +12,7 @@ import os
 
 from csais.config import DATABASE_FILE
 from csais.db import get_connection, get_timestamp
-from csais.text import normalize_text
+from csais.text import drop_overlapping_keywords, find_keywords, normalize_text
 
 
 # --- Konfigurasi ---
@@ -31,6 +31,7 @@ ATTACK_KEYWORDS = [
     "malware", "ransomware", "trojan", "worm", "spyware", "rootkit", "backdoor",
     "botnet", "infostealer", "information stealer", "remote access trojan", "keylogger",
     "loader malware", "dropper malware", "wiper malware", "cryptojacking",
+    "trojanized", "trojanised", "backdoored",
     # Kredensial / identitas
     "credential theft", "credential stealing", "account takeover", "password attack",
     "password spraying", "credential stuffing", "brute force attack", "identity theft",
@@ -140,15 +141,34 @@ NON_INCIDENT_INDICATORS = [
 ]
 
 
+# Kata kunci serangan yang juga lazim di luar konteks siber: "worm" (cacing),
+# "Trojan" (tim olahraga), "zero day" (film), "exploitation" (eksploitasi anak).
+# Hanya dihitung bila teks juga memuat kata konteks siber.
+WEAK_ATTACK_KEYWORDS = {
+    "worm", "trojan", "backdoor", "exploit", "exploitation", "zero day", "zero-day",
+    "impersonation", "rootkit",
+}
+CYBER_CONTEXT_KEYWORDS = [
+    "cyber", "cybersecurity", "cyberattack", "hacker", "hacked", "hacking", "hack",
+    "malware", "ransomware", "phishing", "spyware", "infostealer", "stealer", "botnet",
+    "vulnerability", "vulnerabilities", "cve-", "flaw", "bug", "patch", "patched",
+    "exploited", "security", "threat actor", "researchers", "software", "firmware",
+    "server", "network", "computer", "credentials", "password", "online", "internet",
+    "website", "email", "app", "device", "linux", "windows", "macos", "android", "ios",
+    "firewall", "vpn", "router", "fortinet", "cisco", "microsoft", "apple", "google",
+    "ivanti", "sonicwall", "palo alto", "vmware", "citrix", "steam", "github", "npm",
+    "siber", "peretas", "kerentanan", "perangkat lunak", "aplikasi",
+]
+
+
 # --- Pencocokan kata kunci dan analisis relevansi ---
 def find_matches(text, keywords):
-    """Kembalikan kata kunci dari daftar yang muncul di dalam teks."""
-    matches = []
-    for keyword in keywords:
-        keyword_normalized = keyword.lower()
-        if keyword_normalized in text:
-            matches.append(keyword)
-    return matches
+    """Kata kunci yang muncul sebagai kata utuh, tanpa yang saling tumpang tindih.
+
+    Pencocokan memakai batas kata sehingga "rce" tidak cocok dengan "forced",
+    dan "phishing" tidak dihitung lagi bila "spear phishing" sudah cocok.
+    """
+    return drop_overlapping_keywords(find_keywords(text, keywords))
 
 
 def analyze_relevance(title, summary):
@@ -173,6 +193,15 @@ def analyze_relevance(title, summary):
     non_incident_matches = find_matches(full_text, NON_INCIDENT_INDICATORS)
     title_attack_matches = find_matches(title_text, ATTACK_KEYWORDS)
     title_event_matches = find_matches(title_text, EVENT_INDICATORS)
+
+    # Kata kunci ambigu saja, tanpa konteks siber: bukan serangan siber
+    if (
+        attack_matches
+        and all(keyword in WEAK_ATTACK_KEYWORDS for keyword in attack_matches)
+        and not find_keywords(full_text, CYBER_CONTEXT_KEYWORDS)
+    ):
+        attack_matches = []
+        title_attack_matches = []
 
     # Skor dasar
     score = 0.0
@@ -217,8 +246,6 @@ def analyze_relevance(title, summary):
 
     # Keyakinan: jarak skor dari titik tengah 0.50
     confidence = abs(score - 0.50) * 2
-    if confidence > 1:
-        confidence = 1.0
 
     return {
         "label": label,
@@ -300,10 +327,8 @@ def get_next_batch():
     return rows
 
 
-def save_analysis(article_id, result):
-    """Simpan hasil analisis satu artikel ke tabel v02_relevance."""
-    connection = get_connection()
-    cursor = connection.cursor()
+def save_analysis(cursor, article_id, result):
+    """Simpan hasil analisis satu artikel lewat cursor batch (tanpa commit)."""
     analyzed_at = get_timestamp()
 
     cursor.execute(
@@ -334,16 +359,15 @@ def save_analysis(article_id, result):
         ),
     )
 
-    connection.commit()
-    connection.close()
-
 
 def process_batch(rows):
-    """Analisis dan simpan satu batch artikel; tampilkan 10 contoh pertama."""
+    """Analisis dan simpan satu batch artikel dalam satu transaksi."""
     processed = 0
     relevant = 0
     uncertain = 0
     not_relevant = 0
+    connection = get_connection()
+    cursor = connection.cursor()
 
     for row in rows:
         article_id = row[0]
@@ -352,7 +376,7 @@ def process_batch(rows):
         language = row[3] or "unknown"
 
         result = analyze_relevance(title, summary)
-        save_analysis(article_id, result)
+        save_analysis(cursor, article_id, result)
         processed += 1
 
         if result["label"] == "RELEVANT":
@@ -371,6 +395,8 @@ def process_batch(rows):
             print(f"    Score      : {result['score']:.2f}")
             print(f"    Confidence : {result['confidence']:.2f}")
 
+    connection.commit()
+    connection.close()
     return processed, relevant, uncertain, not_relevant
 
 

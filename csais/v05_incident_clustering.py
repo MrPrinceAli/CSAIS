@@ -3,13 +3,24 @@
 CSAIS - Cyber Social Attack Intelligence System.
 
 Fungsi:
-  1. Mengambil hasil V0.3 Information Extraction
+  1. Mengambil hasil V0.3 beserta judul, ringkasan, dan tanggal terbit artikel
   2. Menggunakan canonical entity dari V0.4
   3. Mengelompokkan artikel yang kemungkinan membahas incident cyber attack
      yang sama
   4. Membuat incident baru jika tidak ditemukan incident yang sesuai
   5. Menyimpan hubungan article -> incident
   6. Menandai article sebagai sudah diproses
+
+Aturan penggabungan: artikel hanya digabung ke incident lama bila lolos hard
+constraint (target/pelaku/jenis serangan tidak bertentangan, tanggal dalam
+jendela) DAN salah satu dari:
+  - ada sinyal identitas: entity/nama target sama, nama target satu sisi muncul
+    di teks sisi lain, token khas (jarang di korpus) yang sama, atau pelaku sama
+    dengan teks sedikit mirip; skor gabungan >= MIN_SCORE_WITH_IDENTITY
+  - kemiripan judul+ringkasan >= TEXT_SIMILARITY_THRESHOLD dan skor gabungan
+    >= INCIDENT_SIMILARITY_THRESHOLD
+Jenis serangan yang sama saja tidak cukup untuk menggabungkan dua artikel.
+Kandidat incident dibatasi pada jendela tanggal terbit PUBLISHED_WINDOW_DAYS.
 
 IMPORTANT:
 Satu article_id hanya boleh diproses satu kali. Jangan menggunakan
@@ -18,24 +29,56 @@ diproses. Karena itu digunakan tabel v05_processed_articles.
 """
 
 import hashlib
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from csais.db import get_connection, get_timestamp
-from csais.text import jaccard_index, normalize_text
+from csais.text import (
+    jaccard_index,
+    normalize_text,
+    remove_publisher,
+    split_publisher,
+    tokenize,
+)
 
 
 # --- Konfigurasi ---
 BATCH_SIZE = 500
 INCIDENT_SIMILARITY_THRESHOLD = 0.70
-DATE_WINDOW_DAYS = 14
+DATE_WINDOW_DAYS = 14  # jendela tanggal serangan (attack_date)
+PUBLISHED_WINDOW_DAYS = 14  # jendela tanggal terbit untuk kandidat incident
+# Jaccard judul+ringkasan yang dianggap "berita yang sama". Pada sampel uji,
+# pasangan 0.35-0.50 hampir semuanya liputan insiden yang sama dari media
+# berbeda; di bawah 0.35 mulai bercampur dengan insiden lain yang sejenis.
+TEXT_SIMILARITY_THRESHOLD = 0.35
+MIN_TEXT_SIMILARITY_WITH_ACTOR = 0.20  # pelaku sama + teks sedikit mirip
+MIN_SCORE_WITH_IDENTITY = 0.40  # skor minimum bila ada sinyal identitas target
+TARGET_IN_TEXT_SIMILARITY = 0.9  # nama target satu sisi muncul di teks sisi lain
+# Token dianggap nama khas bila muncul di <= max(RARE_TOKEN_MAX_DF,
+# RARE_TOKEN_MAX_DF_RATIO * jumlah artikel) artikel, agar batasnya ikut
+# membesar pada korpus yang besar.
+RARE_TOKEN_MAX_DF = 5
+RARE_TOKEN_MAX_DF_RATIO = 0.00025
+RARE_TOKEN_MIN_LENGTH = 5
+MAX_CANDIDATES = 3000
+
+# Token nama target yang terlalu umum untuk dijadikan bukti identitas sendiri
+GENERIC_TARGET_TOKENS = {
+    "the", "and", "of", "for", "inc", "ltd", "llc", "plc", "corp", "corporation",
+    "company", "group", "holdings", "services", "systems", "solutions", "health",
+    "healthcare", "hospital", "medical", "clinic", "school", "schools", "district",
+    "university", "college", "city", "county", "state", "council", "department",
+    "ministry", "bank", "government", "national", "international", "global",
+    "public", "police", "center", "centre",
+}
 
 # Bobot similarity
 TARGET_WEIGHT = 0.30
-ATTACK_TYPE_WEIGHT = 0.20
-THREAT_ACTOR_WEIGHT = 0.20
-LOCATION_WEIGHT = 0.10
-ATTACK_DATE_WEIGHT = 0.10
-ATTACK_METHOD_WEIGHT = 0.10
+TEXT_WEIGHT = 0.30
+THREAT_ACTOR_WEIGHT = 0.15
+ATTACK_TYPE_WEIGHT = 0.10
+LOCATION_WEIGHT = 0.05
+ATTACK_DATE_WEIGHT = 0.05
+ATTACK_METHOD_WEIGHT = 0.05
 
 # Tipe entity dari V0.4
 TARGET_ENTITY_TYPE = "ORGANIZATION"
@@ -43,6 +86,26 @@ THREAT_ACTOR_ENTITY_TYPE = "THREAT_ACTOR"
 LOCATION_ENTITY_TYPE = "LOCATION"
 
 UNKNOWN_VALUES = {"", "unknown", "none", "null", "n/a", "na", "-"}
+
+# Kata yang terlalu umum untuk membedakan dua berita
+STOPWORDS = {
+    "the", "and", "for", "with", "that", "this", "from", "after", "over", "into",
+    "has", "have", "had", "was", "were", "are", "its", "his", "her", "their", "new",
+    "says", "said", "will", "been", "more", "than", "about", "amid", "how", "why",
+    "what", "who", "when", "cyber", "cyberattack", "cyberattacks", "attack",
+    "attacks", "security", "cybersecurity", "hackers", "hacker", "data", "news",
+    "com", "www", "http", "https", "yang", "dan", "dari", "untuk", "dengan", "pada",
+    "oleh", "ini", "itu", "serangan", "siber", "tahun", "kata", "juga", "akan",
+    "telah", "ada",
+}
+
+INCIDENT_COLUMNS = [
+    "incident_id", "attack_type", "target", "target_entity_id", "threat_actor",
+    "threat_actor_entity_id", "location", "attack_date", "attack_method",
+    "document_count", "incident_confidence", "anchor_text", "anchor_published_date",
+    "last_published_date",
+]
+_INCIDENT_SELECT = "SELECT " + ", ".join(INCIDENT_COLUMNS) + " FROM v05_incidents"
 
 
 # --- Normalisasi nilai ---
@@ -85,15 +148,75 @@ def parse_date(value):
     return None
 
 
+def text_tokens(title, summary):
+    """Token judul dan ringkasan tanpa nama media dan tanpa stopword."""
+    headline, publisher = split_publisher(title)
+    text = f"{headline} {remove_publisher(summary, publisher)}"
+    return tokenize(text) - STOPWORDS
+
+
+def attack_type_set(value):
+    """Himpunan kategori dari string V0.3 seperti 'ransomware, data_breach'."""
+    if not value:
+        return set()
+    return {part.strip() for part in value.split(",") if part.strip()}
+
+
+def distinctive_tokens(name):
+    """Token nama target yang cukup khas untuk dicari di teks artikel lain."""
+    if not name:
+        return set()
+    return tokenize(name) - STOPWORDS - GENERIC_TARGET_TOKENS
+
+
+def target_in_text(article, incident, anchor_tokens):
+    """True bila nama target satu sisi muncul utuh di teks judul+ringkasan sisi lain."""
+    article_target = distinctive_tokens(article["target"])
+    if article_target and article_target <= anchor_tokens:
+        return True
+    incident_target = distinctive_tokens(normalize_value(incident["target"]))
+    return bool(incident_target and incident_target <= article["tokens"])
+
+
+# Frekuensi dokumen tiap token (judul+ringkasan) di seluruh tabel articles.
+# Token yang hanya muncul di beberapa artikel (nama produk, nama grup) adalah
+# bukti kuat bahwa dua artikel membahas hal yang sama.
+_TOKEN_DF = {}
+_RARE_DF_LIMIT = RARE_TOKEN_MAX_DF
+
+
+def load_token_document_frequency(conn):
+    """Hitung di berapa artikel setiap token muncul, dan batas 'token langka'."""
+    global _RARE_DF_LIMIT
+    _TOKEN_DF.clear()
+    cursor = conn.cursor()
+    cursor.execute("SELECT title, summary FROM articles")
+    total = 0
+    for title, summary in cursor:
+        total += 1
+        for token in text_tokens(title, summary):
+            _TOKEN_DF[token] = _TOKEN_DF.get(token, 0) + 1
+    _RARE_DF_LIMIT = max(RARE_TOKEN_MAX_DF, int(total * RARE_TOKEN_MAX_DF_RATIO))
+
+
+def shared_rare_tokens(tokens_a, tokens_b):
+    """Token khas (jarang di korpus) yang dimiliki kedua himpunan."""
+    return {
+        token
+        for token in tokens_a & tokens_b
+        if len(token) >= RARE_TOKEN_MIN_LENGTH
+        and 0 < _TOKEN_DF.get(token, 0) <= _RARE_DF_LIMIT
+    }
+
+
 # --- Similarity ---
 def calculate_date_similarity(date_a, date_b):
-    """Kemiripan tanggal, turun linear menjadi 0 setelah DATE_WINDOW_DAYS."""
+    """Kemiripan tanggal: None bila salah satu tidak bisa diparse, 0 di luar jendela."""
     parsed_a = parse_date(date_a)
     parsed_b = parse_date(date_b)
     if parsed_a is None or parsed_b is None:
-        return 0.0
-    difference = abs((parsed_a - parsed_b).total_seconds())
-    difference_days = difference / 86400.0
+        return None
+    difference_days = abs((parsed_a - parsed_b).total_seconds()) / 86400.0
     if difference_days > DATE_WINDOW_DAYS:
         return 0.0
     return 1.0 - (difference_days / DATE_WINDOW_DAYS)
@@ -129,6 +252,10 @@ def create_tables(conn):
             document_count INTEGER DEFAULT 0,
             incident_confidence REAL DEFAULT 0.0,
             clustering_method TEXT,
+            anchor_article_id INTEGER,
+            anchor_text TEXT,
+            anchor_published_date TEXT,
+            last_published_date TEXT,
             created_at TEXT,
             updated_at TEXT
         )
@@ -160,7 +287,6 @@ def migrate_existing_tables(conn):
     """Tambahkan kolom V0.5 yang belum ada pada tabel buatan versi lama."""
     cursor = conn.cursor()
 
-    # v05_incidents
     cursor.execute("PRAGMA table_info(v05_incidents)")
     incident_columns = {row[1] for row in cursor.fetchall()}
     required_incident_columns = {
@@ -175,6 +301,10 @@ def migrate_existing_tables(conn):
         "document_count": "INTEGER DEFAULT 0",
         "incident_confidence": "REAL DEFAULT 0.0",
         "clustering_method": "TEXT",
+        "anchor_article_id": "INTEGER",
+        "anchor_text": "TEXT",
+        "anchor_published_date": "TEXT",
+        "last_published_date": "TEXT",
         "created_at": "TEXT",
         "updated_at": "TEXT",
     }
@@ -184,9 +314,6 @@ def migrate_existing_tables(conn):
                 f"ALTER TABLE v05_incidents ADD COLUMN {column_name} {column_type}"
             )
 
-    # v05_incident_documents: CREATE TABLE IF NOT EXISTS tidak mengubah tabel
-    # lama, jadi schema lama diperiksa satu per satu. Kolom assigned_at adalah
-    # penyebab error sebelumnya.
     cursor.execute("PRAGMA table_info(v05_incident_documents)")
     document_columns = {row[1] for row in cursor.fetchall()}
     required_document_columns = {
@@ -202,7 +329,6 @@ def migrate_existing_tables(conn):
                 f"ADD COLUMN {column_name} {column_type}"
             )
 
-    # v05_processed_articles
     cursor.execute("PRAGMA table_info(v05_processed_articles)")
     processed_columns = {row[1] for row in cursor.fetchall()}
     if "incident_id" not in processed_columns:
@@ -216,32 +342,27 @@ def migrate_existing_tables(conn):
 
 
 def create_v05_indexes(conn):
-    """Buat index V0.5. Dibuat SETELAH migrasi karena kolom bisa belum ada."""
+    """Buat index V0.5 (setelah migrasi) dan buang index ganda versi lama."""
     cursor = conn.cursor()
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS idx_v05_incident_documents_incident "
-        "ON v05_incident_documents(incident_id)"
-    )
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS idx_v05_incident_documents_article "
-        "ON v05_incident_documents(article_id)"
-    )
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS idx_v05_processed_article "
-        "ON v05_processed_articles(article_id)"
-    )
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS idx_v05_incidents_target "
-        "ON v05_incidents(target_entity_id)"
-    )
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS idx_v05_incidents_attack_type "
-        "ON v05_incidents(attack_type)"
-    )
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS idx_v05_incidents_actor "
-        "ON v05_incidents(threat_actor_entity_id)"
-    )
+    for legacy_index in (
+        "idx_v05_documents_article",
+        "idx_v05_documents_incident",
+        "idx_v05_incident_target",
+        "idx_v05_incident_attack_type",
+        "idx_v05_incident_actor",
+        "idx_v05_processed_article",  # article_id sudah PRIMARY KEY
+    ):
+        cursor.execute(f"DROP INDEX IF EXISTS {legacy_index}")
+    indexes = {
+        "idx_v05_incident_documents_incident": "v05_incident_documents(incident_id)",
+        "idx_v05_incident_documents_article": "v05_incident_documents(article_id)",
+        "idx_v05_incidents_target": "v05_incidents(target_entity_id)",
+        "idx_v05_incidents_attack_type": "v05_incidents(attack_type)",
+        "idx_v05_incidents_actor": "v05_incidents(threat_actor_entity_id)",
+        "idx_v05_incidents_published": "v05_incidents(anchor_published_date)",
+    }
+    for name, definition in indexes.items():
+        cursor.execute(f"CREATE INDEX IF NOT EXISTS {name} ON {definition}")
     conn.commit()
 
 
@@ -280,14 +401,16 @@ def recover_document_counts(conn):
 
 # --- Pengambilan data ---
 def get_next_batch(conn):
-    """Ambil batch artikel V0.3 yang belum ada di v05_processed_articles."""
+    """Ambil batch artikel V0.3 (plus judul, ringkasan, tanggal terbit) yang belum diproses."""
     cursor = conn.cursor()
     cursor.execute(
         """
         SELECT
             v03.article_id, v03.attack_type, v03.target, v03.target_organization,
-            v03.threat_actor, v03.location, v03.attack_date, v03.attack_method
+            v03.threat_actor, v03.location, v03.attack_date, v03.attack_method,
+            a.title, a.summary, a.published_date
         FROM v03_information_extraction v03
+        INNER JOIN articles a ON a.article_id = v03.article_id
         LEFT JOIN v05_processed_articles p ON v03.article_id = p.article_id
         WHERE p.article_id IS NULL
         ORDER BY v03.article_id
@@ -318,7 +441,7 @@ def get_canonical_entity(conn, article_id, entity_type):
 
 
 def prepare_article(conn, row):
-    """Susun dict artikel dengan canonical entity V0.4 dan nilai ternormalisasi."""
+    """Susun dict artikel dengan canonical entity V0.4, token teks, dan nilai ternormalisasi."""
     (
         article_id,
         attack_type,
@@ -328,6 +451,9 @@ def prepare_article(conn, row):
         location,
         attack_date,
         attack_method,
+        title,
+        summary,
+        published_date,
     ) = row
 
     # Target: canonical V0.4, fallback ke target_organization lalu target V0.3
@@ -347,13 +473,12 @@ def prepare_article(conn, row):
     if canonical_actor is None:
         canonical_actor = None if is_unknown(threat_actor) else threat_actor
 
-    # Location
-    location_entity_id, canonical_location = get_canonical_entity(
-        conn, article_id, LOCATION_ENTITY_TYPE
-    )
+    # Location (nama canonical saja; id lokasi tidak dipakai V0.5)
+    _, canonical_location = get_canonical_entity(conn, article_id, LOCATION_ENTITY_TYPE)
     if canonical_location is None:
         canonical_location = None if is_unknown(location) else location
 
+    published = parse_date(published_date)
     return {
         "article_id": article_id,
         "attack_type": normalize_value(attack_type),
@@ -364,237 +489,242 @@ def prepare_article(conn, row):
         "location": normalize_value(canonical_location),
         "attack_date": normalize_value(attack_date),
         "attack_method": normalize_value(attack_method),
+        "tokens": text_tokens(title, summary),
+        "published": published,
+        "published_date": published.isoformat() if published else None,
     }
 
 
 # --- Pencarian incident ---
 def get_existing_incidents(conn, article):
-    """Kandidat incident lewat blocking sederhana, bukan seluruh tabel."""
+    """Kandidat incident lewat blocking: entity target, pelaku, atau jendela terbit."""
     cursor = conn.cursor()
-    target_entity_id = article["target_entity_id"]
-    attack_type = article["attack_type"]
-    threat_actor_entity_id = article["threat_actor_entity_id"]
     candidates = []
 
     # Strategi 1: target entity
-    if target_entity_id:
+    if article["target_entity_id"]:
         cursor.execute(
-            """
-            SELECT
-                incident_id, attack_type, target, target_entity_id, threat_actor,
-                threat_actor_entity_id, location, attack_date, attack_method,
-                document_count, incident_confidence
-            FROM v05_incidents
-            WHERE target_entity_id = ?
-            ORDER BY updated_at DESC
-            """,
-            (target_entity_id,),
+            f"{_INCIDENT_SELECT} WHERE target_entity_id = ?",
+            (article["target_entity_id"],),
         )
         candidates.extend(cursor.fetchall())
 
-    # Strategi 2: threat actor
-    if threat_actor_entity_id:
+    # Strategi 2: threat actor entity
+    if article["threat_actor_entity_id"]:
         cursor.execute(
-            """
-            SELECT
-                incident_id, attack_type, target, target_entity_id, threat_actor,
-                threat_actor_entity_id, location, attack_date, attack_method,
-                document_count, incident_confidence
-            FROM v05_incidents
-            WHERE threat_actor_entity_id = ?
-            ORDER BY updated_at DESC
-            """,
-            (threat_actor_entity_id,),
+            f"{_INCIDENT_SELECT} WHERE threat_actor_entity_id = ?",
+            (article["threat_actor_entity_id"],),
         )
         candidates.extend(cursor.fetchall())
 
-    # Strategi 3: attack type, hanya jika dua strategi di atas tidak menghasilkan
-    if attack_type and not candidates:
+    # Strategi 3: incident yang aktif di sekitar tanggal terbit artikel dengan
+    # jenis serangan yang beririsan (atau salah satunya tidak diketahui).
+    # Irisan diperiksa kasar lewat instr(); pemeriksaan tepat ada di
+    # passes_hard_constraints.
+    if article["published"]:
+        window = timedelta(days=PUBLISHED_WINDOW_DAYS)
+        lower = (article["published"] - window).isoformat()
+        upper = (article["published"] + window).isoformat()
+        attack_type = article["attack_type"]
         cursor.execute(
-            """
-            SELECT
-                incident_id, attack_type, target, target_entity_id, threat_actor,
-                threat_actor_entity_id, location, attack_date, attack_method,
-                document_count, incident_confidence
-            FROM v05_incidents
-            WHERE attack_type = ?
-            ORDER BY updated_at DESC
-            LIMIT 1000
+            f"""
+            {_INCIDENT_SELECT}
+            WHERE last_published_date >= ?
+              AND anchor_published_date <= ?
+              AND (
+                  attack_type IS NULL OR ? IS NULL
+                  OR instr(?, attack_type) > 0 OR instr(attack_type, ?) > 0
+              )
+            ORDER BY last_published_date DESC
+            LIMIT ?
             """,
-            (attack_type,),
+            (lower, upper, attack_type, attack_type, attack_type, MAX_CANDIDATES),
         )
         candidates.extend(cursor.fetchall())
 
     # Hapus duplikat berdasarkan incident_id
     unique = {}
-    for candidate in candidates:
-        unique[candidate[0]] = candidate
+    for row in candidates:
+        incident = dict(zip(INCIDENT_COLUMNS, row))
+        unique[incident["incident_id"]] = incident
     return list(unique.values())
 
 
 def passes_hard_constraints(article, incident):
     """Cegah incident yang jelas berbeda digabung."""
-    (
-        incident_id,
-        incident_attack_type,
-        incident_target,
-        incident_target_entity_id,
-        incident_actor,
-        incident_actor_entity_id,
-        incident_location,
-        incident_date,
-        incident_method,
-        document_count,
-        incident_confidence,
-    ) = incident
-
-    # Canonical target berbeda: jangan merge
-    article_target_id = article["target_entity_id"]
     if (
-        article_target_id
-        and incident_target_entity_id
-        and article_target_id != incident_target_entity_id
+        article["target_entity_id"]
+        and incident["target_entity_id"]
+        and article["target_entity_id"] != incident["target_entity_id"]
     ):
         return False
-
-    # Threat actor berbeda
-    article_actor_id = article["threat_actor_entity_id"]
     if (
-        article_actor_id
-        and incident_actor_entity_id
-        and article_actor_id != incident_actor_entity_id
+        article["threat_actor_entity_id"]
+        and incident["threat_actor_entity_id"]
+        and article["threat_actor_entity_id"] != incident["threat_actor_entity_id"]
     ):
         return False
-
-    # Attack type berbeda
-    article_attack_type = article["attack_type"]
-    if (
-        article_attack_type
-        and incident_attack_type
-        and article_attack_type != incident_attack_type
-    ):
+    # Jenis serangan keduanya diketahui tetapi tidak beririsan sama sekali
+    article_types = attack_type_set(article["attack_type"])
+    incident_types = attack_type_set(incident["attack_type"])
+    if article_types and incident_types and not (article_types & incident_types):
         return False
 
-    # Tanggal di luar jendela DATE_WINDOW_DAYS
-    article_date = article["attack_date"]
-    if article_date and incident_date:
-        date_similarity = calculate_date_similarity(article_date, incident_date)
-        if date_similarity == 0.0:
+    # Tanggal serangan keduanya diketahui tetapi berjauhan
+    date_similarity = calculate_date_similarity(
+        article["attack_date"], incident["attack_date"]
+    )
+    if date_similarity == 0.0:
+        return False
+
+    # Tanggal terbit di luar rentang aktif incident
+    published = article["published"]
+    anchor = parse_date(incident["anchor_published_date"])
+    last = parse_date(incident["last_published_date"]) or anchor
+    if published and anchor and last:
+        window = timedelta(days=PUBLISHED_WINDOW_DAYS)
+        if published < anchor - window or published > last + window:
             return False
 
     return True
 
 
 def calculate_incident_similarity(article, incident):
-    """Skor kemiripan berbobot antara artikel dan incident."""
-    (
-        incident_id,
-        incident_attack_type,
-        incident_target,
-        incident_target_entity_id,
-        incident_actor,
-        incident_actor_entity_id,
-        incident_location,
-        incident_date,
-        incident_method,
-        document_count,
-        incident_confidence,
-    ) = incident
-
-    # Target: bandingkan entity id jika keduanya ada, selain itu teksnya
-    if article["target_entity_id"] and incident_target_entity_id:
+    """Skor kemiripan berbobot dan rincian komponennya."""
+    anchor_tokens = set((incident["anchor_text"] or "").split())
+    if article["target_entity_id"] and incident["target_entity_id"]:
         target_similarity = (
-            1.0 if article["target_entity_id"] == incident_target_entity_id else 0.0
+            1.0 if article["target_entity_id"] == incident["target_entity_id"] else 0.0
         )
     else:
         target_similarity = calculate_field_similarity(
-            article["target"], incident_target
+            article["target"], incident["target"]
         )
+    if target_similarity is None and target_in_text(article, incident, anchor_tokens):
+        target_similarity = TARGET_IN_TEXT_SIMILARITY
 
-    attack_type_similarity = calculate_field_similarity(
-        article["attack_type"], incident_attack_type
-    )
-
-    # Threat actor: bandingkan entity id jika keduanya ada, selain itu teksnya
-    if article["threat_actor_entity_id"] and incident_actor_entity_id:
+    if article["threat_actor_entity_id"] and incident["threat_actor_entity_id"]:
         actor_similarity = (
             1.0
-            if article["threat_actor_entity_id"] == incident_actor_entity_id
+            if article["threat_actor_entity_id"] == incident["threat_actor_entity_id"]
             else 0.0
         )
     else:
         actor_similarity = calculate_field_similarity(
-            article["threat_actor"], incident_actor
+            article["threat_actor"], incident["threat_actor"]
         )
 
-    location_similarity = calculate_field_similarity(
-        article["location"], incident_location
-    )
-    date_similarity = calculate_date_similarity(article["attack_date"], incident_date)
-    method_similarity = calculate_field_similarity(
-        article["attack_method"], incident_method
-    )
+    text_similarity = jaccard_index(article["tokens"], anchor_tokens)
 
-    # Skor berbobot: hanya field yang dapat dibandingkan yang ikut dihitung
-    weighted_values = []
-    weighted_weights = []
-    if target_similarity is not None:
-        weighted_values.append(target_similarity)
-        weighted_weights.append(TARGET_WEIGHT)
-    if attack_type_similarity is not None:
-        weighted_values.append(attack_type_similarity)
-        weighted_weights.append(ATTACK_TYPE_WEIGHT)
-    if actor_similarity is not None:
-        weighted_values.append(actor_similarity)
-        weighted_weights.append(THREAT_ACTOR_WEIGHT)
-    if location_similarity is not None:
-        weighted_values.append(location_similarity)
-        weighted_weights.append(LOCATION_WEIGHT)
-    if date_similarity > 0:
-        weighted_values.append(date_similarity)
-        weighted_weights.append(ATTACK_DATE_WEIGHT)
-    if method_similarity is not None:
-        weighted_values.append(method_similarity)
-        weighted_weights.append(ATTACK_METHOD_WEIGHT)
+    article_types = attack_type_set(article["attack_type"])
+    incident_types = attack_type_set(incident["attack_type"])
+    if article_types and incident_types:
+        type_similarity = jaccard_index(article_types, incident_types)
+    else:
+        type_similarity = None
 
-    if not weighted_weights:
-        return 0.0
-    total_weight = sum(weighted_weights)
-    weighted_score = sum(
-        value * weight for value, weight in zip(weighted_values, weighted_weights)
-    )
+    components = [
+        (target_similarity, TARGET_WEIGHT),
+        (text_similarity, TEXT_WEIGHT),
+        (actor_similarity, THREAT_ACTOR_WEIGHT),
+        (type_similarity, ATTACK_TYPE_WEIGHT),
+        (
+            calculate_field_similarity(article["location"], incident["location"]),
+            LOCATION_WEIGHT,
+        ),
+        (
+            calculate_date_similarity(article["attack_date"], incident["attack_date"]),
+            ATTACK_DATE_WEIGHT,
+        ),
+        (
+            calculate_field_similarity(
+                article["attack_method"], incident["attack_method"]
+            ),
+            ATTACK_METHOD_WEIGHT,
+        ),
+    ]
+
+    # Hanya komponen yang dapat dibandingkan yang ikut dihitung
+    total_weight = sum(weight for value, weight in components if value is not None)
     if total_weight == 0:
-        return 0.0
-    return weighted_score / total_weight
+        score = 0.0
+    else:
+        score = (
+            sum(value * weight for value, weight in components if value is not None)
+            / total_weight
+        )
+    return score, {
+        "target": target_similarity,
+        "actor": actor_similarity,
+        "text": text_similarity,
+    }
+
+
+def has_identity_signal(article, incident, details):
+    """Bukti bahwa artikel dan incident membicarakan target/pelaku yang sama.
+
+    Termasuk bila nama target yang terekstrak di satu sisi muncul utuh di
+    teks judul+ringkasan sisi lain, karena ekstraksi target sering hanya
+    berhasil pada salah satu artikel.
+    """
+    if (
+        article["target_entity_id"]
+        and article["target_entity_id"] == incident["target_entity_id"]
+    ):
+        return True
+    incident_target = normalize_value(incident["target"])
+    if article["target"] and article["target"] == incident_target:
+        return True
+
+    anchor_tokens = set((incident["anchor_text"] or "").split())
+    if target_in_text(article, incident, anchor_tokens):
+        return True
+    if shared_rare_tokens(article["tokens"], anchor_tokens):
+        return True
+
+    return bool(
+        article["threat_actor_entity_id"]
+        and article["threat_actor_entity_id"] == incident["threat_actor_entity_id"]
+        and details["text"] >= MIN_TEXT_SIMILARITY_WITH_ACTOR
+    )
 
 
 def find_best_incident(conn, article):
-    """Incident dengan skor tertinggi yang lolos hard constraint dan threshold."""
-    candidates = get_existing_incidents(conn, article)
+    """Incident terbaik yang lolos hard constraint dan salah satu syarat gabung.
+
+    Syarat gabung: sinyal identitas (skor >= MIN_SCORE_WITH_IDENTITY) atau
+    teks sangat mirip (skor >= INCIDENT_SIMILARITY_THRESHOLD).
+    """
     best_incident = None
     best_score = 0.0
-    for incident in candidates:
+    for incident in get_existing_incidents(conn, article):
         if not passes_hard_constraints(article, incident):
             continue
-        score = calculate_incident_similarity(article, incident)
-        if score > best_score:
+        score, details = calculate_incident_similarity(article, incident)
+        if has_identity_signal(article, incident, details):
+            required = MIN_SCORE_WITH_IDENTITY
+        elif details["text"] >= TEXT_SIMILARITY_THRESHOLD:
+            required = INCIDENT_SIMILARITY_THRESHOLD
+        else:
+            continue
+        if score >= required and score > best_score:
             best_score = score
             best_incident = incident
-    if best_incident is not None and best_score >= INCIDENT_SIMILARITY_THRESHOLD:
-        return best_incident, best_score
-    return None, 0.0
+    if best_incident is None:
+        return None, 0.0
+    return best_incident, best_score
 
 
 # --- Penyimpanan incident ---
 def generate_incident_id(article_id):
-    """ID incident dari sha1(article_id + timestamp), 12 hex huruf besar."""
-    raw = f"INCIDENT|{article_id}|{get_timestamp()}"
+    """ID incident deterministik dari artikel pertamanya (sha1, 12 hex huruf besar)."""
+    raw = f"INCIDENT|{article_id}"
     hash_value = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12].upper()
     return f"INCIDENT_{hash_value}"
 
 
 def create_incident(conn, article, confidence):
-    """Simpan incident baru dari artikel dan kembalikan incident_id."""
+    """Simpan incident baru dengan artikel ini sebagai jangkar; kembalikan incident_id."""
     incident_id = generate_incident_id(article["article_id"])
     now = get_timestamp()
     cursor = conn.cursor()
@@ -604,9 +734,10 @@ def create_incident(conn, article, confidence):
             incident_id, attack_type, target, target_entity_id, threat_actor,
             threat_actor_entity_id, location, attack_date, attack_method,
             document_count, incident_confidence, clustering_method,
-            created_at, updated_at
+            anchor_article_id, anchor_text, anchor_published_date,
+            last_published_date, created_at, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             incident_id,
@@ -621,6 +752,10 @@ def create_incident(conn, article, confidence):
             0,
             confidence,
             "RULE_BASED",
+            article["article_id"],
+            " ".join(sorted(article["tokens"])),
+            article["published_date"],
+            article["published_date"],
             now,
             now,
         ),
@@ -656,8 +791,6 @@ def save_incident_document(
         ),
     )
     inserted = cursor.rowcount
-
-    # Perbarui document_count
     if inserted == 1:
         cursor.execute(
             """
@@ -672,19 +805,29 @@ def save_incident_document(
             """,
             (get_timestamp(), incident_id),
         )
-
     return inserted
 
 
+def get_document_incident(conn, article_id):
+    """incident_id yang sudah tercatat untuk artikel di v05_incident_documents."""
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT incident_id FROM v05_incident_documents WHERE article_id = ?",
+        (article_id,),
+    )
+    row = cursor.fetchone()
+    return row[0] if row else None
+
+
 def update_incident(conn, incident_id, article, similarity_score):
-    """Lengkapi field incident yang masih kosong dengan informasi artikel baru."""
+    """Lengkapi field incident yang kosong dan perpanjang rentang tanggal terbitnya."""
     cursor = conn.cursor()
     cursor.execute(
         """
         SELECT
             attack_type, target, target_entity_id, threat_actor,
             threat_actor_entity_id, location, attack_date, attack_method,
-            incident_confidence
+            incident_confidence, last_published_date, anchor_text
         FROM v05_incidents
         WHERE incident_id = ?
         """,
@@ -693,7 +836,6 @@ def update_incident(conn, incident_id, article, similarity_score):
     row = cursor.fetchone()
     if row is None:
         return
-
     (
         old_attack_type,
         old_target,
@@ -704,17 +846,20 @@ def update_incident(conn, incident_id, article, similarity_score):
         old_date,
         old_method,
         old_confidence,
+        old_last_published,
+        old_anchor_text,
     ) = row
 
-    # Nilai lama dipertahankan jika sudah ada
-    attack_type = old_attack_type or article["attack_type"]
-    target = old_target or article["target"]
-    target_entity_id = old_target_entity_id or article["target_entity_id"]
-    actor = old_actor or article["threat_actor"]
-    actor_entity_id = old_actor_entity_id or article["threat_actor_entity_id"]
-    location = old_location or article["location"]
-    attack_date = old_date or article["attack_date"]
-    attack_method = old_method or article["attack_method"]
+    last_published = old_last_published
+    if article["published_date"] and (
+        last_published is None or article["published_date"] > last_published
+    ):
+        last_published = article["published_date"]
+
+    # Token teks incident diperkaya dengan artikel baru agar liputan lanjutan
+    # (nama target, pelaku) ikut dikenali
+    anchor_tokens = set((old_anchor_text or "").split()) | article["tokens"]
+    anchor_text = " ".join(sorted(anchor_tokens))
 
     if old_confidence is None:
         new_confidence = similarity_score
@@ -734,19 +879,23 @@ def update_incident(conn, incident_id, article, similarity_score):
             attack_date = ?,
             attack_method = ?,
             incident_confidence = ?,
+            last_published_date = ?,
+            anchor_text = ?,
             updated_at = ?
         WHERE incident_id = ?
         """,
         (
-            attack_type,
-            target,
-            target_entity_id,
-            actor,
-            actor_entity_id,
-            location,
-            attack_date,
-            attack_method,
+            old_attack_type or article["attack_type"],
+            old_target or article["target"],
+            old_target_entity_id or article["target_entity_id"],
+            old_actor or article["threat_actor"],
+            old_actor_entity_id or article["threat_actor_entity_id"],
+            old_location or article["location"],
+            old_date or article["attack_date"],
+            old_method or article["attack_method"],
             new_confidence,
+            last_published,
+            anchor_text,
             get_timestamp(),
             incident_id,
         ),
@@ -776,12 +925,7 @@ def process_article(conn, row):
     # Pengaman ganda: walaupun get_next_batch() sudah memfilter, cek lagi.
     cursor = conn.cursor()
     cursor.execute(
-        """
-        SELECT incident_id
-        FROM v05_processed_articles
-        WHERE article_id = ?
-        LIMIT 1
-        """,
+        "SELECT incident_id FROM v05_processed_articles WHERE article_id = ? LIMIT 1",
         (article_id,),
     )
     already_processed = cursor.fetchone()
@@ -797,16 +941,15 @@ def process_article(conn, row):
 
     # Incident lama
     if best_incident is not None:
-        incident_id = best_incident[0]
-        update_incident(conn, incident_id, article, best_score)
-        save_incident_document(
-            conn,
-            incident_id,
-            article_id,
-            best_score,
-            best_score,
-            "RULE_BASED_CLUSTERING",
+        incident_id = best_incident["incident_id"]
+        inserted = save_incident_document(
+            conn, incident_id, article_id, best_score, best_score, "RULE_BASED_CLUSTERING"
         )
+        if inserted:
+            update_incident(conn, incident_id, article, best_score)
+        else:
+            # Artikel sudah tercatat pada incident lain (data lama): ikuti itu.
+            incident_id = get_document_incident(conn, article_id) or incident_id
         mark_article_processed(conn, article_id, incident_id)
         return {
             "status": "EXISTING_INCIDENT",
@@ -828,16 +971,20 @@ def process_article(conn, row):
 
 
 def process_batch(conn, rows):
-    """Proses satu batch artikel; kembalikan tuple penghitung batch."""
+    """Proses satu batch dalam satu transaksi; artikel yang gagal di-rollback."""
     batch_articles = 0
     batch_new_incidents = 0
     batch_existing_incidents = 0
     batch_skipped = 0
+    if not conn.in_transaction:
+        conn.execute("BEGIN")
 
     for row in rows:
         article_id = row[0]
+        conn.execute("SAVEPOINT article")
         try:
             result = process_article(conn, row)
+            conn.execute("RELEASE SAVEPOINT article")
             status = result["status"]
             if status == "NEW_INCIDENT":
                 batch_new_incidents += 1
@@ -858,11 +1005,11 @@ def process_batch(conn, rows):
             print(f"Score      : {result['score']:.2f}")
             print(f"Method     : {result['method']}")
         except Exception as error:
+            conn.execute("ROLLBACK TO SAVEPOINT article")
+            conn.execute("RELEASE SAVEPOINT article")
             print("\n⚠️ ERROR")
             print(f"Article ID : {article_id}")
             print(f"Error      : {error}")
-            # Artikel tidak ditandai processed agar dicoba kembali pada run
-            # berikutnya.
             continue
 
     conn.commit()
@@ -875,7 +1022,7 @@ def process_batch(conn, rows):
 
 
 def database_summary(conn):
-    """Hitung jumlah kandidat V0.3, artikel terproses, sisa, incident, dokumen."""
+    """Kandidat V0.3, artikel terproses, sisa, incident, dokumen, incident multi-artikel."""
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) FROM v03_information_extraction")
     total_v03 = cursor.fetchone()[0]
@@ -885,18 +1032,32 @@ def database_summary(conn):
     total_incidents = cursor.fetchone()[0]
     cursor.execute("SELECT COUNT(*) FROM v05_incident_documents")
     total_documents = cursor.fetchone()[0]
-
-    remaining = total_v03 - processed_articles
-    if remaining < 0:
-        remaining = 0
-
+    cursor.execute("SELECT COUNT(*) FROM v05_incidents WHERE document_count > 1")
+    multi_document = cursor.fetchone()[0]
+    remaining = max(total_v03 - processed_articles, 0)
     return (
         total_v03,
         processed_articles,
         remaining,
         total_incidents,
         total_documents,
+        multi_document,
     )
+
+
+def print_status(title, summary):
+    """Cetak blok status database V0.5."""
+    total_v03, processed, remaining, incidents, documents, multi_document = summary
+    print("\n==================================================")
+    print(f"   {title}")
+    print("==================================================")
+    print(f"V03 candidates      : {total_v03}")
+    print(f"Processed articles  : {processed}")
+    print(f"Remaining           : {remaining}")
+    print(f"Incidents           : {incidents}")
+    print(f"Incident documents  : {documents}")
+    print(f"Incidents 2+ docs   : {multi_document}")
+    print("==================================================")
 
 
 def run():
@@ -909,36 +1070,19 @@ def run():
     create_tables(conn)
     migrate_existing_tables(conn)
     create_v05_indexes(conn)  # setelah migrasi
+    load_token_document_frequency(conn)
 
-    # Pulihkan hasil versi lama
     recovered = recover_previous_processed_articles(conn)
     if recovered > 0:
         print("\n♻️ Recovery:")
         print(f"   {recovered} artikel lama ditandai sebagai PROCESSED.")
     recover_document_counts(conn)
 
-    # Status awal
-    (
-        total_v03,
-        processed_articles,
-        remaining,
-        total_incidents,
-        total_documents,
-    ) = database_summary(conn)
-    print("\n==================================================")
-    print("   V0.5 DATABASE STATUS")
-    print("==================================================")
-    print(f"V03 candidates      : {total_v03}")
-    print(f"Processed articles  : {processed_articles}")
-    print(f"Remaining           : {remaining}")
-    print(f"Incidents           : {total_incidents}")
-    print(f"Incident documents  : {total_documents}")
-    print("==================================================")
+    print_status("V0.5 DATABASE STATUS", database_summary(conn))
 
     total_articles_processed = 0
     total_new_incidents = 0
     total_existing_incidents = 0
-    total_skipped = 0
 
     try:
         while True:
@@ -955,24 +1099,20 @@ def run():
             total_articles_processed += batch_articles
             total_new_incidents += batch_new_incidents
             total_existing_incidents += batch_existing_incidents
-            total_skipped += batch_skipped
+            if batch_articles == 0 and batch_skipped == 0:
+                print("\n⚠️ Seluruh artikel dalam batch gagal diproses; berhenti.")
+                break
 
-            (
-                current_v03,
-                current_processed,
-                current_remaining,
-                current_incidents,
-                current_documents,
-            ) = database_summary(conn)
+            current = database_summary(conn)
             print("\n==================================================")
             print(f"Batch articles      : {batch_articles}")
             print(f"New incidents       : {batch_new_incidents}")
             print(f"Existing incidents  : {batch_existing_incidents}")
             print(f"Skipped             : {batch_skipped}")
-            print(f"Total processed     : {current_processed}")
-            print(f"Total incidents     : {current_incidents}")
-            print(f"Total documents     : {current_documents}")
-            print(f"Remaining           : {current_remaining}")
+            print(f"Total processed     : {current[1]}")
+            print(f"Total incidents     : {current[3]}")
+            print(f"Total documents     : {current[4]}")
+            print(f"Remaining           : {current[2]}")
             print("==================================================")
     except KeyboardInterrupt:
         conn.commit()
@@ -982,30 +1122,16 @@ def run():
     finally:
         conn.close()
 
-    # Ringkasan akhir
     conn = get_connection()
-    (
-        final_v03,
-        final_processed,
-        final_remaining,
-        final_incidents,
-        final_documents,
-    ) = database_summary(conn)
+    final = database_summary(conn)
     conn.close()
 
-    print("\n==================================================")
-    print("   V0.5 ANALYSIS SUMMARY")
+    print_status("V0.5 ANALYSIS SUMMARY", final)
+    print(f"Articles processed this run  : {total_articles_processed}")
+    print(f"New incidents this run       : {total_new_incidents}")
+    print(f"Existing incidents this run  : {total_existing_incidents}")
     print("==================================================")
-    print(f"V03 candidates      : {final_v03}")
-    print(f"Processed articles  : {final_processed}")
-    print(f"Remaining           : {final_remaining}")
-    print(f"Total incidents     : {final_incidents}")
-    print(f"Incident documents  : {final_documents}")
-    print(f"Articles processed this run           : {total_articles_processed}")
-    print(f"New incidents this run            : {total_new_incidents}")
-    print(f"Existing incidents this run            : {total_existing_incidents}")
-    print("==================================================")
-    if final_remaining == 0:
+    if final[2] == 0:
         print("   ✅ V0.5 INCIDENT CLUSTERING SELESAI")
     else:
         print("   ⏸️ V0.5 BELUM SELESAI")

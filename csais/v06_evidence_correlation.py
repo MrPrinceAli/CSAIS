@@ -416,7 +416,11 @@ def process_incident(conn, incident_id):
             published_date,
             article_url,
         ) = article
-        text = " ".join([title or "", summary or "", content or ""])
+        # Pada data lama kolom content berisi salinan summary; jangan dihitung dua kali
+        parts = [title or "", summary or ""]
+        if content and content != summary:
+            parts.append(content)
+        text = " ".join(parts)
         fingerprint = generate_content_fingerprint(title, summary, content)
         domain = extract_domain(article_url or source_url)
         article_data[article_id] = {

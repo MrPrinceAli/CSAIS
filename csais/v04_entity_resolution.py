@@ -27,16 +27,13 @@ BATCH_SIZE = 500
 FUZZY_THRESHOLD = 0.85
 MAX_ENTITY_NAME_LENGTH = 300
 
-ENTITY_TYPES = ["ORGANIZATION", "THREAT_ACTOR", "LOCATION"]
-
 
 # --- Alias entity yang sudah dikenal ---
 #
 # Dictionary ini merupakan baseline: beberapa nama berbeda dapat mengarah ke
-# entity yang sama.
+# entity yang sama. Alias dicocokkan dengan seluruh mention, bukan sebagian.
 
-KNOWN_ENTITY_ALIASES = {
-    # Organisasi
+ORGANIZATION_ALIASES = {
     "Bank Mandiri": [
         "bank mandiri", "pt bank mandiri", "mandiri", "mandiri bank",
         "bank mandiri persero",
@@ -54,7 +51,8 @@ KNOWN_ENTITY_ALIASES = {
     "Meta": [
         "meta", "meta platforms", "meta platforms inc", "facebook", "facebook inc",
     ],
-    "TikTok": ["tiktok", "tiktok inc", "bytedance", "byte dance"],
+    "TikTok": ["tiktok", "tiktok inc"],
+    "ByteDance": ["bytedance", "byte dance"],
     "Telegram": ["telegram", "telegram messenger"],
     "WhatsApp": ["whatsapp", "whatsapp messenger"],
     "Cloudflare": ["cloudflare", "cloudflare inc"],
@@ -65,7 +63,7 @@ KNOWN_ENTITY_ALIASES = {
     "NVIDIA": ["nvidia", "nvidia corporation"],
     "OpenAI": ["openai", "openai inc"],
     "CrowdStrike": ["crowdstrike", "crowdstrike holdings"],
-    "Palo Alto Networks": ["palo alto networks", "palo alto", "pan"],
+    "Palo Alto Networks": ["palo alto networks", "palo alto"],
     "Fortinet": ["fortinet", "fortinet inc"],
     "Kaspersky": ["kaspersky", "kaspersky lab", "kaspersky laboratory"],
     "ESET": ["eset", "eset spol"],
@@ -73,18 +71,48 @@ KNOWN_ENTITY_ALIASES = {
     "Mandiant": ["mandiant", "mandiant inc"],
     "FireEye": ["fireeye", "fireeye inc"],
     "Cisco Talos": ["cisco talos", "talos"],
-    # Threat actor
-    "APT28": ["apt28", "fancy bear", "sofacy", "sednit", "strontium"],
-    "APT29": ["apt29", "cozy bear", "the dukes", "midnight blizzard"],
+}
+
+THREAT_ACTOR_ALIASES = {
+    "APT28": [
+        "apt28", "fancy bear", "sofacy", "sednit", "strontium", "forest blizzard",
+    ],
+    "APT29": ["apt29", "cozy bear", "the dukes", "midnight blizzard", "nobelium"],
+    "APT41": ["apt41", "winnti", "double dragon"],
     "Lazarus Group": ["lazarus group", "lazarus", "hidden cobra"],
-    "Sandworm": ["sandworm", "sandworm team"],
-    "LockBit": ["lockbit", "lockbit group", "lockbit 3.0"],
-    "Cl0p": ["cl0p", "clop", "cl0p ransomware"],
-    "BlackCat": ["blackcat", "blackcat ransomware", "alphv", "alphransomware"],
-    "Scattered Spider": ["scattered spider", "octo tempest", "0ktapus"],
+    "Kimsuky": ["kimsuky", "velvet chollima"],
+    "Sandworm": ["sandworm", "sandworm team", "seashell blizzard"],
+    "Volt Typhoon": ["volt typhoon"],
+    "Salt Typhoon": ["salt typhoon"],
+    "MuddyWater": ["muddywater", "muddy water"],
+    "Charming Kitten": ["charming kitten", "apt35", "mint sandstorm"],
+    "LockBit": ["lockbit", "lockbit group", "lockbit 3.0", "lockbit ransomware"],
+    "Cl0p": ["cl0p", "clop", "cl0p ransomware", "clop ransomware"],
+    "BlackCat": [
+        "blackcat", "blackcat ransomware", "alphv", "alphv/blackcat", "alphransomware",
+    ],
+    "Black Basta": ["black basta", "blackbasta"],
+    "RansomHub": ["ransomhub"],
+    "Akira": ["akira", "akira ransomware"],
+    "Qilin": ["qilin", "qilin ransomware", "agenda ransomware"],
+    "Medusa": ["medusa", "medusa ransomware"],
+    "Play": ["play ransomware", "playcrypt"],
+    "Rhysida": ["rhysida", "rhysida ransomware"],
+    "BianLian": ["bianlian"],
+    "Hunters International": ["hunters international"],
+    "8Base": ["8base"],
+    "Conti": ["conti", "conti ransomware"],
+    "REvil": ["revil", "sodinokibi"],
+    "DarkSide": ["darkside"],
+    "INC Ransom": ["inc ransom", "inc ransomware"],
+    "FunkSec": ["funksec"],
+    "Scattered Spider": ["scattered spider", "octo tempest", "0ktapus", "unc3944"],
     "Anonymous": ["anonymous", "anonymous collective"],
+    "Anonymous Sudan": ["anonymous sudan"],
     "KillNet": ["killnet", "kill net"],
     "NoName057(16)": ["noname057(16)", "noname05716", "noname057"],
+    "Bjorka": ["bjorka"],
+    "Brain Cipher": ["brain cipher"],
 }
 
 
@@ -103,7 +131,7 @@ LOCATION_ALIASES = {
     "Australia": ["australia"],
     "India": ["india"],
     "Japan": ["japan"],
-    "South Korea": ["south korea", "republic of korea", "korea"],
+    "South Korea": ["south korea", "republic of korea"],
     "North Korea": ["north korea", "dprk"],
     "Vietnam": ["vietnam", "viet nam"],
     "Thailand": ["thailand"],
@@ -206,12 +234,15 @@ def calculate_similarity(mention, canonical_name):
 def build_alias_index():
     """Peta alias ternormalisasi -> (tipe entity, nama canonical)."""
     alias_index = {}
-    for canonical_name, aliases in KNOWN_ENTITY_ALIASES.items():
-        for alias in aliases:
-            alias_index[normalize_entity_name(alias)] = ("ORGANIZATION", canonical_name)
-    for canonical_name, aliases in LOCATION_ALIASES.items():
-        for alias in aliases:
-            alias_index[normalize_entity_name(alias)] = ("LOCATION", canonical_name)
+    alias_groups = [
+        ("ORGANIZATION", ORGANIZATION_ALIASES),
+        ("THREAT_ACTOR", THREAT_ACTOR_ALIASES),
+        ("LOCATION", LOCATION_ALIASES),
+    ]
+    for entity_type, alias_map in alias_groups:
+        for canonical_name, aliases in alias_map.items():
+            for alias in aliases:
+                alias_index[normalize_entity_name(alias)] = (entity_type, canonical_name)
     return alias_index
 
 
@@ -321,53 +352,71 @@ def get_next_batch(conn):
     return cursor.fetchall()
 
 
-def find_existing_entity(conn, entity_type, mention):
-    """Cari entity yang sudah ada: exact match dulu, lalu fuzzy match."""
+# Cache entity di memori, per tipe: {"by_name": {normalized: entity}, "items": [...]}
+# Menghindari pembacaan seluruh tabel entity untuk setiap mention.
+_ENTITY_CACHE = {}
+
+
+def _cache_entity(entity_type, entity_id, canonical_name, normalized_name):
+    bucket = _ENTITY_CACHE.setdefault(entity_type, {"by_name": {}, "items": []})
+    if normalized_name in bucket["by_name"]:
+        return
+    entity = {
+        "entity_id": entity_id,
+        "canonical_name": canonical_name,
+        "normalized_name": normalized_name,
+    }
+    bucket["by_name"][normalized_name] = entity
+    bucket["items"].append(entity)
+
+
+def load_entity_cache(conn):
+    """Muat seluruh entity dari database ke cache memori."""
+    _ENTITY_CACHE.clear()
     cursor = conn.cursor()
+    cursor.execute(
+        "SELECT entity_id, entity_type, canonical_name, normalized_name FROM v04_entities"
+    )
+    for entity_id, entity_type, canonical_name, normalized_name in cursor.fetchall():
+        _cache_entity(entity_type, entity_id, canonical_name, normalized_name)
+
+
+def find_existing_entity(entity_type, mention):
+    """Cari entity yang sudah ada di cache: exact match dulu, lalu fuzzy match."""
     normalized_mention = normalize_entity_name(mention)
     if not normalized_mention:
         return None
+    bucket = _ENTITY_CACHE.get(entity_type)
+    if not bucket:
+        return None
 
     # Tahap 1 - exact match
-    cursor.execute(
-        """
-        SELECT entity_id, canonical_name, normalized_name
-        FROM v04_entities
-        WHERE entity_type = ? AND normalized_name = ?
-        LIMIT 1
-        """,
-        (entity_type, normalized_mention),
-    )
-    row = cursor.fetchone()
-    if row:
+    exact = bucket["by_name"].get(normalized_mention)
+    if exact:
         return {
-            "entity_id": row[0],
-            "canonical_name": row[1],
+            "entity_id": exact["entity_id"],
+            "canonical_name": exact["canonical_name"],
             "score": 1.0,
             "method": "EXACT_MATCH",
         }
 
-    # Tahap 2 - fuzzy match
-    cursor.execute(
-        """
-        SELECT entity_id, canonical_name, normalized_name
-        FROM v04_entities
-        WHERE entity_type = ?
-        """,
-        (entity_type,),
-    )
-    candidates = cursor.fetchall()
+    # Tahap 2 - fuzzy match. Skor >= FUZZY_THRESHOLD (0.85) mengharuskan
+    # character similarity >= 0.70, yang mustahil bila selisih panjang nama
+    # lebih dari 30% panjang terpanjang; kandidat seperti itu dilewati.
     best_match = None
     best_score = 0.0
-    for candidate in candidates:
-        entity_id = candidate[0]
-        canonical_name = candidate[1]
-        score = calculate_similarity(mention, canonical_name)
+    mention_length = len(normalized_mention)
+    for entity in bucket["items"]:
+        candidate = entity["normalized_name"]
+        longest = max(mention_length, len(candidate))
+        if abs(mention_length - len(candidate)) > 0.3 * longest:
+            continue
+        score = calculate_similarity(normalized_mention, candidate)
         if score > best_score:
             best_score = score
             best_match = {
-                "entity_id": entity_id,
-                "canonical_name": canonical_name,
+                "entity_id": entity["entity_id"],
+                "canonical_name": entity["canonical_name"],
                 "score": score,
                 "method": "FUZZY_MATCH",
             }
@@ -377,8 +426,9 @@ def find_existing_entity(conn, entity_type, mention):
 
 
 def create_entity(conn, entity_type, canonical_name, resolution_method):
-    """Simpan entity baru (INSERT OR IGNORE) dan kembalikan entity_id."""
+    """Simpan entity baru (INSERT OR IGNORE), masukkan ke cache, kembalikan id."""
     entity_id = generate_entity_id(entity_type, canonical_name)
+    normalized_name = normalize_entity_name(canonical_name)
     now = get_timestamp()
     cursor = conn.cursor()
     cursor.execute(
@@ -393,23 +443,15 @@ def create_entity(conn, entity_type, canonical_name, resolution_method):
             entity_id,
             entity_type,
             canonical_name,
-            normalize_entity_name(canonical_name),
+            normalized_name,
             0,
             resolution_method,
             now,
             now,
         ),
     )
+    _cache_entity(entity_type, entity_id, canonical_name, normalized_name)
     return entity_id
-
-
-def update_entity_timestamp(conn, entity_id):
-    """Perbarui updated_at sebuah entity."""
-    cursor = conn.cursor()
-    cursor.execute(
-        "UPDATE v04_entities SET updated_at = ? WHERE entity_id = ?",
-        (get_timestamp(), entity_id),
-    )
 
 
 def save_entity_mention(
@@ -506,26 +548,23 @@ def resolve_mention(conn, entity_type, mention, alias_index):
     # Tahap 1 - alias yang sudah dikenal
     known_canonical = resolve_known_alias(entity_type, mention, alias_index)
     if known_canonical:
-        existing = find_existing_entity(conn, entity_type, known_canonical)
+        existing = find_existing_entity(entity_type, known_canonical)
         if existing:
-            return {
-                "entity_id": existing["entity_id"],
-                "canonical_name": existing["canonical_name"],
-                "score": 1.0,
-                "confidence": 1.0,
-                "method": "EXACT_MATCH",
-            }
-        entity_id = create_entity(conn, entity_type, known_canonical, "KNOWN_ALIAS")
+            entity_id = existing["entity_id"]
+            canonical_name = existing["canonical_name"]
+        else:
+            entity_id = create_entity(conn, entity_type, known_canonical, "KNOWN_ALIAS")
+            canonical_name = known_canonical
         return {
             "entity_id": entity_id,
-            "canonical_name": known_canonical,
+            "canonical_name": canonical_name,
             "score": 1.0,
             "confidence": 1.0,
             "method": "KNOWN_ALIAS",
         }
 
     # Tahap 2 - entity yang sudah ada
-    existing = find_existing_entity(conn, entity_type, mention)
+    existing = find_existing_entity(entity_type, mention)
     if existing:
         score = existing["score"]
         confidence = min(max(score, 0.0), 1.0)
@@ -596,21 +635,28 @@ def process_article(conn, row, alias_index):
 
 
 def process_batch(conn, rows, alias_index):
-    """Proses satu batch artikel lalu commit."""
+    """Proses satu batch dalam satu transaksi; artikel yang gagal di-rollback."""
     batch_articles = 0
     batch_mentions = 0
+    if not conn.in_transaction:
+        conn.execute("BEGIN")
     for row in rows:
         article_id = row[0]
+        conn.execute("SAVEPOINT article")
         try:
             mentions_found = process_article(conn, row, alias_index)
+            conn.execute("RELEASE SAVEPOINT article")
             batch_articles += 1
             batch_mentions += mentions_found
         except Exception as error:
+            # Tulisan parsial artikel ini dibatalkan; cache disegarkan karena
+            # entity yang baru dibuat ikut dibatalkan.
+            conn.execute("ROLLBACK TO SAVEPOINT article")
+            conn.execute("RELEASE SAVEPOINT article")
+            load_entity_cache(conn)
             print("\n⚠️ ERROR")
             print(f"    Article ID : {article_id}")
             print(f"    Error      : {error}")
-            # Jangan tandai artikel sebagai processed jika terjadi exception;
-            # artikel tersebut akan dicoba kembali pada proses berikutnya.
             continue
     conn.commit()
     return batch_articles, batch_mentions
@@ -650,6 +696,7 @@ def run():
         print(f"\n♻️ Recovery: {recovered} artikel lama ditandai sebagai PROCESSED.")
 
     alias_index = build_alias_index()
+    load_entity_cache(conn)
 
     total_v03, total_processed, remaining, total_entities, total_mentions = (
         database_summary(conn)
@@ -674,6 +721,9 @@ def run():
             batch_articles, batch_mentions = process_batch(conn, rows, alias_index)
             total_articles_processed += batch_articles
             total_mentions_created += batch_mentions
+            if batch_articles == 0:
+                print("\n⚠️ Seluruh artikel dalam batch gagal diproses; berhenti.")
+                break
 
             (
                 current_v03,

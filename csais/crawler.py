@@ -3,8 +3,9 @@
 Mengumpulkan artikel berita keamanan siber dari Google News RSS berdasarkan
 daftar kata kunci multibahasa, menyimpannya ke database SQLite, dan mencatat
 checkpoint di tabel crawl_state agar crawl yang terputus dapat dilanjutkan.
-Ada dua mode: historical crawl (per periode 30 hari sejak START_DATE) dan
-incremental crawl (3 hari terakhir, setelah konfirmasi interaktif pengguna).
+Ada dua mode: historical crawl (per periode HISTORICAL_PERIOD_DAYS hari penuh
+sejak START_DATE) dan incremental crawl (INCREMENTAL_DAYS hari terakhir).
+Keduanya hanya berjalan setelah konfirmasi interaktif pengguna.
 """
 
 import hashlib
@@ -20,12 +21,14 @@ from urllib.parse import quote_plus
 import feedparser
 import requests
 
-from csais.config import DATABASE_DIR, DATABASE_FILE
+from csais.config import DATABASE_DIR
 from csais.db import get_connection, get_timestamp
 
 
 # --- Konfigurasi ---
 START_DATE = datetime(2025, 1, 1, tzinfo=timezone.utc)
+HISTORICAL_PERIOD_DAYS = 30  # panjang satu periode historical crawl
+INCREMENTAL_DAYS = 3  # incremental crawl mencakup N hari terakhir sampai hari ini
 
 REQUEST_DELAY_MIN = 0.5
 REQUEST_DELAY_MAX = 5.0
@@ -256,38 +259,13 @@ def initialize_database():
     cursor.execute(
         "CREATE INDEX IF NOT EXISTS idx_crawl_state_status ON crawl_state(status)"
     )
+    # Checkpoint IN_PROGRESS adalah sisa crawl yang terputus; periode itu akan
+    # dicrawl ulang, jadi barisnya dibersihkan agar tidak menumpuk.
+    cursor.execute("DELETE FROM crawl_state WHERE status = 'IN_PROGRESS'")
+    if cursor.rowcount > 0:
+        print(f"\n[*] {cursor.rowcount} checkpoint IN_PROGRESS lama dibersihkan.")
     connection.commit()
     connection.close()
-
-
-def get_incremental_start_date():
-    """Tanggal mulai incremental berdasarkan artikel terbaru di database."""
-    if not os.path.exists(DATABASE_FILE):
-        return START_DATE
-
-    connection = get_connection()
-    cursor = connection.cursor()
-    try:
-        cursor.execute("SELECT MAX(published_date) FROM articles")
-        result = cursor.fetchone()
-    except Exception:
-        result = None
-    connection.close()
-
-    if result and result[0]:
-        try:
-            latest_date = datetime.fromisoformat(result[0])
-            if latest_date.tzinfo is None:
-                latest_date = latest_date.replace(tzinfo=timezone.utc)
-            print(
-                "\n[*] Data terakhir di database ditemukan pada: "
-                f"{latest_date.strftime('%Y-%m-%d %H:%M:%S UTC')}"
-            )
-            return latest_date - timedelta(hours=1)
-        except Exception:
-            pass
-
-    return START_DATE
 
 
 # --- Utilitas teks, hash, tanggal, dan bahasa ---
@@ -507,7 +485,7 @@ def save_article(entry, keyword, query_language, current_start=None, current_end
             build_google_news_url(keyword, source_start, source_end, query_language),
             title,
             summary,
-            summary,
+            None,  # RSS Google News tidak memuat isi artikel penuh
             article_url,
             published_date,
             collected_date,
@@ -575,145 +553,119 @@ def crawl_keyword(keyword, language, start_date, end_date):
     return False
 
 
+def utc_midnight_today():
+    """Tanggal hari ini (UTC) pukul 00:00, agar checkpoint stabil dalam satu hari."""
+    return datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def full_historical_periods(today=None):
+    """Periode HISTORICAL_PERIOD_DAYS hari penuh sejak START_DATE yang sudah berakhir.
+
+    Periode terakhir yang belum genap tidak termasuk; hari-hari itu dicakup
+    oleh incremental crawl. Batas periode selalu tengah malam UTC sehingga
+    checkpoint di crawl_state bisa dicocokkan kembali di run berikutnya.
+    """
+    if today is None:
+        today = utc_midnight_today()
+    period = timedelta(days=HISTORICAL_PERIOD_DAYS)
+    periods = []
+    current_start = START_DATE
+    while current_start + period <= today:
+        periods.append((current_start, current_start + period))
+        current_start += period
+    return periods
+
+
+def crawl_all_keywords(crawl_type, start_date, end_date):
+    """Crawl semua kata kunci untuk satu periode dengan checkpoint; False bila gagal."""
+    period_start = start_date.isoformat()
+    period_end = end_date.isoformat()
+    skipped = 0
+    for language, keywords in MULTILINGUAL_KEYWORDS.items():
+        for keyword in keywords:
+            if is_period_completed(crawl_type, language, keyword, period_start, period_end):
+                skipped += 1
+                continue
+            save_crawl_state(
+                crawl_type, language, keyword, period_start, period_end, "IN_PROGRESS"
+            )
+            if not crawl_keyword(keyword, language, start_date, end_date):
+                return False
+            save_crawl_state(
+                crawl_type, language, keyword, period_start, period_end, "COMPLETED"
+            )
+    if skipped:
+        print(f"\n   ⏭️ {skipped} kata kunci sudah selesai, dilewati.")
+    return True
+
+
 def historical_crawl():
-    """Crawl semua kata kunci per periode 30 hari sejak START_DATE."""
+    """Crawl semua kata kunci untuk setiap periode penuh sejak START_DATE."""
     print("\n==================================================")
     print("   HISTORICAL CRAWL")
     print("==================================================")
 
-    current_start = START_DATE
-    today = datetime.now(timezone.utc)
-    period_number = 0
-
-    while current_start < today:
-        period_number += 1
-        current_end = min(current_start + timedelta(days=30), today)
-
+    for number, (current_start, current_end) in enumerate(full_historical_periods(), 1):
         print("\n==================================================")
-        print(f"PERIOD {period_number}")
+        print(f"PERIOD {number}")
         print(f"{current_start.date()} → {current_end.date()}")
         print("==================================================")
-
-        for language, keywords in MULTILINGUAL_KEYWORDS.items():
-            for keyword in keywords:
-                period_start = current_start.isoformat()
-                period_end = current_end.isoformat()
-
-                # Checkpoint: lewati yang sudah selesai
-                if is_period_completed(
-                    "historical", language, keyword, period_start, period_end
-                ):
-                    print(f"\n   ⏭️ SKIP [{language}] {keyword}")
-                    continue
-
-                save_crawl_state(
-                    "historical",
-                    language,
-                    keyword,
-                    period_start,
-                    period_end,
-                    "IN_PROGRESS",
-                )
-                success = crawl_keyword(keyword, language, current_start, current_end)
-
-                if success:
-                    save_crawl_state(
-                        "historical",
-                        language,
-                        keyword,
-                        period_start,
-                        period_end,
-                        "COMPLETED",
-                    )
-                else:
-                    print("\n❌ Historical crawl dihentikan.")
-                    print("Checkpoint tersimpan.")
-                    return
-
-        current_start = current_end
+        if not crawl_all_keywords("historical", current_start, current_end):
+            print("\n❌ Historical crawl dihentikan.")
+            print("Checkpoint tersimpan.")
+            return False
 
     print("\n✅ HISTORICAL CRAWL SELESAI")
+    return True
 
 
 def incremental_crawl():
-    """Crawl 3 hari terakhir untuk semua kata kunci setelah konfirmasi pengguna."""
+    """Crawl INCREMENTAL_DAYS hari terakhir sampai hari ini untuk semua kata kunci."""
     print("\n==================================================")
     print("   INCREMENTAL CRAWL")
     print("==================================================")
 
-    today = datetime.now(timezone.utc)
-
-    # Pertanyaan interaktif kepada pengguna
-    choice = (
-        input(
-            "Apakah Anda ingin update atau melakukan pembaharuan data (crawl)? (y/n): "
-        )
-        .strip()
-        .lower()
-    )
-    if choice != "y":
-        print("\n[*] Crawl dilewati. Langsung meluncur ke modul berikutnya (V02)...")
-        return False  # Mengembalikan False agar langsung lanjut ke modul berikutnya
-
-    # Jika dipilih Y, tarik data dari 3 hari ke belakang sampai hari ini
-    start_date = today - timedelta(days=3)
-    end_date = today
+    today = utc_midnight_today()
+    start_date = today - timedelta(days=INCREMENTAL_DAYS)
+    end_date = today + timedelta(days=1)  # "before:" Google eksklusif; cakup hari ini
     print(
         f"[*] Rentang incremental aktif: {start_date.strftime('%Y-%m-%d')} → "
-        f"{end_date.strftime('%Y-%m-%d')}"
+        f"{today.strftime('%Y-%m-%d')}"
     )
 
-    for language, keywords in MULTILINGUAL_KEYWORDS.items():
-        for keyword in keywords:
-            period_start = start_date.isoformat()
-            period_end = end_date.isoformat()
-
-            if is_period_completed(
-                "incremental", language, keyword, period_start, period_end
-            ):
-                continue
-
-            save_crawl_state(
-                "incremental",
-                language,
-                keyword,
-                period_start,
-                period_end,
-                "IN_PROGRESS",
-            )
-            success = crawl_keyword(keyword, language, start_date, end_date)
-
-            if success:
-                save_crawl_state(
-                    "incremental",
-                    language,
-                    keyword,
-                    period_start,
-                    period_end,
-                    "COMPLETED",
-                )
-            else:
-                print("\n❌ Incremental crawl dihentikan.")
-                return True
-
+    if not crawl_all_keywords("incremental", start_date, end_date):
+        print("\n❌ Incremental crawl dihentikan.")
+        return False
     print("\n✅ INCREMENTAL CRAWL SELESAI")
     return True
 
 
 def historical_crawl_completed():
-    """Anggap historical crawl selesai bila jumlah task COMPLETED sudah cukup."""
+    """True bila semua kata kunci sudah COMPLETED untuk setiap periode penuh."""
+    periods = full_historical_periods()
+    if not periods:
+        return True
+    total_keywords = sum(len(keywords) for keywords in MULTILINGUAL_KEYWORDS.values())
     connection = get_connection()
     cursor = connection.cursor()
-    total_keywords = sum(len(keywords) for keywords in MULTILINGUAL_KEYWORDS.values())
-    cursor.execute("""
-        SELECT COUNT(*)
-        FROM crawl_state
-        WHERE crawl_type = 'historical'
-        AND status = 'COMPLETED'
-        """)
-    completed = cursor.fetchone()[0]
-    connection.close()
-    return completed > 0 and completed >= total_keywords * 21
+    try:
+        for current_start, current_end in periods:
+            cursor.execute(
+                """
+                SELECT COUNT(*)
+                FROM crawl_state
+                WHERE crawl_type = 'historical'
+                  AND status = 'COMPLETED'
+                  AND period_start = ?
+                  AND period_end = ?
+                """,
+                (current_start.isoformat(), current_end.isoformat()),
+            )
+            if cursor.fetchone()[0] < total_keywords:
+                return False
+        return True
+    finally:
+        connection.close()
 
 
 def database_summary():
@@ -741,15 +693,28 @@ def run():
     print(f"\nData dalam database : {total_articles}")
     print(f"Crawl task selesai  : {completed_tasks}")
 
-    if not historical_crawl_completed():
-        historical_crawl()
-    else:
+    historical_done = historical_crawl_completed()
+    if historical_done:
         print("\n✅ Historical crawl sudah selesai.")
-
-    if historical_crawl_completed():
-        incremental_crawl()
     else:
-        print("\n⏸️ Incremental crawl belum dijalankan.")
+        print("\n⏳ Historical crawl belum lengkap: ada periode penuh yang belum selesai.")
+
+    choice = (
+        input(
+            "Apakah Anda ingin update atau melakukan pembaharuan data (crawl)? (y/n): "
+        )
+        .strip()
+        .lower()
+    )
+    if choice != "y":
+        print("\n[*] Crawl dilewati. Langsung meluncur ke modul berikutnya (V02)...")
+    else:
+        if not historical_done:
+            historical_done = historical_crawl()
+        if historical_done:
+            incremental_crawl()
+        else:
+            print("\n⏸️ Incremental crawl belum dijalankan karena historical belum selesai.")
 
     total_articles, completed_tasks = database_summary()
     print("\n==================================================")
