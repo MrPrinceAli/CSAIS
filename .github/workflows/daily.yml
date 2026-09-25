@@ -54,8 +54,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p database
-          gh release download bootstrap --pattern csais.db --dir database || \
-            echo "Tidak ada rilis bootstrap; mulai dari database kosong."
+          # Tanpa rilis bootstrap, job dihentikan: database kosong yang ikut
+          # tersimpan ke cache akan menutupi bootstrap pada run berikutnya.
+          gh release download bootstrap --pattern csais.db --dir database || {
+            echo "::error::Rilis bootstrap belum ada; jalankan scripts/setup_cloud.sh dulu."
+            exit 1
+          }
 
       - name: Crawl, olah, ambil isi artikel, terbitkan ke Turso
         env:
