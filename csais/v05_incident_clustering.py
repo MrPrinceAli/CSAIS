@@ -50,9 +50,15 @@ PUBLISHED_WINDOW_DAYS = 14  # jendela tanggal terbit untuk kandidat incident
 # pasangan 0.35-0.50 hampir semuanya liputan insiden yang sama dari media
 # berbeda; di bawah 0.35 mulai bercampur dengan insiden lain yang sejenis.
 TEXT_SIMILARITY_THRESHOLD = 0.35
-MIN_TEXT_SIMILARITY_WITH_ACTOR = 0.20  # pelaku sama + teks sedikit mirip
+MIN_TEXT_SIMILARITY_WITH_ACTOR = 0.30  # pelaku sama + teks cukup mirip
 MIN_SCORE_WITH_IDENTITY = 0.40  # skor minimum bila ada sinyal identitas target
 TARGET_IN_TEXT_SIMILARITY = 0.9  # nama target satu sisi muncul di teks sisi lain
+# Nama target yang muncul di lebih dari max(TARGET_MIN_DF_LIMIT,
+# TARGET_MAX_DF_RATIO * jumlah artikel) artikel (Microsoft, FBI, CISA, Google)
+# terlalu umum untuk menjadi bukti identitas satu insiden.
+TARGET_MAX_DF_RATIO = 0.003
+TARGET_MIN_DF_LIMIT = 20
+MAX_ANCHOR_TOKENS = 300  # token incident berhenti diperkaya setelah sebanyak ini
 # Token dianggap nama khas bila muncul di <= max(RARE_TOKEN_MAX_DF,
 # RARE_TOKEN_MAX_DF_RATIO * jumlah artikel) artikel, agar batasnya ikut
 # membesar pada korpus yang besar.
@@ -163,10 +169,15 @@ def attack_type_set(value):
 
 
 def distinctive_tokens(name):
-    """Token nama target yang cukup khas untuk dicari di teks artikel lain."""
+    """Token nama target yang cukup khas untuk menjadi bukti identitas.
+
+    Token generik dan token yang terlalu sering muncul di korpus dibuang;
+    himpunan kosong berarti nama itu tidak bisa dipakai sebagai identitas.
+    """
     if not name:
         return set()
-    return tokenize(name) - STOPWORDS - GENERIC_TARGET_TOKENS
+    tokens = tokenize(name) - STOPWORDS - GENERIC_TARGET_TOKENS
+    return {token for token in tokens if _TOKEN_DF.get(token, 0) <= _TARGET_DF_LIMIT}
 
 
 def target_in_text(article, incident, anchor_tokens):
@@ -183,11 +194,12 @@ def target_in_text(article, incident, anchor_tokens):
 # bukti kuat bahwa dua artikel membahas hal yang sama.
 _TOKEN_DF = {}
 _RARE_DF_LIMIT = RARE_TOKEN_MAX_DF
+_TARGET_DF_LIMIT = float("inf")
 
 
 def load_token_document_frequency(conn):
-    """Hitung di berapa artikel setiap token muncul, dan batas 'token langka'."""
-    global _RARE_DF_LIMIT
+    """Hitung di berapa artikel setiap token muncul, beserta batas-batasnya."""
+    global _RARE_DF_LIMIT, _TARGET_DF_LIMIT
     _TOKEN_DF.clear()
     cursor = conn.cursor()
     cursor.execute("SELECT title, summary FROM articles")
@@ -197,6 +209,7 @@ def load_token_document_frequency(conn):
         for token in text_tokens(title, summary):
             _TOKEN_DF[token] = _TOKEN_DF.get(token, 0) + 1
     _RARE_DF_LIMIT = max(RARE_TOKEN_MAX_DF, int(total * RARE_TOKEN_MAX_DF_RATIO))
+    _TARGET_DF_LIMIT = max(TARGET_MIN_DF_LIMIT, int(total * TARGET_MAX_DF_RATIO))
 
 
 def shared_rare_tokens(tokens_a, tokens_b):
@@ -667,14 +680,16 @@ def has_identity_signal(article, incident, details):
     teks judul+ringkasan sisi lain, karena ekstraksi target sering hanya
     berhasil pada salah satu artikel.
     """
-    if (
-        article["target_entity_id"]
-        and article["target_entity_id"] == incident["target_entity_id"]
-    ):
-        return True
     incident_target = normalize_value(incident["target"])
-    if article["target"] and article["target"] == incident_target:
-        return True
+    # Kesamaan target hanya menjadi bukti bila namanya cukup khas
+    if distinctive_tokens(article["target"]):
+        if (
+            article["target_entity_id"]
+            and article["target_entity_id"] == incident["target_entity_id"]
+        ):
+            return True
+        if article["target"] == incident_target:
+            return True
 
     anchor_tokens = set((incident["anchor_text"] or "").split())
     if target_in_text(article, incident, anchor_tokens):
@@ -857,8 +872,11 @@ def update_incident(conn, incident_id, article, similarity_score):
         last_published = article["published_date"]
 
     # Token teks incident diperkaya dengan artikel baru agar liputan lanjutan
-    # (nama target, pelaku) ikut dikenali
-    anchor_tokens = set((old_anchor_text or "").split()) | article["tokens"]
+    # (nama target, pelaku) ikut dikenali, dengan batas agar cluster besar
+    # tidak terus "menggelinding" menyerap berita lain
+    anchor_tokens = set((old_anchor_text or "").split())
+    if len(anchor_tokens) < MAX_ANCHOR_TOKENS:
+        anchor_tokens |= article["tokens"]
     anchor_text = " ".join(sorted(anchor_tokens))
 
     if old_confidence is None:

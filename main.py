@@ -2,9 +2,10 @@
 
 Cara pakai (dari direktori mana pun):
 
-    python main.py              # crawler (dengan konfirmasi) lalu V0.1 - V0.6
-    python main.py --no-crawl   # lewati crawler, langsung V0.1 - V0.6
-    python main.py --reset      # hapus hasil V0.2 - V0.6 lalu proses ulang
+    python main.py                 # crawler (dengan konfirmasi) lalu V0.1 - V0.6
+    python main.py --no-crawl      # lewati crawler, langsung V0.1 - V0.6
+    python main.py --reset         # hapus hasil V0.2 - V0.6 lalu proses ulang
+    python main.py --reset-from 5  # hapus hasil V0.5 - V0.6 saja lalu proses ulang
 
 Lokasi database diatur di ``csais/config.py``.
 """
@@ -44,7 +45,14 @@ def parse_args():
         help="hapus hasil olahan V0.2 - V0.6 sebelum memproses (dengan konfirmasi)",
     )
     parser.add_argument(
-        "--yes", action="store_true", help="jangan minta konfirmasi untuk --reset"
+        "--reset-from",
+        type=int,
+        choices=range(2, 7),
+        metavar="N",
+        help="hapus hasil olahan mulai tahap V0.N sampai V0.6 saja (2-6)",
+    )
+    parser.add_argument(
+        "--yes", action="store_true", help="jangan minta konfirmasi untuk reset"
     )
     return parser.parse_args()
 
@@ -60,8 +68,9 @@ def main():
     print("   🛡️ CYBER SOCIAL ATTACK INTELLIGENCE SYSTEM")
     print("==================================================")
 
-    if args.reset:
-        reset.reset_derived_tables(confirm=not args.yes)
+    if args.reset or args.reset_from:
+        from_stage = args.reset_from or 2
+        reset.reset_derived_tables(confirm=not args.yes, from_stage=from_stage)
 
     total = len(steps)
     for number, (name, step) in enumerate(steps, start=1):

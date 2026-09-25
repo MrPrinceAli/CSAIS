@@ -42,6 +42,7 @@ python3 -m venv .venv
 ./.venv/bin/python main.py              # crawler (dengan konfirmasi) lalu V0.1 - V0.6
 ./.venv/bin/python main.py --no-crawl   # lewati crawler
 ./.venv/bin/python main.py --reset      # hapus hasil V0.2 - V0.6, proses ulang dari awal
+./.venv/bin/python main.py --reset-from 5   # hapus hasil V0.5 - V0.6 saja, lalu proses ulang
 ```
 
 Crawler akan menanyakan apakah ingin menarik data baru (`y`) atau

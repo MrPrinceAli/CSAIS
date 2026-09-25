@@ -385,8 +385,8 @@ _PASSIVE_VERBS = (
 )
 _SUFFERED_VERBS = (
     r"(?:suffered|suffers|experienced|experiences|confirmed|confirms|disclosed|"
-    r"discloses|reported|reports|faced|faces|investigating|investigates|warns of|"
-    r"warned of|patches|patched|fixes|fixed|responding to|responds to)\s+"
+    r"discloses|reported|reports|faced|faces|investigating|investigates|"
+    r"responding to|responds to)\s+"
     r"(?:a\s+|an\s+)?(?:[A-Za-z][\w-]*\s+){0,3}?"
     r"(?:cyber|cyber-attack|cyberattack|ransomware|data|security|hack|zero-day|"
     r"zero day|vulnerability|exploitation|breach|attack|incident|intrusion|outage|"

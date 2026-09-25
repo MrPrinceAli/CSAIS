@@ -1,30 +1,33 @@
-"""Penghapusan hasil olahan V0.2 - V0.6 agar pipeline memproses ulang dari awal.
+"""Penghapusan hasil olahan agar pipeline memproses ulang dari tahap tertentu.
 
-Tabel hasil crawl (``articles`` dan ``crawl_state``) tidak disentuh.
+Tabel hasil crawl (``articles`` dan ``crawl_state``) tidak disentuh. Karena
+setiap tahap dibangun dari tahap sebelumnya, menghapus tahap N berarti
+menghapus tahap N sampai V0.6.
 """
 
 from csais.db import get_connection
 
-DERIVED_TABLES = [
-    "v02_relevance",
-    "v03_information_extraction",
-    "v04_entities",
-    "v04_entity_mentions",
-    "v04_processed_articles",
-    "v05_incidents",
-    "v05_incident_documents",
-    "v05_processed_articles",
-    "v06_evidence",
-    "v06_source_relations",
-    "v06_processed_incidents",
-]
+STAGE_TABLES = {
+    2: ["v02_relevance"],
+    3: ["v03_information_extraction"],
+    4: ["v04_entities", "v04_entity_mentions", "v04_processed_articles"],
+    5: ["v05_incidents", "v05_incident_documents", "v05_processed_articles"],
+    6: ["v06_evidence", "v06_source_relations", "v06_processed_incidents"],
+}
 
 
-def derived_table_counts(conn):
-    """Jumlah baris tiap tabel hasil olahan yang ada di database."""
+def tables_from_stage(stage):
+    """Daftar tabel hasil olahan dari tahap ``stage`` sampai V0.6."""
+    if stage not in STAGE_TABLES:
+        raise ValueError(f"Tahap tidak dikenal: {stage} (pilih 2 sampai 6)")
+    return [table for s in sorted(STAGE_TABLES) if s >= stage for table in STAGE_TABLES[s]]
+
+
+def table_counts(conn, tables):
+    """Jumlah baris tiap tabel yang ada di database."""
     cursor = conn.cursor()
     counts = {}
-    for table in DERIVED_TABLES:
+    for table in tables:
         cursor.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
             (table,),
@@ -36,16 +39,19 @@ def derived_table_counts(conn):
     return counts
 
 
-def reset_derived_tables(confirm=True):
-    """Hapus tabel V0.2 - V0.6. Bila ``confirm``, minta persetujuan lewat prompt."""
+def reset_derived_tables(confirm=True, from_stage=2):
+    """Hapus tabel hasil tahap ``from_stage`` sampai V0.6, dengan konfirmasi."""
     conn = get_connection()
-    counts = derived_table_counts(conn)
+    counts = table_counts(conn, tables_from_stage(from_stage))
     if not counts:
         print("\nTidak ada tabel hasil olahan yang perlu dihapus.")
         conn.close()
         return False
 
-    print("\nTabel hasil olahan yang akan dihapus (articles dan crawl_state aman):")
+    print(
+        f"\nTabel hasil V0.{from_stage} - V0.6 yang akan dihapus "
+        "(articles dan crawl_state aman):"
+    )
     for table, count in counts.items():
         print(f"   {table:32s} {count} baris")
     if confirm:
@@ -61,5 +67,5 @@ def reset_derived_tables(confirm=True):
     conn.commit()
     conn.execute("VACUUM")
     conn.close()
-    print("Tabel hasil olahan dihapus. Pipeline akan memproses ulang dari V0.2.")
+    print(f"Tabel dihapus. Pipeline akan memproses ulang mulai V0.{from_stage}.")
     return True
