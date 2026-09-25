@@ -6,7 +6,8 @@ yang belum pernah diambil, atau yang statusnya ``unresolved``/``error``
 lagi. Setelah ini, jalankan ``python main.py --no-crawl --no-fetch`` agar
 V0.3 dan V0.4 mengekstrak ulang artikel tersebut, lalu ``python eval/score.py``.
 
-Pemakaian: python eval/fetch_sample_content.py [eval/labels.csv]
+Pemakaian: python eval/fetch_sample_content.py [eval/labels.csv] [--limit N]
+``--limit`` membatasi jumlah artikel per pemanggilan (untuk dijalankan per potongan).
 """
 
 import csv
@@ -19,7 +20,9 @@ from csais import content_fetcher  # noqa: E402
 from csais.db import get_connection  # noqa: E402
 from csais.schema import ensure_content_columns  # noqa: E402
 
-LABELS = sys.argv[1] if len(sys.argv) > 1 else os.path.join("eval", "labels.csv")
+_ARGS = [a for a in sys.argv[1:] if not a.startswith("--")]
+LABELS = _ARGS[0] if _ARGS else os.path.join("eval", "labels.csv")
+LIMIT = int(sys.argv[sys.argv.index("--limit") + 1]) if "--limit" in sys.argv else None
 RETRY_STATUSES = ("unresolved", "error")
 
 
@@ -38,6 +41,9 @@ def main():
         (*article_ids, *RETRY_STATUSES),
     ).fetchall()
     print(f"{len(rows)} dari {len(article_ids)} artikel di {LABELS} perlu diambil isinya.")
+    if LIMIT is not None:
+        rows = rows[:LIMIT]
+        print(f"Dibatasi {len(rows)} artikel pada pemanggilan ini.")
 
     statuses = {}
     for number, (article_id, url) in enumerate(rows, start=1):
