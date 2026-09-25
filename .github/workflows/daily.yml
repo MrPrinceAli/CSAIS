@@ -62,9 +62,17 @@ jobs:
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
         run: |
+          # Terbitkan hanya bila rahasia Turso sudah diisi; tanpa itu pipeline
+          # tetap berjalan dan database tetap tersimpan di cache.
+          PUBLISH=""
+          if [ -n "$TURSO_DATABASE_URL" ] && [ -n "$TURSO_AUTH_TOKEN" ]; then
+            PUBLISH="--publish"
+          else
+            echo "::warning::Rahasia Turso belum diisi; tahap terbit dilewati."
+          fi
           python main.py --crawl \
             --fetch-budget "${{ github.event.inputs.fetch_budget || '300' }}" \
-            --publish
+            $PUBLISH
 
       - name: Simpan database ke cache
         if: always()
