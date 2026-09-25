@@ -16,6 +16,8 @@ export type IncidentRow = {
   last_published_date: string | null;
   title: string | null;
   language: string | null;
+  domains: number | null;
+  independence: number | null;
 };
 
 export type Overview = {
@@ -25,7 +27,9 @@ export type Overview = {
   multi_30: number;
   bukti: number;
   sumber: number;
-  atestasi: number;
+  isi_ok: number;
+  target_known: number;
+  multi_all: number;
 };
 
 export const getLastRun = cache(async () => {
@@ -43,15 +47,19 @@ export const getOverview = cache(async (): Promise<Overview> => {
       (SELECT COUNT(*) FROM v05_incidents WHERE anchor_published_date >= date('now', '-30 days') AND document_count >= 2) AS multi_30,
       (SELECT COUNT(*) FROM v06_evidence) AS bukti,
       (SELECT COUNT(*) FROM sources) AS sumber,
-      0 AS atestasi
+      (SELECT COUNT(*) FROM articles WHERE content_status = 'ok') AS isi_ok,
+      (SELECT COUNT(*) FROM v05_incidents WHERE target IS NOT NULL AND target != '') AS target_known,
+      (SELECT COUNT(*) FROM v05_incidents WHERE document_count >= 2) AS multi_all
   `);
-  return row ?? { artikel: 0, incident: 0, incident_30: 0, multi_30: 0, bukti: 0, sumber: 0, atestasi: 0 };
+  return row ?? { artikel: 0, incident: 0, incident_30: 0, multi_30: 0, bukti: 0, sumber: 0, isi_ok: 0, target_known: 0, multi_all: 0 };
 });
 
 const INCIDENT_SELECT = `
   SELECT i.incident_id, i.attack_type, i.target, i.threat_actor, i.location, i.attack_date,
          i.document_count, i.incident_confidence, i.anchor_article_id, i.anchor_published_date,
-         i.last_published_date, a.title, a.language
+         i.last_published_date, a.title, a.language,
+         (SELECT COUNT(DISTINCT e.source_domain) FROM v06_evidence e WHERE e.incident_id = i.incident_id) AS domains,
+         (SELECT AVG(e.evidence_independence_score) FROM v06_evidence e WHERE e.incident_id = i.incident_id) AS independence
   FROM v05_incidents i
   LEFT JOIN articles a ON a.article_id = i.anchor_article_id
 `;
@@ -66,12 +74,44 @@ export const getLatestIncidents = cache(async (limit = 6): Promise<IncidentRow[]
   );
 });
 
+/** Incident 30 hari dengan sumber terbanyak yang targetnya dikenali: bahan cerita di beranda. */
+export const getFeaturedIncidentId = cache(async (): Promise<string | null> => {
+  const row = await queryOne<{ incident_id: string }>(
+    `SELECT incident_id FROM v05_incidents
+     WHERE anchor_published_date >= date('now', '-45 days') AND target != '' AND document_count >= 3
+     ORDER BY document_count DESC, last_published_date DESC LIMIT 1`,
+  );
+  return row?.incident_id ?? null;
+});
+
+export type CountryCount = { location: string; n: number };
+
+export const getCountryCounts = cache(async (days = 90): Promise<CountryCount[]> => {
+  return query<CountryCount>(
+    `SELECT LOWER(location) AS location, COUNT(*) AS n FROM v05_incidents
+     WHERE location != '' AND anchor_published_date >= date('now', ?)
+     GROUP BY location ORDER BY n DESC`,
+    [`-${days} days`],
+  );
+});
+
+export const getDailyArticles = cache(async (days = 60) => {
+  return query<{ d: string; n: number }>(
+    `SELECT substr(a.published_date, 1, 10) AS d, COUNT(*) AS n
+     FROM articles a
+     WHERE a.published_date >= date('now', ?) AND a.published_date <= date('now', '+1 day')
+     GROUP BY d ORDER BY d`,
+    [`-${days} days`],
+  );
+});
+
 export type DashboardFilters = {
   q?: string;
   jenis?: string;
   bahasa?: string;
   min?: number;
   hari?: number;
+  negara?: string;
   page?: number;
 };
 
@@ -96,6 +136,10 @@ function buildWhere(f: DashboardFilters): { where: string; args: InValue[] } {
     clauses.push(`a.language = ?`);
     args.push(f.bahasa);
   }
+  if (f.negara) {
+    clauses.push(`LOWER(i.location) = ?`);
+    args.push(f.negara.toLowerCase());
+  }
   if (f.min && f.min > 1) {
     clauses.push(`i.document_count >= ?`);
     args.push(f.min);
@@ -106,45 +150,40 @@ function buildWhere(f: DashboardFilters): { where: string; args: InValue[] } {
 export async function getDashboard(f: DashboardFilters) {
   const { where, args } = buildWhere(f);
   const page = f.page && f.page > 0 ? f.page : 1;
-  const [rows, totalRow, daily, types, kpi] = await Promise.all([
+  const base = `FROM v05_incidents i LEFT JOIN articles a ON a.article_id = i.anchor_article_id ${where}`;
+  const [rows, totalRow, daily, types, countries, kpi] = await Promise.all([
     query<IncidentRow>(
       `${INCIDENT_SELECT} ${where}
        ORDER BY i.document_count DESC, i.anchor_published_date DESC
        LIMIT ? OFFSET ?`,
       [...args, PAGE_SIZE, (page - 1) * PAGE_SIZE],
     ),
-    queryOne<{ n: number }>(
-      `SELECT COUNT(*) AS n FROM v05_incidents i LEFT JOIN articles a ON a.article_id = i.anchor_article_id ${where}`,
-      args,
-    ),
-    query<{ d: string; n: number }>(
-      `SELECT substr(i.anchor_published_date, 1, 10) AS d, COUNT(*) AS n
-       FROM v05_incidents i LEFT JOIN articles a ON a.article_id = i.anchor_article_id ${where}
-       GROUP BY d ORDER BY d`,
-      args,
-    ),
+    queryOne<{ n: number }>(`SELECT COUNT(*) AS n ${base}`, args),
+    query<{ d: string; n: number }>(`SELECT substr(i.anchor_published_date, 1, 10) AS d, COUNT(*) AS n ${base} GROUP BY d ORDER BY d`, args),
     query<{ t: string; n: number }>(
-      `SELECT LOWER(COALESCE(NULLIF(i.attack_type, ''), 'unknown')) AS t, COUNT(*) AS n
-       FROM v05_incidents i LEFT JOIN articles a ON a.article_id = i.anchor_article_id ${where}
-       GROUP BY t ORDER BY n DESC LIMIT 8`,
+      `SELECT LOWER(COALESCE(NULLIF(i.attack_type, ''), 'unknown')) AS t, COUNT(*) AS n ${base} GROUP BY t ORDER BY n DESC LIMIT 8`,
       args,
     ),
+    query<CountryCount>(`SELECT LOWER(i.location) AS location, COUNT(*) AS n ${base} AND i.location != '' GROUP BY location ORDER BY n DESC LIMIT 8`, args),
     queryOne<{ total: number; multi: number; target_known: number; indonesia: number }>(
       `SELECT COUNT(*) AS total,
               SUM(CASE WHEN i.document_count >= 2 THEN 1 ELSE 0 END) AS multi,
               SUM(CASE WHEN i.target IS NOT NULL AND i.target != '' THEN 1 ELSE 0 END) AS target_known,
               SUM(CASE WHEN a.language = 'id' THEN 1 ELSE 0 END) AS indonesia
-       FROM v05_incidents i LEFT JOIN articles a ON a.article_id = i.anchor_article_id ${where}`,
+       ${base}`,
       args,
     ),
   ]);
+  const total = Number(totalRow?.n ?? 0);
   return {
     rows,
-    total: Number(totalRow?.n ?? 0),
+    total,
     page,
     pageSize: PAGE_SIZE,
+    pages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
     daily,
     types,
+    countries,
     kpi: kpi ?? { total: 0, multi: 0, target_known: 0, indonesia: 0 },
   };
 }
@@ -181,7 +220,7 @@ export type DocumentRow = {
   field_confidence: string | null;
 };
 
-export async function getIncident(id: string) {
+export const getIncident = cache(async (id: string) => {
   const incident = await queryOne<IncidentRow>(`${INCIDENT_SELECT} WHERE i.incident_id = ?`, [id]);
   if (!incident) return null;
   const [docs, relations, related] = await Promise.all([
@@ -214,12 +253,13 @@ export async function getIncident(id: string) {
       : Promise.resolve([] as IncidentRow[]),
   ]);
   return { incident, docs, relations, related };
-}
+});
 
 export type GroupStat = {
   group: string;
   now: number;
   prev: number;
+  weeks: number[]; // 8 pekan terakhir, dari yang paling lama
   types: { t: string; n: number }[];
   samples: { incident_id: string; title: string | null; attack_type: string | null; document_count: number }[];
 };
@@ -240,19 +280,30 @@ export const getRiskGroups = cache(async (): Promise<GroupStat[]> => {
     LEFT JOIN articles a ON a.article_id = i.anchor_article_id
     WHERE x.target_group != 'UNKNOWN' AND i.anchor_published_date >= date('now', '-60 days')
   `);
-  const cutoff = new Date(Date.now() - 30 * 86400 * 1000).toISOString();
-  const stats = new Map<string, { now: Set<string>; prev: Set<string>; types: Map<string, number>; samples: Map<string, GroupStat["samples"][number]> }>();
+  const now = Date.now();
+  const cutoff = new Date(now - 30 * 86400 * 1000).toISOString();
+  type Acc = {
+    now: Set<string>;
+    prev: Set<string>;
+    weeks: Set<string>[];
+    types: Map<string, number>;
+    samples: Map<string, GroupStat["samples"][number]>;
+  };
+  const stats = new Map<string, Acc>();
   for (const row of rows) {
+    const ts = new Date(row.anchor_published_date).getTime();
+    const weekIndex = 7 - Math.min(7, Math.floor((now - ts) / (7 * 86400 * 1000)));
     for (const raw of row.target_group.split(",")) {
       const group = raw.trim();
       if (!group) continue;
       let s = stats.get(group);
       if (!s) {
-        s = { now: new Set(), prev: new Set(), types: new Map(), samples: new Map() };
+        s = { now: new Set(), prev: new Set(), weeks: Array.from({ length: 8 }, () => new Set<string>()), types: new Map(), samples: new Map() };
         stats.set(group, s);
       }
       const recent = row.anchor_published_date >= cutoff;
       (recent ? s.now : s.prev).add(row.incident_id);
+      if (weekIndex >= 0 && weekIndex < 8) s.weeks[weekIndex].add(row.incident_id);
       if (recent) {
         const type = (row.attack_type ?? "").toLowerCase().split(",")[0].trim() || "unknown";
         s.types.set(type, (s.types.get(type) ?? 0) + 1);
@@ -272,6 +323,7 @@ export const getRiskGroups = cache(async (): Promise<GroupStat[]> => {
       group,
       now: s.now.size,
       prev: s.prev.size,
+      weeks: s.weeks.map((w) => w.size),
       types: [...s.types.entries()].map(([t, n]) => ({ t, n })).sort((a, b) => b.n - a.n).slice(0, 3),
       samples: [...s.samples.values()].sort((a, b) => b.document_count - a.document_count).slice(0, 3),
     }))
@@ -305,10 +357,7 @@ export async function verify(input: string): Promise<VerifyResult> {
     kind = "hash";
     article = await queryOne(`SELECT ${articleCols} FROM articles WHERE content_sha256 = ? LIMIT 1`, [value.toLowerCase()]);
     if (!article) {
-      const ev = await queryOne<{ article_id: number }>(
-        `SELECT article_id FROM v06_evidence WHERE content_fingerprint = ? LIMIT 1`,
-        [value.toLowerCase()],
-      );
+      const ev = await queryOne<{ article_id: number }>(`SELECT article_id FROM v06_evidence WHERE content_fingerprint = ? LIMIT 1`, [value.toLowerCase()]);
       if (ev) article = await queryOne(`SELECT ${articleCols} FROM articles WHERE article_id = ?`, [ev.article_id]);
     }
   } else if (/^https?:\/\//i.test(value)) {
@@ -321,10 +370,7 @@ export async function verify(input: string): Promise<VerifyResult> {
       [value, `${bare}%`, value, `${bare}%`],
     );
   } else {
-    const ev = await queryOne<{ article_id: number }>(
-      `SELECT article_id FROM v06_evidence WHERE evidence_uid = ? LIMIT 1`,
-      [value.toLowerCase()],
-    );
+    const ev = await queryOne<{ article_id: number }>(`SELECT article_id FROM v06_evidence WHERE evidence_uid = ? LIMIT 1`, [value.toLowerCase()]);
     if (ev) {
       article = await queryOne(`SELECT ${articleCols} FROM articles WHERE article_id = ?`, [ev.article_id]);
     } else {
@@ -340,15 +386,67 @@ export async function verify(input: string): Promise<VerifyResult> {
   return { kind, article, evidence };
 }
 
-export const getSources = cache(async () => {
-  return query<{
-    domain: string;
-    source_type: string;
-    country: string;
-    publisher_name: string | null;
-    article_count: number;
-    first_seen: string | null;
-    last_seen: string | null;
-  }>(`SELECT domain, source_type, country, publisher_name, article_count, first_seen, last_seen
-      FROM sources ORDER BY article_count DESC, domain ASC LIMIT 300`);
+/** Contoh bukti terbaru untuk ditampilkan di halaman verifikasi saat kosong. */
+export const getSampleEvidence = cache(async () => {
+  return query<{ evidence_uid: string; content_sha256: string | null; title: string | null; incident_id: string }>(
+    `SELECT e.evidence_uid, a.content_sha256, a.title, e.incident_id
+     FROM v06_evidence e JOIN articles a ON a.article_id = e.article_id
+     WHERE a.content_sha256 IS NOT NULL
+     ORDER BY e.publication_date DESC LIMIT 3`,
+  );
 });
+
+export type SourceRow = {
+  domain: string;
+  source_type: string;
+  country: string;
+  publisher_name: string | null;
+  article_count: number;
+  first_seen: string | null;
+  last_seen: string | null;
+};
+
+export type SourceFilters = { q?: string; tipe?: string; negara?: string; urut?: string; page?: number };
+const SOURCE_PAGE = 48;
+
+export async function getSources(f: SourceFilters) {
+  const clauses: string[] = [];
+  const args: InValue[] = [];
+  if (f.q) {
+    clauses.push(`(domain LIKE ? OR publisher_name LIKE ?)`);
+    args.push(`%${f.q}%`, `%${f.q}%`);
+  }
+  if (f.tipe) {
+    clauses.push(`source_type = ?`);
+    args.push(f.tipe.toUpperCase());
+  }
+  if (f.negara) {
+    clauses.push(`country = ?`);
+    args.push(f.negara);
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  const order = f.urut === "terbaru" ? "last_seen DESC" : f.urut === "nama" ? "domain ASC" : "article_count DESC, domain ASC";
+  const page = f.page && f.page > 0 ? f.page : 1;
+  const [rows, totalRow, byType, byCountry, maxRow] = await Promise.all([
+    query<SourceRow>(
+      `SELECT domain, source_type, country, publisher_name, article_count, first_seen, last_seen
+       FROM sources ${where} ORDER BY ${order} LIMIT ? OFFSET ?`,
+      [...args, SOURCE_PAGE, (page - 1) * SOURCE_PAGE],
+    ),
+    queryOne<{ n: number }>(`SELECT COUNT(*) AS n FROM sources ${where}`, args),
+    query<{ source_type: string; n: number; artikel: number }>(`SELECT source_type, COUNT(*) AS n, SUM(article_count) AS artikel FROM sources GROUP BY source_type ORDER BY n DESC`),
+    query<{ country: string; n: number }>(`SELECT country, COUNT(*) AS n FROM sources GROUP BY country ORDER BY n DESC LIMIT 10`),
+    queryOne<{ m: number }>(`SELECT MAX(article_count) AS m FROM sources`),
+  ]);
+  const total = Number(totalRow?.n ?? 0);
+  return {
+    rows,
+    total,
+    page,
+    pageSize: SOURCE_PAGE,
+    pages: Math.max(1, Math.ceil(total / SOURCE_PAGE)),
+    byType,
+    byCountry,
+    max: Number(maxRow?.m ?? 1),
+  };
+}

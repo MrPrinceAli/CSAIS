@@ -42,6 +42,11 @@
 html {
   color-scheme: dark;
   background: var(--bg);
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
 }
 
 body {
@@ -51,13 +56,8 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-a {
-  color: var(--accent);
-}
-
-a:hover {
-  color: #5fd0df;
-}
+a { color: var(--accent); }
+a:hover { color: #5fd0df; }
 
 .card {
   background: var(--surface);
@@ -76,11 +76,15 @@ a:hover {
   padding: 5px 10px;
   color: var(--soft);
   white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .chip-good { color: var(--good); border-color: var(--good); }
 .chip-accent { color: var(--accent); border-color: var(--accent); }
 .chip-chain { color: var(--chain); border-color: var(--chain); }
+.chip-high { color: var(--high); border-color: var(--high); }
 
 .label {
   font-size: 11px;
@@ -89,9 +93,7 @@ a:hover {
   color: var(--muted);
 }
 
-.tnum {
-  font-variant-numeric: tabular-nums;
-}
+.tnum { font-variant-numeric: tabular-nums; }
 
 .btn {
   display: inline-flex;
@@ -123,21 +125,47 @@ a:hover {
 
 .field:focus-visible,
 .btn:focus-visible,
-a:focus-visible {
+a:focus-visible,
+button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
-.row-link {
-  color: var(--fg);
-  text-decoration: none;
+.row-link { color: var(--fg); text-decoration: none; }
+.row-link:hover { background: rgba(47, 183, 201, 0.06); color: var(--fg); }
+
+/* Latar kisi halus untuk bagian pembuka; bukan dekorasi penuh halaman. */
+.grid-bg {
+  background-image:
+    radial-gradient(ellipse at 70% 40%, rgba(47, 183, 201, 0.10), transparent 55%),
+    linear-gradient(rgba(47, 183, 201, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(47, 183, 201, 0.05) 1px, transparent 1px);
+  background-size: 100% 100%, 32px 32px, 32px 32px;
 }
 
-.row-link:hover {
-  background: rgba(47, 183, 201, 0.06);
-  color: var(--fg);
+.glow { box-shadow: 0 0 80px rgba(47, 183, 201, 0.12); }
+
+/* Muncul saat digulir ke layar. */
+.reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.7s ease, transform 0.7s ease;
+}
+.reveal.is-visible { opacity: 1; transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; transform: none; transition: none; }
+  .btn, .row-link { transition: none; }
 }
 
 @media (prefers-reduced-motion: no-preference) {
   .btn, .row-link { transition: background-color 0.15s ease, border-color 0.15s ease; }
+  .pulse { animation: pulse 2.4s ease-in-out infinite; }
 }
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+.story-section { scroll-margin-top: 80px; }
