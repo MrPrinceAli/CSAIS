@@ -120,9 +120,10 @@ def analyze_relevance(title, summary):
     if title_event_matches:
         score += 0.10
 
-    # Penalti untuk pembahasan umum
+    # Penalti untuk pembahasan umum; dua penanda atau lebih (misalnya artikel
+    # imbauan "waspada ... jangan klik link video viral") dipenalti dua kali
     if non_incident_matches:
-        score -= 0.15
+        score -= 0.15 * min(len(non_incident_matches), 2)
 
     # Normalisasi skor ke rentang 0..1
     if score < 0:

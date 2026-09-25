@@ -86,3 +86,36 @@ def test_find_matches_uses_word_boundaries():
 def test_weak_keywords_are_subset_of_attack_keywords():
     # Prasyarat yang didokumentasikan di csais/data/README.md
     assert v02.WEAK_ATTACK_KEYWORDS <= set(v02.ATTACK_KEYWORDS)
+
+
+# --- Kosakata Indonesia ---
+def test_indonesian_incident_headline_is_relevant():
+    result = v02.analyze_relevance(
+        "Hacker Diduga Jebol Server Telkomsel, Muncul Penjualan Data di Dark Web", ""
+    )
+    assert result["label"] == "RELEVANT"
+    assert "jebol server" in result["attack_matches"]
+
+
+def test_indonesian_awareness_article_is_not_relevant():
+    result = v02.analyze_relevance(
+        "Waspada Link Video Viral, Jangan Klik: Modus Phishing dan Malware",
+        "Kenali cara menghindari jebakan phishing.",
+    )
+    assert result["label"] == "NOT_RELEVANT"
+    assert len(result["non_incident_matches"]) >= 2
+
+
+def test_two_non_incident_indicators_double_the_penalty():
+    one = v02.analyze_relevance("Hospital hit by ransomware, systems disrupted", "Watch our webinar.")
+    two = v02.analyze_relevance(
+        "Hospital hit by ransomware, systems disrupted", "Watch our webinar and training."
+    )
+    assert two["score"] == pytest.approx(one["score"] - 0.15)
+
+
+def test_indonesian_weak_leak_word_needs_cyber_context():
+    plain = v02.analyze_relevance("Pipa air bocor di Jakarta Selatan", "")
+    assert plain["attack_matches"] == []
+    cyber = v02.analyze_relevance("Data pelanggan diduga bocor, akun pengguna terancam", "")
+    assert cyber["attack_matches"]

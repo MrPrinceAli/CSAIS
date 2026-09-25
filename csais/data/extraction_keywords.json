@@ -4,7 +4,8 @@
     "RANSOMWARE": [
       "ransomware",
       "ransom attack",
-      "ransomware attack"
+      "ransomware attack",
+      "serangan ransomware"
     ],
     "MALWARE": [
       "malware",
@@ -23,7 +24,9 @@
     "ACCOUNT_TAKEOVER": [
       "account takeover",
       "account hijacking",
-      "stolen account"
+      "stolen account",
+      "pembajakan akun",
+      "akun dibajak"
     ],
     "CREDENTIAL_ATTACK": [
       "credential stuffing",
@@ -39,7 +42,9 @@
       "spearphishing",
       "smishing",
       "vishing",
-      "quishing"
+      "quishing",
+      "phising",
+      "serangan phishing"
     ],
     "SOCIAL_ENGINEERING": [
       "social engineering",
@@ -47,22 +52,36 @@
       "business email compromise",
       "bec attack",
       "ceo fraud",
-      "executive impersonation"
+      "executive impersonation",
+      "rekayasa sosial",
+      "penipuan berkedok"
     ],
     "ONLINE_SCAM": [
       "online scam",
       "online fraud",
       "cyber fraud",
-      "digital fraud"
+      "digital fraud",
+      "penipuan online",
+      "penipuan daring",
+      "penipuan digital",
+      "penipuan siber",
+      "pusat penipuan online",
+      "sindikat penipuan",
+      "jaringan penipuan"
     ],
     "JOB_SCAM": [
       "job scam",
       "employment scam",
-      "recruitment scam"
+      "recruitment scam",
+      "penipuan lowongan kerja",
+      "lowongan kerja palsu",
+      "loker palsu"
     ],
     "INVESTMENT_SCAM": [
       "investment scam",
-      "investment fraud"
+      "investment fraud",
+      "investasi bodong",
+      "penipuan investasi"
     ],
     "WEB_ATTACK": [
       "web attack",
@@ -107,7 +126,8 @@
       "ddos",
       "distributed denial of service",
       "denial of service",
-      "dos attack"
+      "dos attack",
+      "serangan ddos"
     ],
     "DNS_ATTACK": [
       "dns hijacking",
@@ -117,24 +137,36 @@
     ],
     "NETWORK_INTRUSION": [
       "network intrusion",
-      "network compromise"
+      "network compromise",
+      "peretasan",
+      "diretas",
+      "pembobolan sistem",
+      "jebol server",
+      "kena hack"
     ],
     "DATA_BREACH": [
       "data breach",
       "database breach",
       "personal data breach",
-      "customer data breach"
+      "customer data breach",
+      "kebocoran data",
+      "pembobolan data"
     ],
     "DATA_LEAK": [
       "data leak",
       "database leak",
       "stolen data",
-      "data leaked"
+      "data leaked",
+      "data bocor",
+      "bocornya data",
+      "data dijual"
     ],
     "DATA_THEFT": [
       "data theft",
       "information theft",
-      "data stolen"
+      "data stolen",
+      "pencurian data",
+      "data dicuri"
     ],
     "DATA_EXFILTRATION": [
       "data exfiltration",
@@ -176,7 +208,9 @@
       "android attack",
       "ios malware",
       "mobile malware",
-      "mobile ransomware"
+      "mobile ransomware",
+      "malware android",
+      "aplikasi berbahaya"
     ],
     "IOT_ATTACK": [
       "iot attack",
@@ -196,11 +230,17 @@
       "malicious website",
       "fake website",
       "malicious domain",
-      "fake login page"
+      "fake login page",
+      "situs palsu",
+      "aplikasi palsu"
     ],
     "MALICIOUS_LINK": [
       "malicious link",
-      "malicious url"
+      "malicious url",
+      "tautan berbahaya",
+      "link berbahaya",
+      "link palsu",
+      "tautan palsu"
     ],
     "CYBER_ESPIONAGE": [
       "cyber espionage",
@@ -230,7 +270,9 @@
       "crypto wallet hack",
       "crypto exchange hack",
       "blockchain attack",
-      "smart contract attack"
+      "smart contract attack",
+      "pencurian kripto",
+      "peretasan bursa kripto"
     ],
     "CYBER_EXTORTION": [
       "cyber extortion",
@@ -245,13 +287,15 @@
       "spear phishing",
       "smishing",
       "vishing",
-      "quishing"
+      "quishing",
+      "phising"
     ],
     "SOCIAL_ENGINEERING": [
       "social engineering",
       "impersonation",
       "business email compromise",
-      "bec attack"
+      "bec attack",
+      "rekayasa sosial"
     ],
     "MALWARE": [
       "malware",
@@ -280,12 +324,18 @@
     ],
     "MALICIOUS_LINK": [
       "malicious link",
-      "malicious url"
+      "malicious url",
+      "tautan berbahaya",
+      "link berbahaya",
+      "link palsu",
+      "tautan palsu"
     ],
     "MALICIOUS_WEBSITE": [
       "malicious website",
       "fake website",
-      "fake login page"
+      "fake login page",
+      "situs palsu",
+      "aplikasi palsu"
     ]
   },
   "target_sector_keywords": {
@@ -295,7 +345,10 @@
       "health care",
       "clinic",
       "medical",
-      "health system"
+      "health system",
+      "rumah sakit",
+      "klinik",
+      "kesehatan"
     ],
     "FINANCE": [
       "bank",
@@ -303,35 +356,55 @@
       "financial institution",
       "financial services",
       "fintech",
-      "insurance"
+      "insurance",
+      "perbankan",
+      "asuransi",
+      "bursa kripto",
+      "koperasi"
     ],
     "GOVERNMENT": [
       "government",
       "ministry",
       "municipality",
       "government agency",
-      "public sector"
+      "public sector",
+      "pemerintah",
+      "kementerian",
+      "pemprov",
+      "pemkot",
+      "pemkab",
+      "lembaga negara",
+      "instansi"
     ],
     "EDUCATION": [
       "university",
       "college",
       "school",
       "education institution",
-      "educational institution"
+      "educational institution",
+      "universitas",
+      "sekolah",
+      "kampus",
+      "perguruan tinggi"
     ],
     "TELECOMMUNICATION": [
       "telecom",
       "telecommunication",
       "mobile operator",
       "internet service provider",
-      "isp"
+      "isp",
+      "operator seluler",
+      "telekomunikasi"
     ],
     "ENERGY": [
       "energy",
       "electricity",
       "power grid",
       "oil and gas",
-      "utility"
+      "utility",
+      "listrik",
+      "energi",
+      "migas"
     ],
     "MANUFACTURING": [
       "manufacturing",
@@ -343,7 +416,10 @@
       "retail",
       "e-commerce",
       "ecommerce",
-      "online store"
+      "online store",
+      "ritel",
+      "toko online",
+      "marketplace"
     ],
     "TRANSPORTATION": [
       "airline",
@@ -352,7 +428,11 @@
       "rail",
       "transportation",
       "shipping",
-      "port"
+      "port",
+      "maskapai",
+      "bandara",
+      "kereta",
+      "transportasi"
     ],
     "CRITICAL_INFRASTRUCTURE": [
       "critical infrastructure",
@@ -367,7 +447,8 @@
       "software company",
       "tech company",
       "cloud provider",
-      "software provider"
+      "software provider",
+      "perusahaan teknologi"
     ]
   },
   "target_group_keywords": {
@@ -376,36 +457,83 @@
       "users",
       "customers",
       "citizens",
-      "consumers"
+      "consumers",
+      "pengguna",
+      "warga",
+      "masyarakat",
+      "konsumen",
+      "individu"
     ],
     "EMPLOYEES": [
       "employees",
       "staff",
-      "workers"
+      "workers",
+      "karyawan",
+      "pegawai"
     ],
     "STUDENTS": [
       "students",
-      "student"
+      "student",
+      "pelajar",
+      "mahasiswa",
+      "siswa"
     ],
     "CHILDREN": [
       "children",
       "kids",
-      "minors"
+      "minors",
+      "anak-anak",
+      "anak",
+      "remaja"
     ],
     "JOB_SEEKERS": [
       "job seekers",
       "jobseekers",
-      "job applicants"
+      "job applicants",
+      "pencari kerja",
+      "pelamar kerja"
     ],
     "BUSINESSES": [
       "businesses",
       "companies",
-      "enterprises"
+      "enterprises",
+      "perusahaan",
+      "pelaku usaha"
     ],
     "GOVERNMENT": [
       "government agencies",
       "government institutions",
-      "public agencies"
+      "public agencies",
+      "instansi pemerintah",
+      "lembaga pemerintah"
+    ],
+    "BANK_CUSTOMERS": [
+      "nasabah",
+      "bank customers",
+      "banking customers",
+      "account holders"
+    ],
+    "SMES": [
+      "umkm",
+      "usaha kecil",
+      "small businesses",
+      "smes",
+      "small and medium businesses"
+    ],
+    "CIVIL_SERVANTS": [
+      "asn",
+      "pns",
+      "pppk",
+      "aparatur sipil negara",
+      "civil servants",
+      "government employees",
+      "public servants"
+    ],
+    "ELDERLY": [
+      "lansia",
+      "elderly",
+      "seniors",
+      "older adults"
     ]
   },
   "impact_keywords": {
@@ -414,13 +542,17 @@
       "data theft",
       "information stolen",
       "stolen data",
-      "customer data stolen"
+      "customer data stolen",
+      "data dicuri",
+      "pencurian data"
     ],
     "DATA_LEAK": [
       "data leak",
       "data leaked",
       "information leaked",
-      "database leak"
+      "database leak",
+      "data bocor",
+      "kebocoran data"
     ],
     "SERVICE_DISRUPTION": [
       "service disruption",
@@ -428,25 +560,39 @@
       "operations disrupted",
       "system disruption",
       "service outage",
-      "systems down"
+      "systems down",
+      "layanan terganggu",
+      "gangguan layanan",
+      "sistem lumpuh",
+      "gangguan sistem"
     ],
     "FINANCIAL_LOSS": [
       "financial loss",
       "financial losses",
       "lost money",
       "money stolen",
-      "financial damage"
+      "financial damage",
+      "kerugian",
+      "uang hilang",
+      "rekening terkuras",
+      "dana lenyap",
+      "raib"
     ],
     "SYSTEM_COMPROMISE": [
       "system compromised",
       "systems compromised",
       "server compromised",
-      "network compromised"
+      "network compromised",
+      "server dibobol",
+      "sistem dibobol",
+      "sistem diretas"
     ],
     "ACCOUNT_COMPROMISE": [
       "account compromised",
       "accounts compromised",
-      "account takeover"
+      "account takeover",
+      "akun dibajak",
+      "akun diretas"
     ],
     "OPERATIONAL_IMPACT": [
       "operations halted",

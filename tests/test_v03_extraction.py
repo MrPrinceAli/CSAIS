@@ -211,3 +211,13 @@ def test_extract_threat_actor_rejects_nationality_descriptions(sentence):
 def test_clean_name_drops_trailing_article():
     assert v03._clean_name("Scattered Spider The") == "Scattered Spider"
     assert v03._clean_name("The A") is None
+
+
+def test_indonesian_attack_type_and_victim_groups():
+    text = "kebocoran data nasabah bank akibat phising; umkm, asn, dan lansia ikut jadi korban"
+    attack_types = v03.extract_attack_type(text)
+    assert "DATA_BREACH" in attack_types
+    assert "PHISHING" in attack_types
+    groups = v03.extract_target_group(text)
+    for group in ("BANK_CUSTOMERS", "SMES", "CIVIL_SERVANTS", "ELDERLY"):
+        assert group in groups

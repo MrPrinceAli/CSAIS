@@ -68,3 +68,22 @@ menyesuaikan pengguna data di hilir.
 | `known_threat_actors`    | `threat_actor`       | Daftar (bukan kamus) nama kelompok pelaku ancaman yang dicari langsung di teks asli. Nama umum seperti "Play" atau "Royal" ditulis bersama kata "ransomware" ("Play ransomware"); akhiran " ransomware" dibuang dari hasil. Hanya tiga pelaku pertama yang disimpan, sehingga urutan daftar ini ikut menentukan hasil. |
 
 Bila hasil pencocokan kosong, kolom hasil diisi `UNKNOWN`.
+
+## Kosakata Indonesia
+
+Sejak gelombang 3 (September 2026) kedua file memuat kosakata Indonesia di
+akhir tiap daftar: kata serangan dan kejadian ("peretasan", "dibobol",
+"kebocoran data", "penipuan online", "kena hack"), kata imbauan sebagai
+penanda non-insiden ("waspada", "jangan klik", "kenali", "cara", "link video
+viral"), dan sinonim Indonesia untuk jenis serangan, sektor, dampak, serta
+kelompok korban. Imbuhan Indonesia tidak dikenali otomatis (pencocokan hanya
+mengenal akhiran s/es/ed/ing), jadi tiap bentuk kata ditulis eksplisit.
+
+Di V0.2 penalti non-insiden kini 0,15 per penanda sampai maksimal 0,30, agar
+artikel imbauan yang memuat dua penanda atau lebih tidak dinilai RELEVANT
+hanya karena menyebut "phishing" dan "malware".
+
+Kategori kelompok korban tambahan di `target_group_keywords` (taksonomi
+Indonesia): `BANK_CUSTOMERS` (nasabah), `SMES` (UMKM), `CIVIL_SERVANTS` (ASN,
+PNS, PPPK), `ELDERLY` (lansia). Kategori ini ditaruh di akhir agar urutan hasil
+kategori lama tidak berubah.
