@@ -1,15 +1,15 @@
 @import "tailwindcss";
 
-/* Tema "Ruang Kendali": gelap biru-abu, aksen sian, data monospace. */
+/* Tema "Ruang Kendali": gelap biru-abu, satu aksen sian, data monospace. */
 :root {
   --bg: #0f1720;
-  --surface: #16212d;
+  --surface: #151f2b;
   --nav: #0b1219;
   --fg: #e6edf3;
   --soft: #b7c2cc;
   --muted: #8b9bab;
-  --line: #26333f;
-  --line-2: #3a4a5a;
+  --line: #243040;
+  --line-2: #364758;
   --accent: #2fb7c9;
   --accent-ink: #0f1720;
   --good: #4cc38a;
@@ -54,10 +54,13 @@ body {
   color: var(--fg);
   font-family: var(--font-plex), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  font-feature-settings: "ss01", "cv05";
 }
 
 a { color: var(--accent); }
 a:hover { color: #5fd0df; }
+
+h1, h2, h3 { letter-spacing: -0.01em; }
 
 .card {
   background: var(--surface);
@@ -72,8 +75,8 @@ a:hover { color: #5fd0df; }
   font-size: 11.5px;
   line-height: 1;
   border: 1px solid var(--line-2);
-  border-radius: 999px;
-  padding: 5px 10px;
+  border-radius: 4px;
+  padding: 5px 8px;
   color: var(--soft);
   white-space: nowrap;
   max-width: 100%;
@@ -81,15 +84,16 @@ a:hover { color: #5fd0df; }
   text-overflow: ellipsis;
 }
 
-.chip-good { color: var(--good); border-color: var(--good); }
-.chip-accent { color: var(--accent); border-color: var(--accent); }
-.chip-chain { color: var(--chain); border-color: var(--chain); }
-.chip-high { color: var(--high); border-color: var(--high); }
+.chip-good { color: var(--good); border-color: color-mix(in srgb, var(--good) 60%, transparent); }
+.chip-accent { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
+.chip-chain { color: var(--chain); border-color: color-mix(in srgb, var(--chain) 60%, transparent); }
+.chip-high { color: var(--high); border-color: color-mix(in srgb, var(--high) 60%, transparent); }
 
 .label {
   font-size: 11px;
+  font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   color: var(--muted);
 }
 
@@ -99,7 +103,7 @@ a:hover { color: #5fd0df; }
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
   border-radius: 6px;
   padding: 10px 16px;
@@ -114,8 +118,8 @@ a:hover { color: #5fd0df; }
 .btn-ghost:hover { border-color: var(--accent); color: var(--fg); }
 
 .field {
-  background: var(--surface);
-  border: 1px solid var(--line);
+  background: var(--bg);
+  border: 1px solid var(--line-2);
   border-radius: 6px;
   color: var(--fg);
   font: inherit;
@@ -134,22 +138,17 @@ button:focus-visible {
 .row-link { color: var(--fg); text-decoration: none; }
 .row-link:hover { background: rgba(47, 183, 201, 0.06); color: var(--fg); }
 
-/* Latar kisi halus untuk bagian pembuka; bukan dekorasi penuh halaman. */
-.grid-bg {
-  background-image:
-    radial-gradient(ellipse at 70% 40%, rgba(47, 183, 201, 0.10), transparent 55%),
-    linear-gradient(rgba(47, 183, 201, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(47, 183, 201, 0.05) 1px, transparent 1px);
-  background-size: 100% 100%, 32px 32px, 32px 32px;
+/* Garis aksen tipis di bagian pembuka. */
+.hairline {
+  background-image: linear-gradient(90deg, var(--accent), transparent 70%);
+  height: 1px;
 }
 
-.glow { box-shadow: 0 0 80px rgba(47, 183, 201, 0.12); }
-
-/* Muncul saat digulir ke layar. */
+/* Muncul halus saat digulir. */
 .reveal {
   opacity: 0;
-  transform: translateY(18px);
-  transition: opacity 0.7s ease, transform 0.7s ease;
+  transform: translateY(10px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
 }
 .reveal.is-visible { opacity: 1; transform: none; }
 
@@ -160,12 +159,4 @@ button:focus-visible {
 
 @media (prefers-reduced-motion: no-preference) {
   .btn, .row-link { transition: background-color 0.15s ease, border-color 0.15s ease; }
-  .pulse { animation: pulse 2.4s ease-in-out infinite; }
 }
-
-@keyframes pulse {
-  0%, 100% { opacity: 0.55; }
-  50% { opacity: 1; }
-}
-
-.story-section { scroll-margin-top: 80px; }

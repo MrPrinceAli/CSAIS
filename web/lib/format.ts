@@ -1,76 +1,78 @@
-const num = new Intl.NumberFormat("id-ID");
-const dateShort = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", timeZone: "Asia/Jakarta" });
-const dateLong = new Intl.DateTimeFormat("id-ID", {
-  day: "numeric",
-  month: "long",
-  year: "numeric",
-  timeZone: "Asia/Jakarta",
-});
-const dateTime = new Intl.DateTimeFormat("id-ID", {
-  day: "numeric",
-  month: "short",
-  hour: "2-digit",
-  minute: "2-digit",
-  timeZone: "Asia/Jakarta",
-});
+import type { Lang } from "./i18n";
 
-export function fmtNum(value: number | bigint | null | undefined): string {
-  if (value === null || value === undefined) return "0";
-  return num.format(Number(value));
+const LOCALE: Record<Lang, string> = { id: "id-ID", en: "en-GB" };
+const TZ = "Asia/Jakarta";
+
+const cache = new Map<string, Intl.NumberFormat | Intl.DateTimeFormat>();
+
+function numFmt(lang: Lang): Intl.NumberFormat {
+  const key = `n:${lang}`;
+  let f = cache.get(key) as Intl.NumberFormat | undefined;
+  if (!f) {
+    f = new Intl.NumberFormat(LOCALE[lang]);
+    cache.set(key, f);
+  }
+  return f;
 }
 
-export function fmtDate(value: string | null | undefined): string {
-  if (!value) return "tidak diketahui";
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? value : dateShort.format(d);
+function dateFmt(lang: Lang, kind: "short" | "long" | "time"): Intl.DateTimeFormat {
+  const key = `d:${lang}:${kind}`;
+  let f = cache.get(key) as Intl.DateTimeFormat | undefined;
+  if (!f) {
+    const opts: Intl.DateTimeFormatOptions =
+      kind === "short"
+        ? { day: "numeric", month: "short", timeZone: TZ }
+        : kind === "long"
+          ? { day: "numeric", month: "long", year: "numeric", timeZone: TZ }
+          : { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: TZ };
+    f = new Intl.DateTimeFormat(LOCALE[lang], opts);
+    cache.set(key, f);
+  }
+  return f;
 }
 
-export function fmtDateLong(value: string | null | undefined): string {
-  if (!value) return "tidak diketahui";
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? value : dateLong.format(d);
-}
-
-export function fmtDateTime(value: string | null | undefined): string {
-  if (!value) return "tidak diketahui";
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? value : `${dateTime.format(d)} WIB`;
-}
-
-export function fmtScore(value: number | null | undefined): string {
-  if (value === null || value === undefined) return "-";
-  return Number(value).toFixed(2).replace(".", ",");
+export function formatters(lang: Lang) {
+  const unknown = lang === "en" ? "unknown" : "tidak diketahui";
+  return {
+    num(value: number | bigint | null | undefined): string {
+      if (value === null || value === undefined) return "0";
+      return numFmt(lang).format(Number(value));
+    },
+    date(value: string | null | undefined): string {
+      if (!value) return unknown;
+      const d = new Date(value);
+      return Number.isNaN(d.getTime()) ? value : dateFmt(lang, "short").format(d);
+    },
+    dateLong(value: string | null | undefined): string {
+      if (!value) return unknown;
+      const d = new Date(value);
+      return Number.isNaN(d.getTime()) ? value : dateFmt(lang, "long").format(d);
+    },
+    dateTime(value: string | null | undefined): string {
+      if (!value) return unknown;
+      const d = new Date(value);
+      return Number.isNaN(d.getTime()) ? value : `${dateFmt(lang, "time").format(d)} WIB`;
+    },
+    score(value: number | null | undefined): string {
+      if (value === null || value === undefined) return "-";
+      const s = Number(value).toFixed(2);
+      return lang === "id" ? s.replace(".", ",") : s;
+    },
+    pct(value: number): string {
+      return `${Math.round(value * 100)}%`;
+    },
+  };
 }
 
 /** Judul Google News membawa akhiran " - Penerbit"; buang untuk judul incident. */
-export function incidentTitle(title: string | null | undefined, fallback = "Incident tanpa judul"): string {
+export function incidentTitle(title: string | null | undefined, fallback = "Incident"): string {
   if (!title) return fallback;
   return title.replace(/\s+[-–|]\s+[^-–|]{2,60}$/, "").trim() || fallback;
 }
 
-/** "data_breach" atau "DATA_BREACH" menjadi "Data breach". */
-export function attackLabel(value: string | null | undefined): string {
-  if (!value) return "Belum dikenali";
-  const first = value.split(",")[0].trim();
-  if (!first) return "Belum dikenali";
-  const words = first.toLowerCase().replace(/_/g, " ");
-  const special: Record<string, string> = {
-    ddos: "DDoS",
-    xss: "XSS",
-    "sql injection": "SQL injection",
-    "remote code execution": "Remote code execution",
-    apt: "APT",
-    "ics scada attack": "ICS/SCADA attack",
-    "iot attack": "IoT attack",
-    "dns attack": "DNS attack",
-  };
-  if (special[words]) return special[words];
-  return words.charAt(0).toUpperCase() + words.slice(1);
-}
-
 export function attackCode(value: string | null | undefined): string {
   if (!value) return "UNKNOWN";
-  return value.toUpperCase();
+  return value.toUpperCase().split(",")[0].trim();
 }
 
 export function domainOf(url: string | null | undefined): string {
@@ -95,7 +97,7 @@ const HEAVY = new Set([
   "data_theft",
 ]);
 
-/** Keparahan turunan: jumlah sumber dan jenis serangan; bukan penilaian resmi. */
+/** Keparahan turunan dari jumlah sumber dan jenis serangan; bukan penilaian resmi. */
 export function severity(row: { document_count: number | bigint; attack_type: string | null }): Severity {
   const docs = Number(row.document_count);
   const type = (row.attack_type ?? "").toLowerCase().split(",")[0].trim();
@@ -103,55 +105,4 @@ export function severity(row: { document_count: number | bigint; attack_type: st
   if (docs >= 8 || (heavy && docs >= 3)) return "crit";
   if (docs >= 3 || heavy) return "high";
   return "med";
-}
-
-export const SEVERITY_LABEL: Record<Severity, string> = {
-  crit: "Kritis",
-  high: "Tinggi",
-  med: "Sedang",
-};
-
-export const GROUP_LABEL: Record<string, string> = {
-  BANK_CUSTOMERS: "Nasabah bank",
-  SMES: "UMKM",
-  CIVIL_SERVANTS: "ASN dan PPPK",
-  STUDENTS: "Pelajar dan mahasiswa",
-  ELDERLY: "Lansia",
-  INDIVIDUALS: "Individu dan pengguna",
-  EMPLOYEES: "Karyawan",
-  CHILDREN: "Anak dan remaja",
-  JOB_SEEKERS: "Pencari kerja",
-  BUSINESSES: "Perusahaan",
-  GOVERNMENT: "Instansi pemerintah",
-};
-
-export const EVIDENCE_LABEL: Record<string, string> = {
-  INDEPENDENT_SUPPORT: "Independen",
-  REPRODUCED_OR_SYNDICATED: "Sindikasi",
-  DUPLICATE_OR_REPEATED: "Duplikat",
-  SINGLE_SOURCE: "Sumber tunggal",
-};
-
-export const RELATION_LABEL: Record<string, string> = {
-  LIKELY_INDEPENDENT: "kemungkinan independen",
-  LIKELY_REPRODUCED: "kemungkinan salinan",
-  POSSIBLE_REPRODUCED: "mungkin salinan",
-  LIKELY_DUPLICATE: "kemungkinan duplikat",
-  POSSIBLE_DUPLICATE: "mungkin duplikat",
-  UNCERTAIN_RELATION: "tidak pasti",
-};
-
-export function languageLabel(code: string | null | undefined): string {
-  const map: Record<string, string> = {
-    id: "Indonesia",
-    en: "Inggris",
-    de: "Jerman",
-    es: "Spanyol",
-    pt: "Portugis",
-    fr: "Prancis",
-    ja: "Jepang",
-    ko: "Korea",
-    ru: "Rusia",
-  };
-  return map[code ?? ""] ?? (code || "tidak diketahui");
 }

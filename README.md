@@ -136,10 +136,15 @@ npm run dev                            # http://localhost:3000
 ```
 
 Token baca-saja dibuat dengan `turso db tokens create csais --read-only`; token
-tulis hanya dipakai pekerja Actions. Halaman: beranda, incident (saringan dan
-grafik), detail incident (klaim, garis waktu sumber, bukti), temuan dan kelompok
-berisiko, verifikasi bukti (tautan, hash, atau ID), registri sumber, dan halaman
-portal lembaga yang dibuka setelah kontrak di rantai terpasang.
+tulis hanya dipakai pekerja Actions. Situs dwibahasa: setiap path berprefiks
+`/id` atau `/en` (dipilih dari cookie atau Accept-Language, diatur di
+`web/proxy.ts`; kamus teks di `web/lib/i18n.ts`). Halaman: beranda,
+`/incidents` (globe sebaran negara, filter, indeks kepercayaan awal, paginasi
+bernomor), `/incidents/[id]` (klaim, kronologi sumber, bukti), `/findings`
+(peringkat kelompok berisiko dan peta panas jenis serangan), `/verify`
+(tautan, hash, atau ID bukti), `/sources` (registri domain dengan logo), dan
+`/institutions`. Commit harus memakai email yang terverifikasi di GitHub agar
+Vercel mau membangunnya (`git config user.email` di repo ini sudah diatur).
 
 ## Pengembangan
 

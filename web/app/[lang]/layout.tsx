@@ -1,0 +1,112 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { IBM_Plex_Sans, JetBrains_Mono } from "next/font/google";
+import type { ReactNode } from "react";
+import "../globals.css";
+import { getLastRun } from "@/lib/queries";
+import { formatters } from "@/lib/format";
+import { getDict, isLang, L, LANGS, type Lang } from "@/lib/i18n";
+import { LangToggle } from "@/components/lang-toggle";
+
+const plex = IBM_Plex_Sans({ variable: "--font-plex", subsets: ["latin"], weight: ["400", "500", "600", "700"] });
+const jet = JetBrains_Mono({ variable: "--font-jet", subsets: ["latin"], weight: ["400", "600"] });
+
+export function generateStaticParams() {
+  return LANGS.map((lang) => ({ lang }));
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ lang: string }> }): Promise<Metadata> {
+  const { lang } = await params;
+  const t = getDict(isLang(lang) ? lang : "id");
+  return {
+    title: { default: t.brand, template: `%s · ${t.brand}` },
+    description: lang === "en" ? t.home.lead : t.home.lead,
+    alternates: { languages: { id: "/id", en: "/en" } },
+  };
+}
+
+const NAV: { key: keyof ReturnType<typeof getDict>["nav"]; path: string }[] = [
+  { key: "home", path: "/" },
+  { key: "incidents", path: "/incidents" },
+  { key: "findings", path: "/findings" },
+  { key: "verify", path: "/verify" },
+  { key: "sources", path: "/sources" },
+  { key: "institutions", path: "/institutions" },
+];
+
+export default async function RootLayout({ children, params }: { children: ReactNode; params: Promise<{ lang: string }> }) {
+  const { lang: raw } = await params;
+  if (!isLang(raw)) notFound();
+  const lang: Lang = raw;
+  const t = getDict(lang);
+  const f = formatters(lang);
+  const lastRun = await getLastRun();
+
+  return (
+    <html lang={lang} className={`${plex.variable} ${jet.variable} h-full`}>
+      <body className="min-h-full flex flex-col">
+        <header className="sticky top-0 z-20 border-b border-line bg-nav/95 backdrop-blur">
+          <div className="mx-auto flex h-14 w-full max-w-7xl items-center gap-6 px-4 sm:px-6">
+            <Link href={L(lang, "/")} className="flex items-center gap-2.5 text-[15px] font-semibold tracking-wide text-fg no-underline hover:text-fg">
+              <span className="inline-block h-4.5 w-4.5 rounded-[4px] bg-accent" aria-hidden="true" />
+              {t.brand}
+            </Link>
+            <nav className="hidden items-center gap-5 text-[13.5px] md:flex" aria-label="Main">
+              {NAV.map((item) => (
+                <Link key={item.key} href={L(lang, item.path)} className="text-soft no-underline hover:text-fg">
+                  {t.nav[item.key]}
+                </Link>
+              ))}
+            </nav>
+            <div className="ml-auto flex items-center gap-3">
+              {lastRun ? (
+                <span className="hidden font-mono text-[11px] text-muted lg:inline">{t.status(f.dateTime(lastRun.finished_at), lastRun.pipeline_version.split("+")[0])}</span>
+              ) : null}
+              <LangToggle lang={lang} />
+            </div>
+          </div>
+          <nav className="mx-auto flex w-full max-w-7xl gap-4 overflow-x-auto px-4 pb-2 text-[13px] md:hidden" aria-label="Main (mobile)">
+            {NAV.map((item) => (
+              <Link key={item.key} href={L(lang, item.path)} className="whitespace-nowrap text-soft no-underline">
+                {t.nav[item.key]}
+              </Link>
+            ))}
+          </nav>
+        </header>
+
+        <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">{children}</div>
+
+        <footer className="mt-10 border-t border-line">
+          <div className="mx-auto grid w-full max-w-7xl gap-8 px-4 py-8 text-[12.5px] sm:px-6 md:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))]">
+            <div className="flex flex-col gap-2">
+              <span className="flex items-center gap-2 font-semibold text-fg">
+                <span className="inline-block h-3.5 w-3.5 rounded-[3px] bg-accent" aria-hidden="true" />
+                {t.brand} <span className="font-normal text-muted">· {t.tagline}</span>
+              </span>
+              <p className="max-w-[52ch] leading-relaxed text-muted">{t.footer.about}</p>
+              <span className="font-mono text-[11px] text-muted">{t.footer.updated}</span>
+            </div>
+            <div className="flex flex-col gap-2">
+              <span className="label">{t.footer.columns.product}</span>
+              <Link href={L(lang, "/incidents")} className="text-soft no-underline hover:text-fg">{t.nav.incidents}</Link>
+              <Link href={L(lang, "/findings")} className="text-soft no-underline hover:text-fg">{t.nav.findings}</Link>
+              <Link href={L(lang, "/sources")} className="text-soft no-underline hover:text-fg">{t.nav.sources}</Link>
+            </div>
+            <div className="flex flex-col gap-2">
+              <span className="label">{t.footer.columns.method}</span>
+              <Link href={`${L(lang, "/")}#process`} className="text-soft no-underline hover:text-fg">{t.footer.links.pipeline}</Link>
+              <Link href={L(lang, "/verify")} className="text-soft no-underline hover:text-fg">{t.footer.links.evidence}</Link>
+              <Link href={`${L(lang, "/incidents")}#confidence`} className="text-soft no-underline hover:text-fg">{t.footer.links.confidence}</Link>
+            </div>
+            <div className="flex flex-col gap-2">
+              <span className="label">{t.footer.columns.access}</span>
+              <Link href={L(lang, "/institutions")} className="text-soft no-underline hover:text-fg">{t.nav.institutions}</Link>
+              <span className="text-muted">{t.footer.links.api}</span>
+            </div>
+          </div>
+        </footer>
+      </body>
+    </html>
+  );
+}

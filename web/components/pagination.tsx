@@ -1,6 +1,9 @@
 import Link from "next/link";
+import { formatters } from "@/lib/format";
+import { getDict, type Lang } from "@/lib/i18n";
 
 type Props = {
+  lang: Lang;
   page: number;
   pages: number;
   hrefFor: (page: number) => string;
@@ -8,7 +11,7 @@ type Props = {
   hidden: Record<string, string | undefined>;
   total: number;
   pageSize: number;
-  label?: string;
+  label: string;
 };
 
 function pageList(page: number, pages: number): (number | "gap")[] {
@@ -26,26 +29,22 @@ function pageList(page: number, pages: number): (number | "gap")[] {
 }
 
 /** Paginasi bernomor dengan lompat langsung ke halaman. */
-export function Pagination({ page, pages, hrefFor, action, hidden, total, pageSize, label = "baris" }: Props) {
+export function Pagination({ lang, page, pages, hrefFor, action, hidden, total, pageSize, label }: Props) {
+  const t = getDict(lang).common;
+  const f = formatters(lang);
   if (pages <= 1) {
-    return (
-      <p className="text-[12.5px] text-muted">
-        {total} {label}, satu halaman.
-      </p>
-    );
+    return <p className="text-[12.5px] text-muted">{t.singlePage(f.num(total), label)}</p>;
   }
   const from = (page - 1) * pageSize + 1;
   const to = Math.min(total, page * pageSize);
-  const base = "inline-flex h-9 min-w-9 items-center justify-center rounded-md border px-2 text-[13px] no-underline";
+  const base = "inline-flex h-9 min-w-9 items-center justify-center rounded-md border px-2.5 text-[13px] no-underline";
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <span className="text-[12.5px] text-muted">
-        {from} sampai {to} dari {total.toLocaleString("id-ID")} {label}
-      </span>
-      <nav className="flex flex-wrap items-center gap-1.5" aria-label="Halaman">
+      <span className="text-[12.5px] text-muted">{t.rangeOf(from, to, f.num(total), label)}</span>
+      <nav className="flex flex-wrap items-center gap-1.5" aria-label="Pagination">
         {page > 1 ? (
           <Link href={hrefFor(page - 1)} className={`${base} border-line text-soft hover:border-accent hover:text-fg`} rel="prev">
-            Sebelumnya
+            {t.prev}
           </Link>
         ) : null}
         {pageList(page, pages).map((p, i) =>
@@ -65,16 +64,16 @@ export function Pagination({ page, pages, hrefFor, action, hidden, total, pageSi
         )}
         {page < pages ? (
           <Link href={hrefFor(page + 1)} className={`${base} border-line text-soft hover:border-accent hover:text-fg`} rel="next">
-            Berikutnya
+            {t.next}
           </Link>
         ) : null}
       </nav>
       <form method="get" action={action} className="flex items-center gap-2 text-[12.5px] text-muted">
         {Object.entries(hidden).map(([k, v]) => (v ? <input key={k} type="hidden" name={k} value={v} /> : null))}
-        <label htmlFor="page-jump">Ke halaman</label>
+        <label htmlFor="page-jump">{t.goToPage}</label>
         <input id="page-jump" name="page" type="number" min={1} max={pages} defaultValue={page} className="field w-20 py-1.5 text-center" />
         <button type="submit" className="btn btn-ghost px-3 py-1.5 text-[12.5px]">
-          Lompat
+          {t.jump}
         </button>
       </form>
     </div>

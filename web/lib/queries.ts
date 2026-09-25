@@ -261,6 +261,7 @@ export type GroupStat = {
   prev: number;
   weeks: number[]; // 8 pekan terakhir, dari yang paling lama
   types: { t: string; n: number }[];
+  typesAll: Record<string, number>;
   samples: { incident_id: string; title: string | null; attack_type: string | null; document_count: number }[];
 };
 
@@ -325,6 +326,7 @@ export const getRiskGroups = cache(async (): Promise<GroupStat[]> => {
       prev: s.prev.size,
       weeks: s.weeks.map((w) => w.size),
       types: [...s.types.entries()].map(([t, n]) => ({ t, n })).sort((a, b) => b.n - a.n).slice(0, 3),
+      typesAll: Object.fromEntries(s.types),
       samples: [...s.samples.values()].sort((a, b) => b.document_count - a.document_count).slice(0, 3),
     }))
     .sort((a, b) => b.now - a.now);
@@ -450,3 +452,9 @@ export async function getSources(f: SourceFilters) {
     max: Number(maxRow?.m ?? 1),
   };
 }
+
+export const getLanguageCounts = cache(async () => {
+  return query<{ language: string; n: number }>(
+    `SELECT COALESCE(NULLIF(language, ''), 'unknown') AS language, COUNT(*) AS n FROM articles GROUP BY language ORDER BY n DESC LIMIT 6`,
+  );
+});
