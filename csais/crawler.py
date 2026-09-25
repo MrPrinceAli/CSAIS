@@ -23,6 +23,7 @@ import requests
 
 from csais.config import DATABASE_DIR
 from csais.db import get_connection, get_timestamp
+from csais.language import article_text, detect_language
 
 
 # --- Konfigurasi ---
@@ -37,6 +38,25 @@ MAX_RETRIES = 3
 RETRY_BASE_DELAY = 2
 
 USER_AGENT = "CSAIS-Research-Crawler/0.1 (Cyber Social Attack Intelligence System)"
+
+
+# --- Sumber lembaga resmi ---
+# Situs lembaga tidak menyediakan RSS yang bisa diakses, tetapi halamannya
+# terindeks Google News, jadi dicari dengan operator site: (tanpa tanda kutip).
+# Artikel dari sini disimpan dengan source_type "OFFICIAL" dan source_name
+# nama lembaganya, sehingga bisa dibedakan dari media di V0.6.
+OFFICIAL_SOURCE_LANGUAGE = "id"
+OFFICIAL_SOURCES = {
+    "BSSN": ["site:bssn.go.id"],
+    "Komdigi": ["site:komdigi.go.id siber", "site:komdigi.go.id penipuan"],
+    "OJK": [
+        "site:ojk.go.id siber", "site:ojk.go.id penipuan", "site:ojk.go.id investasi ilegal",
+    ],
+    "Polri": [
+        "site:polri.go.id siber", "site:polri.go.id penipuan online",
+        "site:polri.go.id peretasan",
+    ],
+}
 
 
 # --- Kata kunci keamanan siber (bahasa Inggris) ---
@@ -252,10 +272,7 @@ def initialize_database():
     cursor.execute(
         "CREATE INDEX IF NOT EXISTS idx_articles_language ON articles(language)"
     )
-    cursor.execute(
-        "CREATE INDEX IF NOT EXISTS idx_articles_content_hash "
-        "ON articles(content_hash)"
-    )
+    # content_hash dan article_url sudah UNIQUE, jadi indeksnya dibuat otomatis
     cursor.execute(
         "CREATE INDEX IF NOT EXISTS idx_crawl_state_status ON crawl_state(status)"
     )
@@ -298,28 +315,6 @@ def parse_date(date_value):
         return None
 
 
-def detect_language(text):
-    """Deteksi bahasa sederhana (id/en) berdasarkan kata umum."""
-    text_lower = text.lower()
-    indonesian_words = [
-        "dan", "yang", "dari", "dengan", "untuk", "serangan", "siber", "keamanan",
-    ]
-    english_words = [
-        "the", "and", "of", "with", "cyber", "security", "attack",
-    ]
-
-    indonesia_score = sum(
-        1 for word in indonesian_words if f" {word} " in f" {text_lower} "
-    )
-    english_score = sum(1 for word in english_words if f" {word} " in f" {text_lower} ")
-
-    if indonesia_score > english_score:
-        return "id", 0.60
-    if english_score > indonesia_score:
-        return "en", 0.60
-    return "unknown", 0.30
-
-
 # --- Google News RSS ---
 def build_google_news_url(keyword, start_date, end_date, language):
     """Susun URL pencarian Google News RSS untuk satu kata kunci dan periode."""
@@ -327,8 +322,10 @@ def build_google_news_url(keyword, start_date, end_date, language):
     if start_date.strftime("%Y-%m-%d") >= end_date.strftime("%Y-%m-%d"):
         end_date = end_date + timedelta(days=1)
 
+    # Operator site: tidak boleh diberi tanda kutip
+    term = keyword if keyword.startswith("site:") else f'"{keyword}"'
     query = (
-        f'"{keyword}" '
+        f"{term} "
         f'after:{start_date.strftime("%Y-%m-%d")} '
         f'before:{end_date.strftime("%Y-%m-%d")}'
     )
@@ -423,7 +420,15 @@ def save_crawl_state(crawl_type, language, keyword, period_start, period_end, st
 
 
 # --- Penyimpanan artikel ---
-def save_article(entry, keyword, query_language, current_start=None, current_end=None):
+def save_article(
+    entry,
+    keyword,
+    query_language,
+    current_start=None,
+    current_end=None,
+    source_name="Google News",
+    source_type="RSS",
+):
     """Simpan satu entri RSS ke tabel articles; True bila artikel baru."""
     title = clean_text(entry.get("title", ""))
     summary = clean_text(entry.get("summary", ""))
@@ -433,7 +438,7 @@ def save_article(entry, keyword, query_language, current_start=None, current_end
 
     published_date = parse_date(entry.get("published", ""))
     collected_date = get_timestamp()
-    detected_language, language_confidence = detect_language(f"{title} {summary}")
+    detected_language, language_confidence = detect_language(article_text(title, summary))
     content_hash = generate_content_hash(title, summary, article_url)
 
     connection = get_connection()
@@ -480,8 +485,8 @@ def save_article(entry, keyword, query_language, current_start=None, current_end
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
-            "Google News",
-            "RSS",
+            source_name,
+            source_type,
             build_google_news_url(keyword, source_start, source_end, query_language),
             title,
             summary,
@@ -510,11 +515,13 @@ def request_delay():
     time.sleep(delay)
 
 
-def crawl_keyword(keyword, language, start_date, end_date):
+def crawl_keyword(
+    keyword, language, start_date, end_date, source_name="Google News", source_type="RSS"
+):
     """Ambil RSS Google News untuk satu kata kunci dan simpan semua entrinya."""
     url = build_google_news_url(keyword, start_date, end_date, language)
 
-    print(f"\n   🔎 [{language}] {keyword}")
+    print(f"\n   🔎 [{language}] {keyword}" + (f" ({source_name})" if source_type != "RSS" else ""))
     print(
         f"      Period : {start_date.strftime('%Y-%m-%d %H:%M')} → "
         f"{end_date.strftime('%Y-%m-%d %H:%M')}"
@@ -534,7 +541,9 @@ def crawl_keyword(keyword, language, start_date, end_date):
 
             saved_count = 0
             for entry in feed.entries:
-                if save_article(entry, keyword, language, start_date, end_date):
+                if save_article(
+                    entry, keyword, language, start_date, end_date, source_name, source_type
+                ):
                     saved_count += 1
 
             print(f"      Entries : {len(feed.entries)}")
@@ -576,24 +585,40 @@ def full_historical_periods(today=None):
     return periods
 
 
+def all_crawl_tasks():
+    """Semua (bahasa, kata kunci, nama sumber, tipe sumber) yang dicrawl per periode."""
+    tasks = [
+        (language, keyword, "Google News", "RSS")
+        for language, keywords in MULTILINGUAL_KEYWORDS.items()
+        for keyword in keywords
+    ]
+    tasks.extend(
+        (OFFICIAL_SOURCE_LANGUAGE, query, institution, "OFFICIAL")
+        for institution, queries in OFFICIAL_SOURCES.items()
+        for query in queries
+    )
+    return tasks
+
+
 def crawl_all_keywords(crawl_type, start_date, end_date):
     """Crawl semua kata kunci untuk satu periode dengan checkpoint; False bila gagal."""
     period_start = start_date.isoformat()
     period_end = end_date.isoformat()
     skipped = 0
-    for language, keywords in MULTILINGUAL_KEYWORDS.items():
-        for keyword in keywords:
-            if is_period_completed(crawl_type, language, keyword, period_start, period_end):
-                skipped += 1
-                continue
-            save_crawl_state(
-                crawl_type, language, keyword, period_start, period_end, "IN_PROGRESS"
-            )
-            if not crawl_keyword(keyword, language, start_date, end_date):
-                return False
-            save_crawl_state(
-                crawl_type, language, keyword, period_start, period_end, "COMPLETED"
-            )
+    for language, keyword, source_name, source_type in all_crawl_tasks():
+        if is_period_completed(crawl_type, language, keyword, period_start, period_end):
+            skipped += 1
+            continue
+        save_crawl_state(
+            crawl_type, language, keyword, period_start, period_end, "IN_PROGRESS"
+        )
+        if not crawl_keyword(
+            keyword, language, start_date, end_date, source_name, source_type
+        ):
+            return False
+        save_crawl_state(
+            crawl_type, language, keyword, period_start, period_end, "COMPLETED"
+        )
     if skipped:
         print(f"\n   ⏭️ {skipped} kata kunci sudah selesai, dilewati.")
     return True
@@ -645,7 +670,7 @@ def historical_crawl_completed():
     periods = full_historical_periods()
     if not periods:
         return True
-    total_keywords = sum(len(keywords) for keywords in MULTILINGUAL_KEYWORDS.values())
+    total_keywords = len(all_crawl_tasks())
     connection = get_connection()
     cursor = connection.cursor()
     try:

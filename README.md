@@ -1,9 +1,10 @@
 # CSAIS - Cyber Social Attack Intelligence System
 
 Pipeline pengumpulan dan pengolahan berita serangan siber (khususnya
-rekayasa sosial) dari Google News. Seluruh hasil disimpan di database
-SQLite `database/csais.db`. Program berjalan di terminal, tidak ada
-antarmuka web.
+rekayasa sosial) dari Google News, ditambah halaman lembaga resmi (BSSN,
+Komdigi, OJK, Polri) yang terindeks Google News lewat operator `site:`.
+Seluruh hasil disimpan di database SQLite `database/csais.db`. Program
+berjalan di terminal, tidak ada antarmuka web.
 
 ## Struktur proyek
 
@@ -15,6 +16,7 @@ csais/
   db.py                 koneksi SQLite dan timestamp bersama
   text.py               normalisasi teks, pencocokan kata utuh, Jaccard bersama
   reset.py              penghapusan hasil olahan V0.2 - V0.6 (dipakai --reset)
+  language.py           deteksi bahasa artikel (langdetect)
   crawler.py            crawler Google News RSS (historical + incremental)
   v01_data_collector.py          V0.1 ringkasan data
   v02_relevance_detection.py     V0.2 deteksi relevansi artikel
@@ -43,6 +45,7 @@ python3 -m venv .venv
 ./.venv/bin/python main.py --no-crawl   # lewati crawler
 ./.venv/bin/python main.py --reset      # hapus hasil V0.2 - V0.6, proses ulang dari awal
 ./.venv/bin/python main.py --reset-from 5   # hapus hasil V0.5 - V0.6 saja, lalu proses ulang
+./.venv/bin/python main.py --redetect-language  # deteksi ulang bahasa semua artikel (langdetect)
 ```
 
 Crawler akan menanyakan apakah ingin menarik data baru (`y`) atau

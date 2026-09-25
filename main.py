@@ -14,6 +14,7 @@ import argparse
 
 from csais import (
     crawler,
+    language,
     reset,
     v01_data_collector,
     v02_relevance_detection,
@@ -54,6 +55,11 @@ def parse_args():
     parser.add_argument(
         "--yes", action="store_true", help="jangan minta konfirmasi untuk reset"
     )
+    parser.add_argument(
+        "--redetect-language",
+        action="store_true",
+        help="deteksi ulang bahasa seluruh artikel dengan langdetect, lalu keluar",
+    )
     return parser.parse_args()
 
 
@@ -67,6 +73,14 @@ def main():
     print("==================================================")
     print("   🛡️ CYBER SOCIAL ATTACK INTELLIGENCE SYSTEM")
     print("==================================================")
+
+    if args.redetect_language:
+        print("\n🔄 Mendeteksi ulang bahasa seluruh artikel...")
+        total = language.redetect_all()
+        print(f"\nSelesai: {total} artikel diperbarui.\n\nDistribusi bahasa:")
+        for code, count in language.language_distribution():
+            print(f"   {code}: {count}")
+        return
 
     if args.reset or args.reset_from:
         from_stage = args.reset_from or 2
