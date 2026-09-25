@@ -49,6 +49,7 @@ def test_publish_table_creates_fills_and_swaps(tmp_path, monkeypatch):
     )
     conn.commit()
     monkeypatch.setattr(publish, "CHUNK_ROWS", 3)
+    monkeypatch.setattr(publish, "ROWS_PER_STATEMENT", 1)
 
     client = FakeClient()
     total = publish.publish_table(conn, client, "sources", "SELECT * FROM sources", ["domain"], log=lambda *_: None)
@@ -67,3 +68,35 @@ def test_publish_table_creates_fills_and_swaps(tmp_path, monkeypatch):
     assert 'ALTER TABLE "sources__new" RENAME TO "sources"' in swap
     assert any("idx_sources_domain" in sql for sql in swap)
     conn.close()
+
+
+def test_insert_statements_pack_multiple_rows(monkeypatch):
+    monkeypatch.setattr(publish, "ROWS_PER_STATEMENT", 2)
+    columns = [("a", "TEXT"), ("b", "INTEGER")]
+    statements = publish.insert_statements("t", columns, [("x", 1), ("y", 2), ("z", 3)])
+    assert len(statements) == 2
+    sql, args = statements[0]
+    assert sql == 'INSERT INTO "t__new" ("a", "b") VALUES (?, ?), (?, ?)'
+    assert args == ["x", 1, "y", 2]
+    assert statements[1] == ('INSERT INTO "t__new" ("a", "b") VALUES (?, ?)', ["z", 3])
+
+
+def test_publish_all_uses_given_client_for_every_table(tmp_path, monkeypatch):
+    db = tmp_path / "local.db"
+    conn = sqlite3.connect(db)
+    conn.execute("CREATE TABLE sources (domain TEXT)")
+    conn.execute("CREATE TABLE pipeline_runs (run_id INTEGER, stage TEXT, pipeline_version TEXT, "
+                 "started_at TEXT, finished_at TEXT, rows_processed INTEGER, notes TEXT)")
+    conn.executemany("INSERT INTO sources VALUES (?)", [("a.id",), ("b.id",)])
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(publish, "get_connection", lambda: sqlite3.connect(db))
+    monkeypatch.setattr(publish, "record_run", lambda *a, **k: None)
+    client = FakeClient()
+    total = publish.publish_all(
+        client=client,
+        tables={"sources": ("SELECT * FROM sources", []), "hilang": ("SELECT * FROM hilang", [])},
+        log=lambda *_: None,
+    )
+    assert total == 2  # tabel yang tidak ada dilewati, bukan gagal
+    assert any(sql.startswith('CREATE TABLE "sources__new"') for _, stmts in client.calls for sql, _ in stmts)

@@ -13,14 +13,17 @@ Kredensial dibaca dari variabel lingkungan:
 
 import os
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 
 import requests
 
 from csais.db import get_connection, get_timestamp
 from csais.schema import record_run
 
-CHUNK_ROWS = 300
-REQUEST_TIMEOUT = 60
+CHUNK_ROWS = 2000  # baris per permintaan HTTP (satu transaksi)
+ROWS_PER_STATEMENT = 100  # baris per statement INSERT multi-baris
+WORKERS = 4  # tabel yang disalin bersamaan (masing-masing koneksi dan sesi sendiri)
+REQUEST_TIMEOUT = 120
 
 # Tabel yang diterbitkan: nama -> (SELECT sumber, daftar index remote)
 PUBLISH_TABLES = {
@@ -144,10 +147,19 @@ def swap_statements(table, indexes):
 
 
 def insert_statements(table, columns, rows):
+    """INSERT multi-baris: setiap statement memuat sampai ROWS_PER_STATEMENT baris."""
     names = ", ".join(f'"{name}"' for name, _ in columns)
-    marks = ", ".join("?" for _ in columns)
-    sql = f'INSERT INTO "{table}__new" ({names}) VALUES ({marks})'
-    return [(sql, list(row)) for row in rows]
+    row_marks = "(" + ", ".join("?" for _ in columns) + ")"
+    rows = list(rows)
+    statements = []
+    for start in range(0, len(rows), ROWS_PER_STATEMENT):
+        batch = rows[start : start + ROWS_PER_STATEMENT]
+        sql = (
+            f'INSERT INTO "{table}__new" ({names}) VALUES '
+            + ", ".join([row_marks] * len(batch))
+        )
+        statements.append((sql, [value for row in batch for value in row]))
+    return statements
 
 
 # --- Publikasi ---
@@ -169,19 +181,39 @@ def publish_table(conn, client, table, select_sql, indexes, log=print):
     return total
 
 
-def publish_all(client=None, tables=None, log=print):
-    """Terbitkan semua tabel di PUBLISH_TABLES; kembalikan total baris."""
-    client = client or TursoClient(
-        os.environ.get("TURSO_DATABASE_URL"), os.environ.get("TURSO_AUTH_TOKEN")
-    )
+def publish_all(client=None, tables=None, log=print, workers=WORKERS):
+    """Terbitkan semua tabel di PUBLISH_TABLES; kembalikan total baris.
+
+    Tabel independen satu sama lain (masing-masing punya tabel sementara dan
+    ditukar sendiri), jadi disalin ``workers`` sekaligus. Bila ``client``
+    diberikan (pengujian), semua tabel memakai klien itu secara berurutan.
+    """
+    database_url = os.environ.get("TURSO_DATABASE_URL")
+    auth_token = os.environ.get("TURSO_AUTH_TOKEN")
+    if client is None:
+        TursoClient(database_url, auth_token)  # validasi kredensial lebih awal
     started_at = get_timestamp()
-    conn = get_connection()
-    total = 0
-    for table, (select_sql, indexes) in (tables or PUBLISH_TABLES).items():
+    items = list((tables or PUBLISH_TABLES).items())
+
+    def publish_one(item):
+        table, (select_sql, indexes) = item
+        conn = get_connection()
+        table_client = client or TursoClient(database_url, auth_token)
         try:
-            total += publish_table(conn, client, table, select_sql, indexes, log)
+            return publish_table(conn, table_client, table, select_sql, indexes, log)
         except sqlite3.OperationalError as error:
             log(f"   {table:28s} dilewati ({error})")
+            return 0
+        finally:
+            conn.close()
+
+    if client is None and workers > 1:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            total = sum(pool.map(publish_one, items))
+    else:
+        total = sum(publish_one(item) for item in items)
+
+    conn = get_connection()
     record_run(conn, "publish_turso", started_at, total)
     conn.close()
     return total
