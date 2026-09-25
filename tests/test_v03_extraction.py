@@ -166,3 +166,30 @@ def test_extract_information_end_to_end():
     assert info["indicator"] == "UNKNOWN"
     assert info["extraction_method"] == "RULE_BASED"
     assert info["extraction_confidence"] == pytest.approx(0.4)
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        # keterangan sebelum kata kerja bukan nama
+        "Threat Actor Allegedly Claims 20 Million Records Stolen from Company X",
+        # judul seksi di isi artikel tidak boleh menyambung ke baris berikutnya
+        "Campaign Overview\nThreat actors behind this campaign used phishing.",
+        "the threat actor\nCampaign Overview\nused phishing",
+    ],
+)
+def test_extract_threat_actor_rejects_adverbs_and_section_headings(sentence):
+    assert v03.extract_threat_actor(sentence) == "UNKNOWN"
+
+
+def test_extract_target_organization_ignores_month_names():
+    assert v03.extract_target_organization("Dec 28 was hit by a cyberattack", "") == "UNKNOWN"
+    assert (
+        v03.extract_target_organization("PowerSchool was hit by a cyberattack on Dec 28", "")
+        == "PowerSchool"
+    )
+
+
+def test_extract_target_organization_does_not_cross_line_breaks():
+    text = "Latest News\nAcme Corp was hacked last week."
+    assert v03.extract_target_organization("", "", text) == "Acme Corp"

@@ -165,6 +165,19 @@ _REJECT_FIRST_WORDS = {
     "moreover", "instead", "despite", "among", "both", "each", "every", "such",
     "like", "unlike", "per", "via", "read", "learn", "see", "get", "watch", "follow",
     "sign", "subscribe", "share", "related", "sources", "source", "image", "photo",
+    # Keterangan yang mendahului kata kerja ("Threat Actor Allegedly Claims ...")
+    "allegedly", "reportedly", "purportedly", "apparently", "officially",
+    # Judul seksi dan boilerplate halaman yang ikut terbawa di isi artikel
+    "overview", "summary", "analysis", "timeline", "background", "introduction",
+    "conclusion", "campaign", "detection", "mitigation", "mitigations",
+    "recommendations", "references", "attribution", "indicators", "advertisement",
+    "sponsored", "trending", "recommended", "popular", "newsletter", "podcast",
+    "video", "editorial", "opinion", "click", "download", "print", "email",
+    "copyright", "tags", "topics", "comments",
+    # Nama dan singkatan bulan ("Dec 28 was breached")
+    "january", "february", "march", "april", "may", "june", "july", "august",
+    "september", "october", "november", "december", "jan", "feb", "mar", "apr",
+    "jun", "jul", "aug", "sep", "sept", "oct", "nov", "dec",
 }
 
 # Kata umum yang tidak boleh menjadi satu-satunya isi sebuah nama. Kata benda
@@ -180,9 +193,12 @@ _GENERIC_NAME_WORDS = _REJECT_FIRST_WORDS | {
     "national", "international", "major", "windows", "linux", "android",
 }
 
+# Spasi di dalam nama: bukan baris baru, agar judul seksi di isi artikel
+# ("Campaign Overview") tidak menyambung dengan kalimat di bawahnya.
+_SP = r"[ \t\u00a0]+"
 _NAME_TOKEN = r"[A-Z][\w&.'’-]*"
 _NAME_CONNECTOR = r"(?:of|and|&|de|for|the|del|di)"
-_ORG_NAME = rf"({_NAME_TOKEN}(?:\s+(?:{_NAME_CONNECTOR}\s+)?{_NAME_TOKEN}){{0,5}})"
+_ORG_NAME = rf"({_NAME_TOKEN}(?:{_SP}(?:{_NAME_CONNECTOR}{_SP})?{_NAME_TOKEN}){{0,5}})"
 _PASSIVE_VERBS = (
     r"(?:(?:was|were|has been|have been|had been|is|are|gets|got)\s+)?"
     r"(?:reportedly\s+|recently\s+|allegedly\s+)?"
@@ -223,15 +239,15 @@ _ACTOR_TERMS = (
     r"ransomware groups?|ransomware gangs?|cybercrime groups?|cybercriminal groups?|"
     r"apt groups?|hacktivist groups?|extortion groups?|ransomware operations?)"
 )
-_ACTOR_NAME = r"([A-Z][\w-]*(?:\s+[A-Z0-9][\w-]*){0,2})"
+_ACTOR_NAME = rf"([A-Z][\w-]*(?:{_SP}[A-Z0-9][\w-]*){{0,2}})"
 _ACTOR_PATTERNS = [
     re.compile(
-        rf"{_ACTOR_TERMS}\s+(?i:known as\s+|called\s+|named\s+|dubbed\s+|tracked as\s+)?"
+        rf"{_ACTOR_TERMS}{_SP}(?i:known as{_SP}|called{_SP}|named{_SP}|dubbed{_SP}|tracked as{_SP})?"
         rf"[\"“']?{_ACTOR_NAME}"
     ),
-    re.compile(rf"{_ACTOR_NAME}\s+{_ACTOR_TERMS}"),
+    re.compile(rf"{_ACTOR_NAME}{_SP}{_ACTOR_TERMS}"),
     # Nama dengan huruf besar di tengah atau angka (LockBit, Cl0p, RansomHub)
-    re.compile(r"([A-Z][a-z]*[A-Z0-9][\w-]*)\s+(?i:ransomware)\b"),
+    re.compile(rf"([A-Z][a-z]*[A-Z0-9][\w-]*){_SP}(?i:ransomware)\b"),
 ]
 
 

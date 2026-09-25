@@ -15,7 +15,8 @@ Hasil disimpan di tabel ``articles``:
 
 Hanya artikel kandidat V0.2 (RELEVANT lalu UNCERTAIN, terbaru lebih dulu)
 yang diambil, dengan anggaran per run agar cocok untuk pekerja terjadwal.
-Artikel yang gagal karena jaringan dicoba lagi setelah RETRY_AFTER_DAYS.
+Artikel yang gagal sementara (``error`` jaringan, atau ``unresolved`` karena
+pembuka tautan Google News dibatasi) dicoba lagi setelah RETRY_AFTER_DAYS.
 """
 
 import hashlib
@@ -140,7 +141,7 @@ def get_pending(conn, budget):
         WHERE r.relevance_label IN ('RELEVANT', 'UNCERTAIN')
           AND (
               a.content_fetched_at IS NULL
-              OR (a.content_status = 'error' AND a.content_fetched_at < ?)
+              OR (a.content_status IN ('error', 'unresolved') AND a.content_fetched_at < ?)
           )
         ORDER BY CASE r.relevance_label WHEN 'RELEVANT' THEN 0 ELSE 1 END,
                  a.published_date DESC
