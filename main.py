@@ -20,6 +20,7 @@ import sys
 from datetime import datetime
 
 from csais import (
+    content_fetcher,
     crawler,
     export,
     language,
@@ -37,6 +38,7 @@ from csais.provenance import pipeline_stamp
 PIPELINE_STEPS = [
     ("V0.1 - Data Processing", v01_data_collector.run),
     ("V0.2 - Relevance Detection", v02_relevance_detection.run),
+    ("Content Fetch - Isi Artikel", content_fetcher.run),
     ("V0.3 - Information Extraction", v03_information_extraction.run),
     ("V0.4 - Entity Resolution", v04_entity_resolution.run),
     ("V0.5 - Incident Clustering", v05_incident_clustering.run),
@@ -100,6 +102,16 @@ def parse_args():
         help="deteksi ulang bahasa seluruh artikel dengan langdetect, lalu keluar",
     )
     parser.add_argument(
+        "--fetch-budget",
+        type=int,
+        default=content_fetcher.DEFAULT_BUDGET,
+        metavar="N",
+        help=f"maksimal artikel yang diambil isinya per run (default {content_fetcher.DEFAULT_BUDGET})",
+    )
+    parser.add_argument(
+        "--no-fetch", action="store_true", help="lewati pengambilan isi artikel"
+    )
+    parser.add_argument(
         "--export", metavar="FILE", help="ekspor incident ke berkas JSON Lines, lalu keluar"
     )
     parser.add_argument(
@@ -140,7 +152,13 @@ def main():
         from_stage = args.reset_from or 2
         reset.reset_derived_tables(confirm=not args.yes, from_stage=from_stage)
 
-    steps = list(PIPELINE_STEPS)
+    steps = []
+    for name, step in PIPELINE_STEPS:
+        if step is content_fetcher.run:
+            if args.no_fetch:
+                continue
+            step = lambda: content_fetcher.run(budget=args.fetch_budget)  # noqa: E731
+        steps.append((name, step))
     if not args.no_crawl:
         steps.insert(0, ("CSAIS Crawler", lambda: crawler.run(ask=not args.crawl)))
 

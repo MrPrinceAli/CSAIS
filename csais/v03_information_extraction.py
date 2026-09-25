@@ -15,7 +15,7 @@ from datetime import datetime
 from csais.config import DATABASE_FILE
 from csais.db import get_connection, get_timestamp
 from csais.provenance import pipeline_stamp
-from csais.schema import ensure_column, record_run
+from csais.schema import ensure_column, ensure_content_columns, record_run
 from csais.text import (
     contains_keyword,
     drop_overlapping_keywords,
@@ -154,7 +154,17 @@ _REJECT_FIRST_WORDS = {
     "affiliates", "victims", "victim", "list", "lists", "site", "sites", "website",
     "infrastructure", "threat", "tactics", "techniques", "tools", "malware", "group",
     "groups", "gang", "gangs", "name", "names", "police", "officials", "over", "more",
-    "than", "most", "top", "worst", "massive", "huge",
+    "than", "most", "top", "worst", "massive", "huge", "emerging",
+    # Kata fungsi yang kapital hanya karena berada di awal kalimat isi artikel
+    "if", "while", "although", "though", "as", "but", "and", "or", "so", "because",
+    "since", "once", "until", "unless", "before", "during", "however", "meanwhile",
+    "according", "in", "on", "at", "by", "for", "from", "with", "to", "of", "there",
+    "here", "they", "we", "you", "he", "she", "one", "no", "not", "yes", "also",
+    "still", "even", "just", "only", "then", "today", "yesterday", "last", "first",
+    "earlier", "later", "recently", "additionally", "further", "furthermore",
+    "moreover", "instead", "despite", "among", "both", "each", "every", "such",
+    "like", "unlike", "per", "via", "read", "learn", "see", "get", "watch", "follow",
+    "sign", "subscribe", "share", "related", "sources", "source", "image", "photo",
 }
 
 # Kata umum yang tidak boleh menjadi satu-satunya isi sebuah nama. Kata benda
@@ -271,20 +281,57 @@ _COUNTRY_WORDS = {name.lower() for name in COUNTRY_NAMES} | {
 }
 
 
-def extract_target_organization(headline, summary):
-    """Ekstrak nama organisasi target dari judul lalu ringkasan (tanpa nama media).
+def _first_organization(text):
+    """Nama organisasi pertama yang cocok pola serangan di satu teks; None bila tidak ada."""
+    for pattern in _ORGANIZATION_PATTERNS:
+        for match in pattern.finditer(text):
+            name = _clean_name(match.group(1))
+            if name and name.lower() not in _COUNTRY_WORDS:
+                return name[:150]
+    return None
+
+
+def extract_target_organization(headline, summary, content=""):
+    """Ekstrak nama organisasi target dari judul, lalu ringkasan, lalu isi artikel.
 
     Nama negara tidak dihitung sebagai organisasi; itu urusan extract_location.
     """
-    for text in (headline or "", summary or ""):
-        if not text:
-            continue
-        for pattern in _ORGANIZATION_PATTERNS:
-            for match in pattern.finditer(text):
-                name = _clean_name(match.group(1))
-                if name and name.lower() not in _COUNTRY_WORDS:
-                    return name[:150]
-    return "UNKNOWN"
+    return extract_target_organization_tiered(headline, summary, content)[0]
+
+
+# Keyakinan berdasarkan tempat nama ditemukan: judul paling dapat dipercaya,
+# isi artikel paling rendah karena bisa menyebut organisasi lain yang dikutip.
+TIER_CONFIDENCE = {"headline": 0.9, "summary": 0.8, "content": 0.6}
+CONTENT_SCAN_CHARS = 3000  # bagian awal isi artikel yang dipindai regex
+
+
+def extract_target_organization_tiered(headline, summary, content=""):
+    """(nama organisasi, keyakinan) dari judul, ringkasan, lalu isi artikel."""
+    tiers = (
+        ("headline", headline or ""),
+        ("summary", summary or ""),
+        ("content", (content or "")[:CONTENT_SCAN_CHARS]),
+    )
+    for tier, text in tiers:
+        if text:
+            name = _first_organization(text)
+            if name:
+                return name, TIER_CONFIDENCE[tier]
+    return "UNKNOWN", 0.0
+
+
+def extract_threat_actor_tiered(headline, summary, content=""):
+    """(pelaku, keyakinan): dicari di judul dulu, lalu ringkasan, lalu isi artikel."""
+    tiers = (
+        ("headline", headline or ""),
+        ("summary", f"{headline or ''}. {summary or ''}"),
+        ("content", f"{headline or ''}. {summary or ''} {(content or '')[:CONTENT_SCAN_CHARS]}"),
+    )
+    for tier, text in tiers:
+        actor = extract_threat_actor(text)
+        if actor != "UNKNOWN":
+            return actor, TIER_CONFIDENCE[tier]
+    return "UNKNOWN", 0.0
 
 
 def _valid_date(year, month, day):
@@ -336,8 +383,19 @@ def calculate_extraction_confidence(
     return round(confidence, 4)
 
 
+def _keyword_confidence(value, title_value):
+    """Keyakinan field kata kunci: 0.9 bila juga cocok di judul, 0.7 bila hanya di teks lain."""
+    if value == "UNKNOWN":
+        return 0.0
+    return 0.9 if title_value != "UNKNOWN" else 0.7
+
+
 def extract_information(article_id, title, summary, content):
-    """Ekstrak seluruh field informasi dari satu artikel."""
+    """Ekstrak seluruh field informasi dari satu artikel beserta keyakinan per field.
+
+    Isi artikel penuh (bila sudah diambil content_fetcher) ikut dipindai;
+    tanpa isi, ekstraksi bekerja pada judul dan ringkasan saja.
+    """
     title_text = normalize_text(title)
     summary_text = normalize_text(summary)
     content_text = normalize_text(content)
@@ -346,19 +404,41 @@ def extract_information(article_id, title, summary, content):
     attack_type = extract_attack_type(combined_text)
     attack_method = extract_attack_method(combined_text)
     target_sector = extract_target_sector(combined_text)
+    target_group = extract_target_group(combined_text)
     location = extract_location(combined_text)
+    impact = extract_impact(combined_text)
+    attack_date = extract_attack_date(combined_text)
+    indicators = extract_indicators(combined_text)
+
     # Teks asli (huruf besar dipertahankan) tanpa nama media Google News
     headline, publisher = split_publisher(title)
     raw_summary = remove_publisher(summary, publisher)
-    threat_actor = extract_threat_actor(f"{headline}. {raw_summary}")
-    target_organization = extract_target_organization(headline, raw_summary)
-    target_group = extract_target_group(combined_text)
-    attack_date = extract_attack_date(combined_text)
-    impact = extract_impact(combined_text)
-    indicators = extract_indicators(combined_text)
+    threat_actor, actor_confidence = extract_threat_actor_tiered(
+        headline, raw_summary, content
+    )
+    target_organization, target_confidence = extract_target_organization_tiered(
+        headline, raw_summary, content
+    )
+
     extraction_confidence = calculate_extraction_confidence(
         attack_type, attack_method, target_sector, location, impact
     )
+    field_confidence = {
+        "attack_type": _keyword_confidence(attack_type, extract_attack_type(title_text)),
+        "attack_method": _keyword_confidence(
+            attack_method, extract_attack_method(title_text)
+        ),
+        "target": target_confidence,
+        "target_sector": _keyword_confidence(
+            target_sector, extract_target_sector(title_text)
+        ),
+        "target_group": _keyword_confidence(target_group, extract_target_group(title_text)),
+        "location": _keyword_confidence(location, extract_location(title_text)),
+        "attack_date": 0.5 if attack_date != "UNKNOWN" else 0.0,
+        "threat_actor": actor_confidence,
+        "impact": _keyword_confidence(impact, extract_impact(title_text)),
+        "indicator": 0.9 if indicators != "UNKNOWN" else 0.0,
+    }
 
     return {
         "article_id": article_id,
@@ -374,6 +454,7 @@ def extract_information(article_id, title, summary, content):
         "impact": impact,
         "indicator": indicators,
         "extraction_confidence": extraction_confidence,
+        "field_confidence": field_confidence,
         "extraction_method": "RULE_BASED",
     }
 
@@ -416,6 +497,7 @@ def initialize_v03_database():
         """)
     connection.commit()
     ensure_column(connection, "v03_information_extraction", "pipeline_version", "TEXT")
+    ensure_column(connection, "v03_information_extraction", "field_confidence", "TEXT")
     connection.close()
 
 
@@ -449,24 +531,33 @@ def get_remaining_candidates():
     """Hitung kandidat V0.2 yang belum diekstrak oleh V0.3."""
     connection = get_connection()
     cursor = connection.cursor()
-    cursor.execute("""
+    cursor.execute(f"""
         SELECT COUNT(*)
         FROM v02_relevance v
+        JOIN articles a ON a.article_id = v.article_id
         LEFT JOIN v03_information_extraction x ON v.article_id = x.article_id
         WHERE v.relevance_label IN ('RELEVANT', 'UNCERTAIN')
-            AND x.article_id IS NULL
+            AND ({_NEEDS_EXTRACTION})
         """)
     total = cursor.fetchone()[0]
     connection.close()
     return total
 
 
+# Artikel perlu (di)ekstrak bila belum pernah, atau isi penuhnya baru diambil
+# setelah ekstraksi terakhir (INSERT OR REPLACE memperbarui barisnya).
+_NEEDS_EXTRACTION = (
+    "x.article_id IS NULL OR (a.content_status = 'ok' "
+    "AND a.content_fetched_at > x.extracted_at)"
+)
+
+
 def get_next_batch():
-    """Ambil batch artikel kandidat V0.2 yang belum diekstrak."""
+    """Ambil batch artikel kandidat V0.2 yang belum (atau perlu ulang) diekstrak."""
     connection = get_connection()
     cursor = connection.cursor()
     cursor.execute(
-        """
+        f"""
         SELECT
             a.article_id,
             a.title,
@@ -481,7 +572,7 @@ def get_next_batch():
         LEFT JOIN v03_information_extraction x
             ON a.article_id = x.article_id
         WHERE v.relevance_label IN ('RELEVANT', 'UNCERTAIN')
-            AND x.article_id IS NULL
+            AND ({_NEEDS_EXTRACTION})
         ORDER BY a.article_id
         LIMIT ?
         """,
@@ -513,9 +604,10 @@ def save_extraction(cursor, result):
             extraction_confidence,
             extraction_method,
             extracted_at,
-            pipeline_version
+            pipeline_version,
+            field_confidence
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             result["article_id"],
@@ -534,6 +626,7 @@ def save_extraction(cursor, result):
             result["extraction_method"],
             extracted_at,
             pipeline_stamp(),
+            json.dumps(result["field_confidence"]),
         ),
     )
 
@@ -615,6 +708,9 @@ def run():
 
     started_at = get_timestamp()
     initialize_v03_database()
+    connection = get_connection()
+    ensure_content_columns(connection)  # kolom content_status dipakai kueri batch
+    connection.close()
 
     # Ringkasan database
     total_candidates = get_total_candidates()

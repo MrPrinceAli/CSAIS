@@ -18,6 +18,11 @@ csais/
   reset.py              penghapusan hasil olahan V0.2 - V0.6 (dipakai --reset)
   language.py           deteksi bahasa artikel (langdetect)
   crawler.py            crawler Google News RSS (historical + incremental)
+  content_fetcher.py    buka tautan Google News ke URL media, ambil isi artikel penuh
+  sources.py            registri domain sumber (media/resmi) dan penanda sindikasi
+  provenance.py         versi pipeline + sidik jari kode
+  schema.py             migrasi kolom ringan, ID deterministik, catatan run
+  export.py             ekspor incident ke JSON Lines (kontrak keluaran)
   v01_data_collector.py          V0.1 ringkasan data
   v02_relevance_detection.py     V0.2 deteksi relevansi artikel
   v03_information_extraction.py  V0.3 ekstraksi jenis serangan, target, dll.
@@ -28,8 +33,13 @@ database/
   csais.db              database SQLite (tidak ikut di git)
 ```
 
-Setiap modul V0.x bersifat inkremental: hanya artikel yang belum
-diproses yang diolah pada run berikutnya.
+Urutan tahap: crawler, V0.1, V0.2, content fetch, V0.3, V0.4, V0.5, V0.6.
+Setiap tahap bersifat inkremental: hanya artikel yang belum diproses yang
+diolah pada run berikutnya. Content fetch mengambil isi artikel penuh untuk
+kandidat V0.2 dengan anggaran per run (`--fetch-budget`, default 300);
+artikel yang isinya baru terambil otomatis diekstrak ulang oleh V0.3 dan
+V0.4. V0.5 membandingkan jenis serangan per keluarga (ransomware dan data
+breach satu keluarga) dan merangkai incident lanjutan bertarget sama.
 
 ## Persiapan
 

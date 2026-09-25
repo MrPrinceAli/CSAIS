@@ -61,6 +61,9 @@ TARGET_IN_TEXT_SIMILARITY = 0.9  # nama target satu sisi muncul di teks sisi lai
 TARGET_MAX_DF_RATIO = 0.003
 TARGET_MIN_DF_LIMIT = 20
 MAX_ANCHOR_TOKENS = 300  # token incident berhenti diperkaya setelah sebanyak ini
+# Rantai incident: incident lanjutan dengan target khas yang sama, mulai paling
+# lama CHAIN_GAP_DAYS setelah liputan terakhir incident sebelumnya, digabung.
+CHAIN_GAP_DAYS = 30
 # Token dianggap nama khas bila muncul di <= max(RARE_TOKEN_MAX_DF,
 # RARE_TOKEN_MAX_DF_RATIO * jumlah artikel) artikel, agar batasnya ikut
 # membesar pada korpus yang besar.
@@ -105,6 +108,37 @@ STOPWORDS = {
     "com", "www", "http", "https", "yang", "dan", "dari", "untuk", "dengan", "pada",
     "oleh", "ini", "itu", "serangan", "siber", "tahun", "kata", "juga", "akan",
     "telah", "ada",
+}
+
+# Keluarga jenis serangan: satu kejadian sering diberi label berbeda oleh media
+# yang berbeda (ransomware vs data_leak untuk insiden yang sama), jadi
+# kecocokan jenis serangan dibandingkan per keluarga, bukan per kategori.
+ATTACK_TYPE_FAMILIES = {
+    "BREACH": [
+        "ransomware", "malware", "cyber_extortion", "data_breach", "data_leak",
+        "data_theft", "data_exfiltration", "account_takeover", "credential_attack",
+        "network_intrusion", "insider_threat", "cloud_attack", "supply_chain_attack",
+    ],
+    "SOCIAL": [
+        "phishing", "social_engineering", "online_scam", "job_scam", "investment_scam",
+        "deepfake_fraud", "malicious_website", "malicious_link",
+    ],
+    "VULNERABILITY": [
+        "zero_day", "vulnerability_exploitation", "remote_code_execution", "web_attack",
+        "sql_injection", "xss", "path_traversal", "file_inclusion",
+        "website_defacement", "domain_hijacking",
+    ],
+    "DDOS": ["ddos", "dns_attack"],
+    "ESPIONAGE": ["cyber_espionage", "apt", "information_operation"],
+    "INFRASTRUCTURE": [
+        "critical_infrastructure_attack", "ics_scada_attack", "iot_attack", "mobile_attack",
+    ],
+    "CRYPTO": ["crypto_attack"],
+}
+_FAMILY_OF = {
+    category: family
+    for family, categories in ATTACK_TYPE_FAMILIES.items()
+    for category in categories
 }
 
 INCIDENT_COLUMNS = [
@@ -168,6 +202,18 @@ def attack_type_set(value):
     if not value:
         return set()
     return {part.strip() for part in value.split(",") if part.strip()}
+
+
+def attack_family_set(value):
+    """Himpunan keluarga jenis serangan; kategori tak dikenal menjadi keluarganya sendiri."""
+    return {_FAMILY_OF.get(category, category) for category in attack_type_set(value)}
+
+
+def families_compatible(value_a, value_b):
+    """True bila salah satu tidak diketahui atau keluarganya beririsan."""
+    families_a = attack_family_set(value_a)
+    families_b = attack_family_set(value_b)
+    return not families_a or not families_b or bool(families_a & families_b)
 
 
 def distinctive_tokens(name):
@@ -537,27 +583,36 @@ def get_existing_incidents(conn, article):
         candidates.extend(cursor.fetchall())
 
     # Strategi 3: incident yang aktif di sekitar tanggal terbit artikel dengan
-    # jenis serangan yang beririsan (atau salah satunya tidak diketahui).
-    # Irisan diperiksa kasar lewat instr(); pemeriksaan tepat ada di
-    # passes_hard_constraints.
+    # keluarga jenis serangan yang beririsan (atau salah satunya tidak
+    # diketahui). Irisan diperiksa kasar lewat instr() terhadap semua kategori
+    # sekeluarga; pemeriksaan tepat ada di passes_hard_constraints.
     if article["published"]:
         window = timedelta(days=PUBLISHED_WINDOW_DAYS)
         lower = (article["published"] - window).isoformat()
         upper = (article["published"] + window).isoformat()
-        attack_type = article["attack_type"]
+        related = sorted(
+            category
+            for family in attack_family_set(article["attack_type"])
+            for category in ATTACK_TYPE_FAMILIES.get(family, [family])
+        )
+        type_clause = "attack_type IS NULL"
+        params = [lower, upper]
+        if related:
+            type_clause += " OR " + " OR ".join("instr(attack_type, ?) > 0" for _ in related)
+            params.extend(related)
+        else:
+            type_clause = "1 = 1"
+        params.append(MAX_CANDIDATES)
         cursor.execute(
             f"""
             {_INCIDENT_SELECT}
             WHERE last_published_date >= ?
               AND anchor_published_date <= ?
-              AND (
-                  attack_type IS NULL OR ? IS NULL
-                  OR instr(?, attack_type) > 0 OR instr(attack_type, ?) > 0
-              )
+              AND ({type_clause})
             ORDER BY last_published_date DESC
             LIMIT ?
             """,
-            (lower, upper, attack_type, attack_type, attack_type, MAX_CANDIDATES),
+            params,
         )
         candidates.extend(cursor.fetchall())
 
@@ -583,11 +638,13 @@ def passes_hard_constraints(article, incident):
         and article["threat_actor_entity_id"] != incident["threat_actor_entity_id"]
     ):
         return False
-    # Jenis serangan keduanya diketahui tetapi tidak beririsan sama sekali
-    article_types = attack_type_set(article["attack_type"])
-    incident_types = attack_type_set(incident["attack_type"])
-    if article_types and incident_types and not (article_types & incident_types):
-        return False
+    # Keluarga jenis serangan keduanya diketahui tetapi tidak beririsan; kecuali
+    # targetnya jelas sama (satu insiden sering diberi label berbeda, misalnya
+    # zero-day yang berujung data breach)
+    if not families_compatible(article["attack_type"], incident["attack_type"]):
+        anchor_tokens = set((incident["anchor_text"] or "").split())
+        if not target_identity(article, incident, anchor_tokens):
+            return False
 
     # Tanggal serangan keduanya diketahui tetapi berjauhan
     date_similarity = calculate_date_similarity(
@@ -679,13 +736,9 @@ def calculate_incident_similarity(article, incident):
     }
 
 
-def has_identity_signal(article, incident, details):
-    """Bukti bahwa artikel dan incident membicarakan target/pelaku yang sama.
-
-    Termasuk bila nama target yang terekstrak di satu sisi muncul utuh di
-    teks judul+ringkasan sisi lain, karena ekstraksi target sering hanya
-    berhasil pada salah satu artikel.
-    """
+def target_identity(article, incident, anchor_tokens):
+    """True bila target artikel dan incident jelas sama (nama khas yang sama
+    lewat entity, teks, atau kemunculan nama di teks sisi lain)."""
     incident_target = normalize_value(incident["target"])
     # Kesamaan target hanya menjadi bukti bila namanya cukup khas
     if distinctive_tokens(article["target"]):
@@ -696,9 +749,18 @@ def has_identity_signal(article, incident, details):
             return True
         if article["target"] == incident_target:
             return True
+    return target_in_text(article, incident, anchor_tokens)
 
+
+def has_identity_signal(article, incident, details):
+    """Bukti bahwa artikel dan incident membicarakan target/pelaku yang sama.
+
+    Termasuk bila nama target yang terekstrak di satu sisi muncul utuh di
+    teks judul+ringkasan sisi lain, karena ekstraksi target sering hanya
+    berhasil pada salah satu artikel.
+    """
     anchor_tokens = set((incident["anchor_text"] or "").split())
-    if target_in_text(article, incident, anchor_tokens):
+    if target_identity(article, incident, anchor_tokens):
         return True
     if shared_rare_tokens(article["tokens"], anchor_tokens):
         return True
@@ -945,6 +1007,115 @@ def mark_article_processed(conn, article_id, incident_id):
     )
 
 
+# --- Rantai incident ---
+def _table_exists(conn, table):
+    cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table,))
+    return cursor.fetchone() is not None
+
+
+def merge_incident(conn, head, other):
+    """Pindahkan seluruh artikel ``other`` ke ``head``, hapus ``other``.
+
+    Hasil V0.6 kedua incident dihapus agar dihitung ulang pada run V0.6.
+    ``head`` (dict) diperbarui di tempat.
+    """
+    cursor = conn.cursor()
+    head_id, other_id = head["incident_id"], other["incident_id"]
+    cursor.execute(
+        "UPDATE v05_incident_documents SET incident_id = ?, clustering_method = 'CHAINED' "
+        "WHERE incident_id = ?",
+        (head_id, other_id),
+    )
+    cursor.execute(
+        "UPDATE v05_processed_articles SET incident_id = ? WHERE incident_id = ?",
+        (head_id, other_id),
+    )
+
+    anchor_tokens = set((head["anchor_text"] or "").split())
+    if len(anchor_tokens) < MAX_ANCHOR_TOKENS:
+        anchor_tokens |= set((other["anchor_text"] or "").split())
+    head["anchor_text"] = " ".join(sorted(anchor_tokens))
+    head["last_published_date"] = max(
+        head["last_published_date"] or "", other["last_published_date"] or ""
+    ) or None
+    for field in ("attack_type", "threat_actor", "threat_actor_entity_id", "location",
+                  "attack_date", "attack_method", "target_entity_id"):
+        head[field] = head[field] or other[field]
+    head["document_count"] = (head["document_count"] or 0) + (other["document_count"] or 0)
+
+    cursor.execute(
+        """
+        UPDATE v05_incidents
+        SET anchor_text = ?, last_published_date = ?, attack_type = ?, threat_actor = ?,
+            threat_actor_entity_id = ?, location = ?, attack_date = ?, attack_method = ?,
+            target_entity_id = ?, document_count = ?, updated_at = ?
+        WHERE incident_id = ?
+        """,
+        (
+            head["anchor_text"], head["last_published_date"], head["attack_type"],
+            head["threat_actor"], head["threat_actor_entity_id"], head["location"],
+            head["attack_date"], head["attack_method"], head["target_entity_id"],
+            head["document_count"], get_timestamp(), head_id,
+        ),
+    )
+    cursor.execute("DELETE FROM v05_incidents WHERE incident_id = ?", (other_id,))
+
+    for table in ("v06_evidence", "v06_source_relations", "v06_processed_incidents"):
+        if _table_exists(conn, table):
+            cursor.execute(
+                f"DELETE FROM {table} WHERE incident_id IN (?, ?)", (head_id, other_id)
+            )
+
+
+def chain_incidents(conn):
+    """Gabungkan incident lanjutan bertarget sama; kembalikan jumlah penggabungan.
+
+    Kasus yang liputannya berminggu-minggu terpecah oleh jendela
+    PUBLISHED_WINDOW_DAYS; di sini incident dengan target khas yang sama dan jenis
+    serangan yang tidak bertentangan dirangkai bila jaraknya <= CHAIN_GAP_DAYS.
+    """
+    cursor = conn.cursor()
+    cursor.execute(f"{_INCIDENT_SELECT} WHERE target IS NOT NULL ORDER BY anchor_published_date")
+    groups = {}
+    for row in cursor.fetchall():
+        incident = dict(zip(INCIDENT_COLUMNS, row))
+        target = normalize_value(incident["target"])
+        if not distinctive_tokens(target):
+            continue
+        # Kunci berdasarkan nama target; entity id tidak dipakai agar incident yang
+        # targetnya dikenali V0.4 dan yang hanya berupa teks tetap satu kelompok.
+        groups.setdefault(target, []).append(incident)
+
+    merges = 0
+    for items in groups.values():
+        if len(items) < 2:
+            continue
+        head = items[0]
+        for incident in items[1:]:
+            head_last = parse_date(head["last_published_date"]) or parse_date(
+                head["anchor_published_date"]
+            )
+            incident_first = parse_date(incident["anchor_published_date"])
+            if head_last is None or incident_first is None:
+                head = incident
+                continue
+            gap_days = (incident_first - head_last).days
+            # Rentang liputan yang tumpang tindih (gap <= 0) berarti kejadian yang
+            # sama walau labelnya berbeda; bila berurutan, keluarga jenis serangan
+            # harus cocok.
+            if gap_days <= CHAIN_GAP_DAYS and (
+                gap_days <= 0
+                or families_compatible(head["attack_type"], incident["attack_type"])
+            ):
+                merge_incident(conn, head, incident)
+                merges += 1
+            else:
+                head = incident
+    conn.commit()
+    return merges
+
+
 # --- Pemrosesan ---
 def process_article(conn, row):
     """Kelompokkan satu artikel ke incident lama atau buat incident baru."""
@@ -1145,6 +1316,10 @@ def run():
             print(f"Total documents     : {current[4]}")
             print(f"Remaining           : {current[2]}")
             print("==================================================")
+
+        merged = chain_incidents(conn)
+        if merged:
+            print(f"\n🔗 {merged} incident lanjutan dirangkai ke incident sebelumnya.")
     except KeyboardInterrupt:
         conn.commit()
         print("\n\n⚠️ V0.5 dihentikan oleh user.")

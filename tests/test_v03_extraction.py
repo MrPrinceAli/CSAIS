@@ -155,6 +155,7 @@ def test_extract_information_end_to_end():
         "article_id", "attack_type", "attack_method", "target", "target_organization",
         "target_sector", "target_group", "location", "attack_date", "threat_actor",
         "impact", "indicator", "extraction_confidence", "extraction_method",
+        "field_confidence",
     }
     assert info["article_id"] == 7
     assert info["attack_type"] == "RANSOMWARE, DATA_THEFT"

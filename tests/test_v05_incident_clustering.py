@@ -165,7 +165,7 @@ def test_passes_hard_constraints_accepts_compatible_article():
     [
         ({"target_entity_id": "ent-other"}, {}),
         ({"threat_actor_entity_id": "ta-1"}, {"threat_actor_entity_id": "ta-2"}),
-        ({"attack_type": "ransomware"}, {"attack_type": "phishing, ddos"}),
+        ({"attack_type": "ransomware", "target": None, "target_entity_id": None}, {"attack_type": "phishing, ddos", "target": None, "target_entity_id": None}),  # tanpa identitas target, keluarga beda ditolak
         ({"attack_date": "2025-01-01"}, {"attack_date": "2025-03-01"}),
         ({"published": "2025-04-15T00:00:00+00:00"}, {}),  # terbit jauh setelah incident
         ({"published": "2025-01-15T00:00:00+00:00"}, {}),  # terbit jauh sebelum incident

@@ -346,7 +346,7 @@ def get_next_batch(conn):
             v03.location
         FROM v03_information_extraction v03
         LEFT JOIN v04_processed_articles p ON v03.article_id = p.article_id
-        WHERE p.article_id IS NULL
+        WHERE p.article_id IS NULL OR v03.extracted_at > p.processed_at
         ORDER BY v03.article_id
         LIMIT ?
         """,
@@ -511,9 +511,10 @@ def save_entity_mention(
 def mark_article_processed(conn, article_id):
     """Tandai artikel sebagai sudah diproses."""
     cursor = conn.cursor()
+    # OR REPLACE: artikel yang diekstrak ulang V0.3 (isi penuh baru) diproses lagi
     cursor.execute(
         """
-        INSERT OR IGNORE INTO v04_processed_articles (article_id, processed_at)
+        INSERT OR REPLACE INTO v04_processed_articles (article_id, processed_at)
         VALUES (?, ?)
         """,
         (article_id, get_timestamp()),
@@ -677,9 +678,13 @@ def database_summary(conn):
     total_entities = cursor.fetchone()[0]
     cursor.execute("SELECT COUNT(*) FROM v04_entity_mentions")
     total_mentions = cursor.fetchone()[0]
-    remaining = total_v03 - total_processed
-    if remaining < 0:
-        remaining = 0
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM v03_information_extraction v03
+        LEFT JOIN v04_processed_articles p ON v03.article_id = p.article_id
+        WHERE p.article_id IS NULL OR v03.extracted_at > p.processed_at
+        """)
+    remaining = cursor.fetchone()[0]
     return total_v03, total_processed, remaining, total_entities, total_mentions
 
 

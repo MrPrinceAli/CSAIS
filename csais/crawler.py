@@ -21,6 +21,7 @@ from urllib.parse import quote_plus
 import feedparser
 import requests
 
+from csais import sources
 from csais.config import DATABASE_DIR
 from csais.db import get_connection, get_timestamp
 from csais.language import article_text, detect_language
@@ -767,6 +768,7 @@ def run(ask=True):
 
     connection = get_connection()
     record_run(connection, "crawler", started_at, total_articles - articles_before)
+    sources.run(connection)  # registri sumber dan penanda sindikasi
     connection.close()
 
 

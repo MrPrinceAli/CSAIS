@@ -58,6 +58,17 @@ def ensure_article_uid(conn):
     return len(rows)
 
 
+def ensure_content_columns(conn):
+    """Kolom isi artikel penuh pada tabel articles (dipakai content_fetcher)."""
+    for column, definition in (
+        ("resolved_url", "TEXT"),
+        ("content_status", "TEXT"),
+        ("content_sha256", "TEXT"),
+        ("content_fetched_at", "TEXT"),
+    ):
+        ensure_column(conn, "articles", column, definition)
+
+
 def ensure_evidence_uids(conn):
     """Isi v06_evidence.evidence_uid untuk baris lama yang belum punya; kembalikan jumlahnya."""
     cursor = conn.cursor()

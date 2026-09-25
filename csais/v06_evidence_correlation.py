@@ -28,7 +28,13 @@ from urllib.parse import urlparse
 
 from csais.db import get_connection, get_timestamp
 from csais.provenance import pipeline_stamp
-from csais.schema import ensure_column, ensure_evidence_uids, evidence_uid, record_run
+from csais.schema import (
+    ensure_column,
+    ensure_content_columns,
+    ensure_evidence_uids,
+    evidence_uid,
+    record_run,
+)
 from csais.text import jaccard_index
 
 
@@ -181,6 +187,7 @@ def create_tables(conn):
     filled = ensure_evidence_uids(conn)
     if filled:
         print(f"\n[*] evidence_uid diisi untuk {filled} bukti lama.")
+    ensure_content_columns(conn)  # resolved_url dipakai untuk domain sumber
 
 
 def get_next_incident_batch(conn):
@@ -206,7 +213,8 @@ def get_incident_documents(conn, incident_id):
     cursor.execute(
         """
         SELECT d.article_id, a.source_name, a.source_type, a.source_url,
-               a.title, a.summary, a.content, a.published_date, a.article_url,
+               a.title, a.summary, a.content, a.published_date,
+               COALESCE(a.resolved_url, a.article_url) AS article_url,
                a.article_uid
         FROM v05_incident_documents d
         INNER JOIN articles a ON d.article_id = a.article_id
