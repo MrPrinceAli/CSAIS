@@ -37,19 +37,22 @@ PUBLISH_TABLES = {
         FROM articles
         WHERE article_id IN (SELECT article_id FROM v05_incident_documents)
         """,
-        ["article_uid", "published_date"],
+        ["article_id", "article_uid", "published_date"],
     ),
     "v02_relevance": (
         "SELECT * FROM v02_relevance WHERE article_id IN "
         "(SELECT article_id FROM v05_incident_documents)",
-        ["relevance_label"],
+        ["article_id", "relevance_label"],
     ),
-    "v03_information_extraction": ("SELECT * FROM v03_information_extraction", ["attack_type"]),
+    "v03_information_extraction": (
+        "SELECT * FROM v03_information_extraction",
+        ["article_id", "attack_type"],
+    ),
     "v04_entities": ("SELECT * FROM v04_entities", ["entity_type"]),
     "v04_entity_mentions": ("SELECT * FROM v04_entity_mentions", ["article_id", "entity_id"]),
     "v05_incidents": (
         "SELECT * FROM v05_incidents",
-        ["anchor_published_date", "attack_type", "target"],
+        ["incident_id", "anchor_published_date", "attack_type", "target", "document_count"],
     ),
     "v05_incident_documents": (
         "SELECT * FROM v05_incident_documents",
