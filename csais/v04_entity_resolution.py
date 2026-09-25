@@ -19,6 +19,8 @@ import hashlib
 import re
 
 from csais.db import get_connection, get_timestamp
+from csais.provenance import pipeline_stamp
+from csais.schema import ensure_column, record_run
 from csais.text import jaccard_index
 
 
@@ -311,6 +313,7 @@ def create_tables(conn):
         "ON v04_processed_articles(article_id)"
     )
     conn.commit()
+    ensure_column(conn, "v04_entity_mentions", "pipeline_version", "TEXT")
 
 
 def recover_previous_processed_articles(conn):
@@ -473,9 +476,9 @@ def save_entity_mention(
         INSERT OR IGNORE INTO v04_entity_mentions (
             article_id, entity_id, entity_type, original_name, canonical_name,
             resolution_score, resolution_confidence, resolution_method,
-            resolved_at
+            resolved_at, pipeline_version
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             article_id,
@@ -487,6 +490,7 @@ def save_entity_mention(
             resolution_confidence,
             resolution_method,
             now,
+            pipeline_stamp(),
         ),
     )
     inserted = cursor.rowcount
@@ -531,7 +535,7 @@ def extract_field_mentions(value):
     results = []
     for part in parts:
         part = part.strip()
-        if not part:
+        if not part or normalize_entity_name(part) in unknown_values:
             continue
         if len(part) > MAX_ENTITY_NAME_LENGTH:
             continue
@@ -686,6 +690,7 @@ def run():
     print("   V0.4 ENTITY RESOLUTION")
     print("==================================================")
 
+    started_at = get_timestamp()
     conn = get_connection()
     create_tables(conn)
 
@@ -750,6 +755,7 @@ def run():
     final_v03, final_processed, final_remaining, final_entities, final_mentions = (
         database_summary(conn)
     )
+    record_run(conn, "v04_entity_resolution", started_at, total_articles_processed)
     conn.close()
 
     print("\n==================================================")

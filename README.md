@@ -46,7 +46,41 @@ python3 -m venv .venv
 ./.venv/bin/python main.py --reset      # hapus hasil V0.2 - V0.6, proses ulang dari awal
 ./.venv/bin/python main.py --reset-from 5   # hapus hasil V0.5 - V0.6 saja, lalu proses ulang
 ./.venv/bin/python main.py --redetect-language  # deteksi ulang bahasa semua artikel (langdetect)
+./.venv/bin/python main.py --crawl              # crawl tanpa prompt, untuk penjadwalan (scripts/run_daily.sh)
+./.venv/bin/python main.py --export exports/incidents.jsonl --min-docs 2   # ekspor incident ke JSON Lines
 ```
+
+Setiap run menyalin keluaran layar ke `logs/csais_<waktu>.log` dan mencatat
+tahap yang dijalankan di tabel `pipeline_runs` beserta versi pipeline
+(`csais/provenance.py`: nomor versi plus sidik jari kode). Setiap baris hasil
+V0.2 sampai V0.6 juga menyimpan versi itu di kolom `pipeline_version`.
+
+## Identitas data dan ekspor
+
+- `articles.article_uid`: ID deterministik artikel (24 heksadesimal SHA-256 dari
+  URL), sama di database mana pun. `incident_id` diturunkan dari article_uid
+  artikel pertamanya, dan `v06_evidence.evidence_uid` dari incident dan artikel.
+  ID ini yang dipakai sistem lain (ledger bukti, laporan), bukan nomor urut.
+- `--export` menulis JSON Lines: baris pertama metadata, lalu satu incident per
+  baris berisi klaim tiap artikel (hasil V0.3), bukti (V0.6), dan relasi antar
+  sumber. Skemanya didokumentasikan di `csais/export.py`.
+
+## Evaluasi
+
+`eval/make_sample.py` mengambil 300 artikel berstrata, `eval/labels.csv` berisi
+label manual (relevan, target, pelaku), dan `eval/score.py` menghitung presisi,
+recall, dan F1 pipeline terhadap label itu dari database saat ini. Jalankan
+`score.py` setiap kali logika V0.2 atau V0.3 berubah.
+
+## Pengembangan
+
+```bash
+./.venv/bin/pip install -r requirements-dev.txt
+./.venv/bin/python -m pytest          # tes otomatis di folder tests/
+```
+
+Daftar kata kunci ada di `csais/data/*.json` dan bisa diedit tanpa menyentuh
+kode.
 
 Crawler akan menanyakan apakah ingin menarik data baru (`y`) atau
 langsung memproses data yang sudah ada (`n`). Bila `y`, periode historical

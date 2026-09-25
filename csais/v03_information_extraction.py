@@ -7,12 +7,15 @@ pelaku ancaman, dampak, serta indikator (CVE dan hash). Hasil disimpan ke
 tabel ``v03_information_extraction`` beserta skor kepercayaan ekstraksi.
 """
 
+import json
 import os
 import re
 from datetime import datetime
 
 from csais.config import DATABASE_FILE
 from csais.db import get_connection, get_timestamp
+from csais.provenance import pipeline_stamp
+from csais.schema import ensure_column, record_run
 from csais.text import (
     contains_keyword,
     drop_overlapping_keywords,
@@ -27,235 +30,37 @@ from csais.text import (
 BATCH_SIZE = 500
 
 
-# --- Kata kunci jenis serangan ---
-ATTACK_TYPE_KEYWORDS = {
-    # MALWARE
-    "RANSOMWARE": ["ransomware", "ransom attack", "ransomware attack"],
-    "MALWARE": [
-        "malware", "trojan", "trojanized", "trojanised", "worm", "spyware", "rootkit",
-        "backdoor", "botnet", "infostealer", "information stealer", "keylogger",
-    ],
-    # CREDENTIAL / IDENTITY
-    "ACCOUNT_TAKEOVER": ["account takeover", "account hijacking", "stolen account"],
-    "CREDENTIAL_ATTACK": [
-        "credential stuffing", "password spraying", "brute force attack",
-        "password attack", "credential stealing", "credential theft",
-    ],
-    # SOCIAL ENGINEERING
-    "PHISHING": [
-        "phishing", "spear phishing", "spearphishing", "smishing", "vishing",
-        "quishing",
-    ],
-    "SOCIAL_ENGINEERING": [
-        "social engineering", "impersonation", "business email compromise",
-        "bec attack", "ceo fraud", "executive impersonation",
-    ],
-    "ONLINE_SCAM": ["online scam", "online fraud", "cyber fraud", "digital fraud"],
-    "JOB_SCAM": ["job scam", "employment scam", "recruitment scam"],
-    "INVESTMENT_SCAM": ["investment scam", "investment fraud"],
-    # WEB / APPLICATION
-    "WEB_ATTACK": ["web attack", "website attack", "web application attack"],
-    "SQL_INJECTION": ["sql injection", "sqli"],
-    "XSS": ["cross site scripting", "xss attack"],
-    "REMOTE_CODE_EXECUTION": ["remote code execution", "rce"],
-    "PATH_TRAVERSAL": ["path traversal", "directory traversal"],
-    "FILE_INCLUSION": ["file inclusion"],
-    # VULNERABILITY / EXPLOIT
-    "ZERO_DAY": [
-        "zero-day", "zero day", "zero-day vulnerability", "zero day vulnerability",
-    ],
-    "VULNERABILITY_EXPLOITATION": [
-        "zero-day exploit", "zero day exploit", "actively exploited",
-        "vulnerability exploited", "exploited in the wild", "vulnerability exploitation",
-        "exploit chain",
-    ],
-    # NETWORK
-    "DDoS": [
-        "ddos", "distributed denial of service", "denial of service", "dos attack",
-    ],
-    "DNS_ATTACK": ["dns hijacking", "dns poisoning", "dns spoofing", "dns attack"],
-    "NETWORK_INTRUSION": ["network intrusion", "network compromise"],
-    # DATA
-    "DATA_BREACH": [
-        "data breach", "database breach", "personal data breach",
-        "customer data breach",
-    ],
-    "DATA_LEAK": ["data leak", "database leak", "stolen data", "data leaked"],
-    "DATA_THEFT": ["data theft", "information theft", "data stolen"],
-    "DATA_EXFILTRATION": ["data exfiltration", "exfiltrated"],
-    # SUPPLY CHAIN
-    "SUPPLY_CHAIN_ATTACK": [
-        "supply chain attack", "supply chain compromise",
-        "software supply chain attack", "third party compromise",
-        "third-party compromise",
-    ],
-    # CLOUD
-    "CLOUD_ATTACK": [
-        "cloud attack", "cloud breach", "cloud compromise", "cloud exploitation",
-    ],
-    # INSIDER
-    "INSIDER_THREAT": ["insider threat", "insider attack", "malicious insider"],
-    # CRITICAL INFRASTRUCTURE / OT
-    "CRITICAL_INFRASTRUCTURE_ATTACK": [
-        "critical infrastructure attack", "critical infrastructure cyber attack",
-        "power grid cyber attack", "water system cyber attack",
-        "energy sector cyber attack",
-    ],
-    "ICS_SCADA_ATTACK": [
-        "ics attack", "scada attack", "ot attack", "industrial control system attack",
-    ],
-    # MOBILE / IOT
-    "MOBILE_ATTACK": [
-        "mobile attack", "android attack", "ios malware", "mobile malware",
-        "mobile ransomware",
-    ],
-    "IOT_ATTACK": ["iot attack", "iot malware", "iot botnet", "iot security breach"],
-    # WEBSITE / DOMAIN
-    "WEBSITE_DEFACEMENT": ["website defacement", "web defacement"],
-    "DOMAIN_HIJACKING": ["domain hijacking", "domain takeover"],
-    "MALICIOUS_WEBSITE": [
-        "malicious website", "fake website", "malicious domain", "fake login page",
-    ],
-    "MALICIOUS_LINK": ["malicious link", "malicious url"],
-    # CYBER ESPIONAGE
-    "CYBER_ESPIONAGE": ["cyber espionage", "cyber spying", "cyber espionage campaign"],
-    "APT": ["apt attack", "advanced persistent threat", "apt campaign"],
-    # INFORMATION OPERATIONS
-    "INFORMATION_OPERATION": [
-        "information operation", "influence operation", "online influence operation",
-        "disinformation campaign",
-    ],
-    "DEEPFAKE_FRAUD": ["deepfake fraud", "deepfake scam", "ai impersonation"],
-    # CRYPTO / BLOCKCHAIN
-    "CRYPTO_ATTACK": [
-        "crypto attack", "cryptocurrency attack", "crypto theft", "crypto wallet hack",
-        "crypto exchange hack", "blockchain attack", "smart contract attack",
-    ],
-    # EXTORTION
-    "CYBER_EXTORTION": [
-        "cyber extortion", "digital extortion", "double extortion", "triple extortion",
-    ],
-}
+# --- Kata kunci ekstraksi ---
+# Daftar kata kunci disimpan di file JSON pada folder csais/data agar dapat
+# diubah tanpa menyentuh kode. Penjelasan setiap kunci ada di csais/data/README.md.
+_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
 
-# --- Kata kunci metode serangan ---
-ATTACK_METHOD_KEYWORDS = {
-    "PHISHING": ["phishing", "spear phishing", "smishing", "vishing", "quishing"],
-    "SOCIAL_ENGINEERING": [
-        "social engineering", "impersonation", "business email compromise",
-        "bec attack",
-    ],
-    "MALWARE": ["malware", "trojan", "spyware", "backdoor", "botnet", "infostealer"],
-    "EXPLOITATION": ["exploit", "exploited", "exploitation", "zero-day", "zero day"],
-    "BRUTE_FORCE": ["brute force", "password spraying", "credential stuffing"],
-    "VULNERABILITY_EXPLOITATION": [
-        "vulnerability exploited", "actively exploited", "security vulnerability",
-    ],
-    "MALICIOUS_LINK": ["malicious link", "malicious url"],
-    "MALICIOUS_WEBSITE": ["malicious website", "fake website", "fake login page"],
-}
+def _load_keywords(name):
+    """Baca satu file data kata kunci JSON dari folder csais/data."""
+    with open(os.path.join(_DATA_DIR, name), encoding="utf-8") as fh:
+        return json.load(fh)
 
 
-# --- Kata kunci sektor target ---
-TARGET_SECTOR_KEYWORDS = {
-    "HEALTHCARE": [
-        "hospital", "healthcare", "health care", "clinic", "medical", "health system",
-    ],
-    "FINANCE": [
-        "bank", "banking", "financial institution", "financial services", "fintech",
-        "insurance",
-    ],
-    "GOVERNMENT": [
-        "government", "ministry", "municipality", "government agency", "public sector",
-    ],
-    "EDUCATION": [
-        "university", "college", "school", "education institution",
-        "educational institution",
-    ],
-    "TELECOMMUNICATION": [
-        "telecom", "telecommunication", "mobile operator", "internet service provider",
-        "isp",
-    ],
-    "ENERGY": ["energy", "electricity", "power grid", "oil and gas", "utility"],
-    "MANUFACTURING": ["manufacturing", "factory", "industrial", "manufacturer"],
-    "RETAIL": ["retail", "e-commerce", "ecommerce", "online store"],
-    "TRANSPORTATION": [
-        "airline", "airport", "railway", "rail", "transportation", "shipping", "port",
-    ],
-    "CRITICAL_INFRASTRUCTURE": [
-        "critical infrastructure", "water system", "power grid",
-        "industrial control system", "ics", "scada",
-    ],
-    "TECHNOLOGY": [
-        "technology company", "software company", "tech company", "cloud provider",
-        "software provider",
-    ],
-}
+_EXTRACTION = _load_keywords("extraction_keywords.json")
 
+# Kata kunci jenis serangan
+ATTACK_TYPE_KEYWORDS = _EXTRACTION["attack_type_keywords"]
 
-# --- Kata kunci kelompok target ---
-TARGET_GROUP_KEYWORDS = {
-    "INDIVIDUALS": ["individuals", "users", "customers", "citizens", "consumers"],
-    "EMPLOYEES": ["employees", "staff", "workers"],
-    "STUDENTS": ["students", "student"],
-    "CHILDREN": ["children", "kids", "minors"],
-    "JOB_SEEKERS": ["job seekers", "jobseekers", "job applicants"],
-    "BUSINESSES": ["businesses", "companies", "enterprises"],
-    "GOVERNMENT": ["government agencies", "government institutions", "public agencies"],
-}
+# Kata kunci metode serangan
+ATTACK_METHOD_KEYWORDS = _EXTRACTION["attack_method_keywords"]
 
+# Kata kunci sektor target
+TARGET_SECTOR_KEYWORDS = _EXTRACTION["target_sector_keywords"]
 
-# --- Kata kunci dampak ---
-IMPACT_KEYWORDS = {
-    "DATA_THEFT": [
-        "data stolen", "data theft", "information stolen", "stolen data",
-        "customer data stolen",
-    ],
-    "DATA_LEAK": ["data leak", "data leaked", "information leaked", "database leak"],
-    "SERVICE_DISRUPTION": [
-        "service disruption", "services disrupted", "operations disrupted",
-        "system disruption", "service outage", "systems down",
-    ],
-    "FINANCIAL_LOSS": [
-        "financial loss", "financial losses", "lost money", "money stolen",
-        "financial damage",
-    ],
-    "SYSTEM_COMPROMISE": [
-        "system compromised", "systems compromised", "server compromised",
-        "network compromised",
-    ],
-    "ACCOUNT_COMPROMISE": [
-        "account compromised", "accounts compromised", "account takeover",
-    ],
-    "OPERATIONAL_IMPACT": [
-        "operations halted", "operations disrupted", "business disruption",
-        "business operations affected",
-    ],
-}
+# Kata kunci kelompok target
+TARGET_GROUP_KEYWORDS = _EXTRACTION["target_group_keywords"]
 
+# Kata kunci dampak
+IMPACT_KEYWORDS = _EXTRACTION["impact_keywords"]
 
-# --- Kata kunci negara / lokasi ---
-COUNTRY_NAMES = {
-    "Indonesia": ["indonesia", "indonesian"],
-    "Singapore": ["singapore", "singaporean"],
-    "Malaysia": ["malaysia", "malaysian"],
-    "Thailand": ["thailand", "thai"],
-    "Vietnam": ["vietnam", "vietnamese"],
-    "Philippines": ["philippines", "filipino"],
-    "India": ["india", "indian"],
-    "China": ["china", "chinese"],
-    "Japan": ["japan", "japanese"],
-    "South Korea": ["south korea", "korean"],
-    "Australia": ["australia", "australian"],
-    "United States": ["united states", "u.s.", "american"],
-    "United Kingdom": ["united kingdom", "britain", "british"],
-    "Germany": ["germany", "german"],
-    "France": ["france", "french"],
-    "Russia": ["russia", "russian"],
-    "Ukraine": ["ukraine", "ukrainian"],
-    "Canada": ["canada", "canadian"],
-    "Brazil": ["brazil", "brazilian"],
-}
+# Kata kunci negara / lokasi
+COUNTRY_NAMES = _EXTRACTION["country_names"]
 
 
 # --- Ekstraksi berbasis kata kunci ---
@@ -326,16 +131,7 @@ def extract_location(text):
 # --- Pelaku ancaman yang sudah dikenal ---
 # Nama grup yang cukup khas untuk dicari langsung di teks. Nama umum seperti
 # "Play", "Royal", atau "Hive" hanya dicari bersama kata "ransomware".
-KNOWN_THREAT_ACTORS = [
-    "APT28", "Fancy Bear", "APT29", "Cozy Bear", "Midnight Blizzard", "APT41",
-    "Lazarus", "Lazarus Group", "Kimsuky", "Sandworm", "Volt Typhoon", "Salt Typhoon",
-    "MuddyWater", "Charming Kitten", "Scattered Spider", "LockBit", "Cl0p", "Clop",
-    "BlackCat", "ALPHV", "Black Basta", "RansomHub", "Qilin", "Rhysida", "BianLian",
-    "Hunters International", "8Base", "Conti", "REvil", "DarkSide", "INC Ransom",
-    "FunkSec", "KillNet", "NoName057(16)", "Anonymous Sudan", "Bjorka", "Brain Cipher",
-    "Akira ransomware", "Medusa ransomware", "Play ransomware", "Royal ransomware",
-    "Hive ransomware", "Cactus ransomware", "Interlock ransomware",
-]
+KNOWN_THREAT_ACTORS = _EXTRACTION["known_threat_actors"]
 
 # Kata sandang di awal nama dibuang.
 _ARTICLES = {"a", "an", "the"}
@@ -619,6 +415,7 @@ def initialize_v03_database():
         ON v03_information_extraction(target_sector)
         """)
     connection.commit()
+    ensure_column(connection, "v03_information_extraction", "pipeline_version", "TEXT")
     connection.close()
 
 
@@ -715,9 +512,10 @@ def save_extraction(cursor, result):
             indicator,
             extraction_confidence,
             extraction_method,
-            extracted_at
+            extracted_at,
+            pipeline_version
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             result["article_id"],
@@ -735,6 +533,7 @@ def save_extraction(cursor, result):
             result["extraction_confidence"],
             result["extraction_method"],
             extracted_at,
+            pipeline_stamp(),
         ),
     )
 
@@ -814,6 +613,7 @@ def run():
         print(f"   {DATABASE_FILE}")
         return
 
+    started_at = get_timestamp()
     initialize_v03_database()
 
     # Ringkasan database
@@ -853,6 +653,10 @@ def run():
     print("--------------------------------------------------")
     for sector, count in sector_rows:
         print(f"{sector:<35} {count}")
+
+    connection = get_connection()
+    record_run(connection, "v03_information_extraction", started_at, total_processed)
+    connection.close()
 
     print("\n==================================================")
     print("   ✅ V0.3 INFORMATION EXTRACTION SELESAI")

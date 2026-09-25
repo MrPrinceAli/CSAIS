@@ -32,6 +32,8 @@ import hashlib
 from datetime import datetime, timedelta, timezone
 
 from csais.db import get_connection, get_timestamp
+from csais.provenance import pipeline_stamp
+from csais.schema import ensure_article_uid, record_run
 from csais.text import (
     jaccard_index,
     normalize_text,
@@ -282,6 +284,7 @@ def create_tables(conn):
             similarity_confidence REAL,
             clustering_method TEXT,
             assigned_at TEXT,
+            pipeline_version TEXT,
             UNIQUE (article_id)
         )
         """)
@@ -334,6 +337,7 @@ def migrate_existing_tables(conn):
         "similarity_confidence": "REAL",
         "clustering_method": "TEXT",
         "assigned_at": "TEXT",
+        "pipeline_version": "TEXT",
     }
     for column_name, column_type in required_document_columns.items():
         if column_name not in document_columns:
@@ -421,7 +425,7 @@ def get_next_batch(conn):
         SELECT
             v03.article_id, v03.attack_type, v03.target, v03.target_organization,
             v03.threat_actor, v03.location, v03.attack_date, v03.attack_method,
-            a.title, a.summary, a.published_date
+            a.title, a.summary, a.published_date, a.article_uid
         FROM v03_information_extraction v03
         INNER JOIN articles a ON a.article_id = v03.article_id
         LEFT JOIN v05_processed_articles p ON v03.article_id = p.article_id
@@ -467,6 +471,7 @@ def prepare_article(conn, row):
         title,
         summary,
         published_date,
+        uid,
     ) = row
 
     # Target: canonical V0.4, fallback ke target_organization lalu target V0.3
@@ -494,6 +499,7 @@ def prepare_article(conn, row):
     published = parse_date(published_date)
     return {
         "article_id": article_id,
+        "article_uid": uid,
         "attack_type": normalize_value(attack_type),
         "target": normalize_value(canonical_target),
         "target_entity_id": target_entity_id,
@@ -731,16 +737,20 @@ def find_best_incident(conn, article):
 
 
 # --- Penyimpanan incident ---
-def generate_incident_id(article_id):
-    """ID incident deterministik dari artikel pertamanya (sha1, 12 hex huruf besar)."""
-    raw = f"INCIDENT|{article_id}"
+def generate_incident_id(anchor_uid):
+    """ID incident deterministik dari article_uid artikel pertamanya.
+
+    Memakai article_uid (turunan URL), bukan article_id (nomor urut), agar ID
+    incident sama di database mana pun yang berisi artikel yang sama.
+    """
+    raw = f"INCIDENT|{anchor_uid}"
     hash_value = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12].upper()
     return f"INCIDENT_{hash_value}"
 
 
 def create_incident(conn, article, confidence):
     """Simpan incident baru dengan artikel ini sebagai jangkar; kembalikan incident_id."""
-    incident_id = generate_incident_id(article["article_id"])
+    incident_id = generate_incident_id(article["article_uid"] or article["article_id"])
     now = get_timestamp()
     cursor = conn.cursor()
     cursor.execute(
@@ -792,9 +802,9 @@ def save_incident_document(
         """
         INSERT OR IGNORE INTO v05_incident_documents (
             incident_id, article_id, similarity_score, similarity_confidence,
-            clustering_method, assigned_at
+            clustering_method, assigned_at, pipeline_version
         )
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
         (
             incident_id,
@@ -803,6 +813,7 @@ def save_incident_document(
             similarity_confidence,
             clustering_method,
             get_timestamp(),
+            pipeline_stamp(),
         ),
     )
     inserted = cursor.rowcount
@@ -1084,10 +1095,12 @@ def run():
     print("   V0.5 INCIDENT CLUSTERING")
     print("==================================================")
 
+    started_at = get_timestamp()
     conn = get_connection()
     create_tables(conn)
     migrate_existing_tables(conn)
     create_v05_indexes(conn)  # setelah migrasi
+    ensure_article_uid(conn)
     load_token_document_frequency(conn)
 
     recovered = recover_previous_processed_articles(conn)
@@ -1142,6 +1155,7 @@ def run():
 
     conn = get_connection()
     final = database_summary(conn)
+    record_run(conn, "v05_incident_clustering", started_at, total_articles_processed)
     conn.close()
 
     print_status("V0.5 ANALYSIS SUMMARY", final)

@@ -27,6 +27,8 @@ from difflib import SequenceMatcher
 from urllib.parse import urlparse
 
 from csais.db import get_connection, get_timestamp
+from csais.provenance import pipeline_stamp
+from csais.schema import ensure_column, ensure_evidence_uids, evidence_uid, record_run
 from csais.text import jaccard_index
 
 
@@ -173,6 +175,12 @@ def create_tables(conn):
         "ON v06_source_relations(incident_id)"
     )
     conn.commit()
+    # ID deterministik bukti dan versi pipeline (migrasi untuk tabel lama)
+    ensure_column(conn, "v06_evidence", "evidence_uid", "TEXT")
+    ensure_column(conn, "v06_evidence", "pipeline_version", "TEXT")
+    filled = ensure_evidence_uids(conn)
+    if filled:
+        print(f"\n[*] evidence_uid diisi untuk {filled} bukti lama.")
 
 
 def get_next_incident_batch(conn):
@@ -198,7 +206,8 @@ def get_incident_documents(conn, incident_id):
     cursor.execute(
         """
         SELECT d.article_id, a.source_name, a.source_type, a.source_url,
-               a.title, a.summary, a.content, a.published_date, a.article_url
+               a.title, a.summary, a.content, a.published_date, a.article_url,
+               a.article_uid
         FROM v05_incident_documents d
         INNER JOIN articles a ON d.article_id = a.article_id
         WHERE d.incident_id = ?
@@ -344,6 +353,7 @@ def save_evidence(
         content,
         published_date,
         article_url,
+        uid,
     ) = article
     source_domain = extract_domain(article_url or source_url)
     cursor = conn.cursor()
@@ -352,9 +362,10 @@ def save_evidence(
         INSERT OR REPLACE INTO v06_evidence (
             incident_id, article_id, source_name, source_type, source_domain,
             evidence_type, evidence_independence_score, evidence_confidence,
-            publication_date, content_fingerprint, analyzed_at
+            publication_date, content_fingerprint, analyzed_at,
+            evidence_uid, pipeline_version
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             incident_id,
@@ -368,6 +379,8 @@ def save_evidence(
             published_date,
             fingerprint,
             get_timestamp(),
+            evidence_uid(incident_id, uid or article_id),
+            pipeline_stamp(),
         ),
     )
 
@@ -415,6 +428,7 @@ def process_incident(conn, incident_id):
             content,
             published_date,
             article_url,
+            _uid,
         ) = article
         # Pada data lama kolom content berisi salinan summary; jangan dihitung dua kali
         parts = [title or "", summary or ""]
@@ -609,6 +623,7 @@ def run():
     print("   V0.6 EVIDENCE CORRELATION")
     print("==================================================")
 
+    started_at = get_timestamp()
     conn = get_connection()
     create_tables(conn)
 
@@ -700,6 +715,7 @@ def run():
         final_independent,
         final_reproduced,
     ) = database_summary(conn)
+    record_run(conn, "v06_evidence_correlation", started_at, total_incidents_processed)
     conn.close()
 
     print("\n==================================================")

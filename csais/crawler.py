@@ -24,6 +24,7 @@ import requests
 from csais.config import DATABASE_DIR
 from csais.db import get_connection, get_timestamp
 from csais.language import article_text, detect_language
+from csais.schema import article_uid, ensure_article_uid, ensure_pipeline_runs, record_run
 
 
 # --- Konfigurasi ---
@@ -282,6 +283,12 @@ def initialize_database():
     if cursor.rowcount > 0:
         print(f"\n[*] {cursor.rowcount} checkpoint IN_PROGRESS lama dibersihkan.")
     connection.commit()
+
+    # ID deterministik artikel dan tabel catatan run
+    filled = ensure_article_uid(connection)
+    if filled:
+        print(f"\n[*] article_uid diisi untuk {filled} artikel lama.")
+    ensure_pipeline_runs(connection)
     connection.close()
 
 
@@ -480,9 +487,9 @@ def save_article(
             language, language_confidence,
             query_keyword, query_language,
             content_hash,
-            first_seen, last_seen
+            first_seen, last_seen, article_uid
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             source_name,
@@ -501,6 +508,7 @@ def save_article(
             content_hash,
             collected_date,
             collected_date,
+            article_uid(article_url),
         ),
     )
     connection.commit()
@@ -706,12 +714,16 @@ def database_summary():
 
 
 # --- Program utama ---
-def run():
-    """Jalankan crawler: inisialisasi database, historical, lalu incremental."""
+def run(ask=True):
+    """Jalankan crawler: inisialisasi database, historical, lalu incremental.
+
+    Bila ``ask`` False (mode terjadwal), crawl langsung berjalan tanpa prompt.
+    """
     print("\n==================================================")
     print("   CSAIS DATA CRAWLER")
     print("==================================================")
 
+    started_at = get_timestamp()
     initialize_database()
 
     total_articles, completed_tasks = database_summary()
@@ -724,13 +736,16 @@ def run():
     else:
         print("\n⏳ Historical crawl belum lengkap: ada periode penuh yang belum selesai.")
 
-    choice = (
-        input(
-            "Apakah Anda ingin update atau melakukan pembaharuan data (crawl)? (y/n): "
+    if ask:
+        choice = (
+            input(
+                "Apakah Anda ingin update atau melakukan pembaharuan data (crawl)? (y/n): "
+            )
+            .strip()
+            .lower()
         )
-        .strip()
-        .lower()
-    )
+    else:
+        choice = "y"
     if choice != "y":
         print("\n[*] Crawl dilewati. Langsung meluncur ke modul berikutnya (V02)...")
     else:
@@ -741,6 +756,7 @@ def run():
         else:
             print("\n⏸️ Incremental crawl belum dijalankan karena historical belum selesai.")
 
+    articles_before = total_articles
     total_articles, completed_tasks = database_summary()
     print("\n==================================================")
     print("   CRAWLER SUMMARY")
@@ -748,6 +764,10 @@ def run():
     print(f"Total articles : {total_articles}")
     print(f"Completed tasks: {completed_tasks}")
     print("==================================================")
+
+    connection = get_connection()
+    record_run(connection, "crawler", started_at, total_articles - articles_before)
+    connection.close()
 
 
 if __name__ == "__main__":

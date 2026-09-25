@@ -8,10 +8,13 @@ label RELEVANT / UNCERTAIN / NOT_RELEVANT berdasarkan pencocokan kata kunci
 keyakinannya ke tabel ``v02_relevance``.
 """
 
+import json
 import os
 
 from csais.config import DATABASE_FILE
 from csais.db import get_connection, get_timestamp
+from csais.provenance import pipeline_stamp
+from csais.schema import ensure_column, record_run
 from csais.text import drop_overlapping_keywords, find_keywords, normalize_text
 
 
@@ -23,142 +26,33 @@ UNCERTAIN_THRESHOLD = 0.40
 
 
 # --- Kata kunci relevansi ---
-ATTACK_KEYWORDS = [
-    # Keamanan siber umum
-    "cyber attack", "cyberattack", "cyber incident", "cybersecurity incident",
-    "cyber threat", "cyber intrusion", "cyber compromise", "cyber breach",
-    # Malware
-    "malware", "ransomware", "trojan", "worm", "spyware", "rootkit", "backdoor",
-    "botnet", "infostealer", "information stealer", "remote access trojan", "keylogger",
-    "loader malware", "dropper malware", "wiper malware", "cryptojacking",
-    "trojanized", "trojanised", "backdoored",
-    # Kredensial / identitas
-    "credential theft", "credential stealing", "account takeover", "password attack",
-    "password spraying", "credential stuffing", "brute force attack", "identity theft",
-    "session hijacking", "token theft", "authentication bypass", "mfa bypass",
-    "mfa fatigue", "mfa bombing", "privilege escalation",
-    # Rekayasa sosial
-    "phishing", "spear phishing", "spearphishing", "smishing", "vishing", "quishing",
-    "social engineering", "impersonation", "business email compromise", "bec attack",
-    "ceo fraud", "executive impersonation", "invoice fraud", "romance scam", "job scam",
-    "investment scam", "online scam", "online fraud", "cyber fraud", "digital fraud",
-    # Web / aplikasi
-    "web attack", "website attack", "web application attack", "sql injection", "sqli",
-    "cross site scripting", "xss attack", "command injection", "code injection",
-    "remote code execution", "rce", "ssrf", "file inclusion", "path traversal",
-    "directory traversal", "api attack", "api abuse",
-    # Kerentanan / eksploit
-    "zero day", "zero-day", "zero day vulnerability", "zero-day vulnerability",
-    "zero day exploit", "zero-day exploit", "exploit", "exploitation",
-    "vulnerability exploited", "actively exploited", "security vulnerability",
-    "critical vulnerability", "remote exploit", "cve-",
-    # Jaringan
-    "ddos", "distributed denial of service", "dos attack", "denial of service",
-    "network attack", "network intrusion", "dns attack", "dns hijacking",
-    "dns poisoning", "dns spoofing", "bgp hijacking", "man in the middle",
-    "mitm attack", "packet interception", "network compromise",
-    # Data
-    "data breach", "data leak", "data theft", "data exfiltration", "information theft",
-    "database breach", "database leak", "stolen data", "personal data breach",
-    "pii breach", "customer data breach",
-    # Rantai pasok
-    "supply chain attack", "supply chain compromise", "software supply chain attack",
-    "third party compromise", "third-party compromise", "vendor compromise",
-    "vendor attack", "dependency confusion", "malicious package",
-    "malicious dependency", "software update attack",
-    # Cloud
-    "cloud attack", "cloud breach", "cloud compromise", "cloud account takeover",
-    "cloud credential theft", "cloud security incident", "saas attack",
-    "cloud exploitation", "cloud vulnerability", "cloud ransomware", "container escape",
-    "kubernetes attack",
-    # Orang dalam (insider)
-    "insider threat", "insider attack", "malicious insider", "employee data theft",
-    "employee cyber attack", "privileged user abuse", "insider data breach",
-    # Infrastruktur kritis / OT
-    "ics attack", "scada attack", "ot attack", "industrial control system attack",
-    "industrial cybersecurity", "critical infrastructure attack",
-    "critical infrastructure cyber attack", "power grid cyber attack",
-    "water system cyber attack", "energy sector cyber attack",
-    "manufacturing cyber attack", "oil and gas cyber attack",
-    "telecommunication cyber attack", "transportation cyber attack",
-    # Mobile
-    "mobile malware", "mobile attack", "android malware", "android attack",
-    "ios malware", "iphone malware", "mobile ransomware", "mobile spyware",
-    "mobile security breach",
-    # IoT
-    "iot attack", "iot malware", "iot botnet", "iot security breach",
-    "smart device attack", "connected device attack",
-    # Website / domain
-    "website defacement", "web defacement", "domain hijacking", "domain takeover",
-    "website compromise", "website hacking", "server compromise", "server hacking",
-    # Spionase siber
-    "cyber espionage", "cyber espionage campaign", "cyber spying",
-    "state sponsored cyber attack", "state-sponsored cyber attack", "apt attack",
-    "advanced persistent threat", "apt campaign", "nation state cyber attack",
-    "nation-state cyber attack",
-    # Operasi informasi
-    "information operation", "influence operation", "online influence operation",
-    "disinformation campaign", "malinformation", "information warfare",
-    "cyber influence operation", "deepfake fraud", "ai impersonation",
-    "synthetic identity fraud",
-    # Kripto / blockchain
-    "crypto attack", "cryptocurrency attack", "crypto theft", "crypto wallet hack",
-    "crypto exchange hack", "blockchain attack", "smart contract attack", "crypto scam",
-    # Pemerasan
-    "cyber extortion", "digital extortion", "ransom attack", "ransomware attack",
-    "double extortion", "triple extortion", "data extortion",
-    # Situs / tautan berbahaya
-    "malicious website", "malicious link", "malicious url", "fake website",
-    "fake login page", "malicious domain", "malicious domain attack",
-    # Dark web / kejahatan siber
-    "dark web cybercrime", "dark web stolen data", "stolen credentials",
-    "stolen account", "cybercrime marketplace", "malware marketplace",
-    "ransomware group",
-    # Serangan siber terkait AI
-    "ai cyber attack", "ai-powered cyber attack", "ai powered cyber attack",
-    "artificial intelligence cyber attack", "generative ai cyber attack", "ai phishing",
-    "ai scam", "ai fraud", "ai malware", "ai social engineering", "ai vulnerability",
-    "ai security attack",
-]
+# Daftar kata kunci disimpan di file JSON pada folder csais/data agar dapat
+# diubah tanpa menyentuh kode. Penjelasan setiap kunci ada di csais/data/README.md.
+_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+
+
+def _load_keywords(name):
+    """Baca satu file data kata kunci JSON dari folder csais/data."""
+    with open(os.path.join(_DATA_DIR, name), encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+_RELEVANCE = _load_keywords("relevance_keywords.json")
+
+# Kata kunci serangan siber
+ATTACK_KEYWORDS = _RELEVANCE["attack_keywords"]
 
 # Indikator bahwa serangan benar-benar terjadi (bahasa kejadian/insiden)
-EVENT_INDICATORS = [
-    "attacked", "attackers", "targeted", "targeting", "breached", "compromised",
-    "infected", "exploited", "hacked", "hit by", "hit with", "fell victim", "victim of",
-    "stolen", "exfiltrated", "leaked", "disrupted", "shutdown", "intrusion", "incident",
-    "campaign", "threat actor", "threat group", "victims", "affected",
-    "unauthorized access", "data stolen", "data leaked", "credentials stolen",
-]
+EVENT_INDICATORS = _RELEVANCE["event_indicators"]
 
 # Indikator pembahasan umum / bukan insiden (acara, edukasi, panduan)
-NON_INCIDENT_INDICATORS = [
-    "conference", "webinar", "workshop", "training", "course", "certification",
-    "summit", "forum", "event", "panel discussion", "research paper", "academic study",
-    "study finds", "report discusses", "guide", "guidance", "best practices",
-    "awareness campaign", "awareness program", "prevention", "how to protect",
-    "how to prevent", "tips to avoid", "security advice", "security training",
-    "cybersecurity strategy",
-]
-
+NON_INCIDENT_INDICATORS = _RELEVANCE["non_incident_indicators"]
 
 # Kata kunci serangan yang juga lazim di luar konteks siber: "worm" (cacing),
 # "Trojan" (tim olahraga), "zero day" (film), "exploitation" (eksploitasi anak).
 # Hanya dihitung bila teks juga memuat kata konteks siber.
-WEAK_ATTACK_KEYWORDS = {
-    "worm", "trojan", "backdoor", "exploit", "exploitation", "zero day", "zero-day",
-    "impersonation", "rootkit",
-}
-CYBER_CONTEXT_KEYWORDS = [
-    "cyber", "cybersecurity", "cyberattack", "hacker", "hacked", "hacking", "hack",
-    "malware", "ransomware", "phishing", "spyware", "infostealer", "stealer", "botnet",
-    "vulnerability", "vulnerabilities", "cve-", "flaw", "bug", "patch", "patched",
-    "exploited", "security", "threat actor", "researchers", "software", "firmware",
-    "server", "network", "computer", "credentials", "password", "online", "internet",
-    "website", "email", "app", "device", "linux", "windows", "macos", "android", "ios",
-    "firewall", "vpn", "router", "fortinet", "cisco", "microsoft", "apple", "google",
-    "ivanti", "sonicwall", "palo alto", "vmware", "citrix", "steam", "github", "npm",
-    "siber", "peretas", "kerentanan", "perangkat lunak", "aplikasi",
-]
+WEAK_ATTACK_KEYWORDS = set(_RELEVANCE["weak_attack_keywords"])
+CYBER_CONTEXT_KEYWORDS = _RELEVANCE["cyber_context_keywords"]
 
 
 # --- Pencocokan kata kunci dan analisis relevansi ---
@@ -284,6 +178,7 @@ def initialize_v02_database():
         """)
 
     connection.commit()
+    ensure_column(connection, "v02_relevance", "pipeline_version", "TEXT")
     connection.close()
 
 
@@ -342,9 +237,10 @@ def save_analysis(cursor, article_id, result):
             attack_matches,
             event_matches,
             non_incident_matches,
-            analyzed_at
+            analyzed_at,
+            pipeline_version
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             article_id,
@@ -356,6 +252,7 @@ def save_analysis(cursor, article_id, result):
             " | ".join(result["event_matches"]),
             " | ".join(result["non_incident_matches"]),
             analyzed_at,
+            pipeline_stamp(),
         ),
     )
 
@@ -432,6 +329,7 @@ def run():
         print(f"   {DATABASE_FILE}")
         return
 
+    started_at = get_timestamp()
     initialize_v02_database()
 
     # Ringkasan awal
@@ -469,6 +367,10 @@ def run():
     print(f"\nRELEVANT             : {summary['RELEVANT']}")
     print(f"UNCERTAIN            : {summary['UNCERTAIN']}")
     print(f"NOT_RELEVANT         : {summary['NOT_RELEVANT']}")
+
+    connection = get_connection()
+    record_run(connection, "v02_relevance_detection", started_at, total_processed)
+    connection.close()
 
     print("\n==================================================")
     print("   ✅ V0.2 RELEVANCE DETECTION SELESAI")

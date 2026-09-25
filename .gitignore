@@ -5,3 +5,5 @@ database/*.db
 database/*.db-wal
 database/*.db-shm
 .DS_Store
+logs/
+exports/
