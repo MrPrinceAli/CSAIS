@@ -216,8 +216,11 @@ def run(budget=DEFAULT_BUDGET):
         for number, (article_id, article_url) in enumerate(rows, start=1):
             status = fetch_one(conn, article_id, article_url)
             statuses[status] = statuses.get(status, 0) + 1
+            # Commit per artikel: kunci tulis tidak ditahan selama menunggu
+            # jaringan, sehingga proses lain (misalnya pengambilan sampel
+            # evaluasi) bisa menulis bergantian dan kegagalan tidak membuang hasil.
+            conn.commit()
             if number % 25 == 0 or number == len(rows):
-                conn.commit()
                 print(f"   {number}/{len(rows)} diproses: {statuses}")
     except KeyboardInterrupt:
         conn.commit()

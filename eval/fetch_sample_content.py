@@ -49,8 +49,8 @@ def main():
     for number, (article_id, url) in enumerate(rows, start=1):
         status = content_fetcher.fetch_one(conn, article_id, url)
         statuses[status] = statuses.get(status, 0) + 1
+        conn.commit()  # per artikel, agar proses lain tidak terkunci lama
         if number % 20 == 0 or number == len(rows):
-            conn.commit()
             print(f"   {number}/{len(rows)} {statuses}", flush=True)
     conn.commit()
     conn.close()
