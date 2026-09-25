@@ -121,6 +121,26 @@ Batasan paket gratis: 2.000 menit Actions per bulan untuk repo privat (satu run
 sekitar 30 sampai 45 menit), cache 10 GB, Turso 9 GB dan 25 juta baris tulis
 per bulan; semuanya jauh di atas kebutuhan saat ini.
 
+## Aplikasi web (folder `web/`)
+
+Dashboard publik dibangun dengan Next.js dan hanya membaca Turso lewat token
+baca-saja; tidak ada yang berjalan di laptop. Produksi: https://csais.vercel.app
+(proyek Vercel `csais`, root directory `web`, wilayah fungsi Tokyo agar dekat
+database). Setiap push ke `main` yang menyentuh `web/` memicu deploy otomatis.
+
+```bash
+cd web
+cp .env.local.example .env.local      # isi TURSO_DATABASE_URL dan token baca-saja
+npm install
+npm run dev                            # http://localhost:3000
+```
+
+Token baca-saja dibuat dengan `turso db tokens create csais --read-only`; token
+tulis hanya dipakai pekerja Actions. Halaman: beranda, incident (saringan dan
+grafik), detail incident (klaim, garis waktu sumber, bukti), temuan dan kelompok
+berisiko, verifikasi bukti (tautan, hash, atau ID), registri sumber, dan halaman
+portal lembaga yang dibuka setelah kontrak di rantai terpasang.
+
 ## Pengembangan
 
 ```bash
