@@ -82,6 +82,35 @@ label manual (relevan, target, pelaku), dan `eval/score.py` menghitung presisi,
 recall, dan F1 pipeline terhadap label itu dari database saat ini. Jalankan
 `score.py` setiap kali logika V0.2 atau V0.3 berubah.
 
+## Menjalankan di cloud (gratis)
+
+Pembagian kerja: pekerja pipeline di GitHub Actions, database bersama di
+Turso (SQLite hosted), aplikasi web di Vercel yang hanya membaca Turso.
+
+1. Buat database di Turso, lalu ambil URL dan token:
+   `turso db create csais`, `turso db show csais --url`,
+   `turso db tokens create csais`.
+2. Uji terbit dari komputer lokal (kredensial lewat variabel lingkungan,
+   jangan ditulis di kode; file `.env` sudah di-gitignore):
+
+   ```bash
+   export TURSO_DATABASE_URL=libsql://csais-xxx.turso.io
+   export TURSO_AUTH_TOKEN=...
+   ./.venv/bin/python main.py --publish-only
+   ```
+
+3. Dorong kode ke GitHub, isi kedua rahasia itu di Settings > Secrets and
+   variables > Actions, dan unggah database sekali sebagai rilis bootstrap:
+   `gh release create bootstrap database/csais.db --title "Database bootstrap"`.
+4. Workflow `.github/workflows/daily.yml` berjalan tiap hari pukul 04:00 WIB:
+   memulihkan database dari cache, crawl tanpa prompt, mengolah artikel baru,
+   mengambil isi artikel (anggaran 300), menerbitkan ke Turso, menyimpan
+   database ke cache lagi. Bisa dipicu manual dari tab Actions.
+
+Batasan paket gratis: 2.000 menit Actions per bulan untuk repo privat (satu run
+sekitar 30 sampai 45 menit), cache 10 GB, Turso 9 GB dan 25 juta baris tulis
+per bulan; semuanya jauh di atas kebutuhan saat ini.
+
 ## Pengembangan
 
 ```bash

@@ -1,0 +1,82 @@
+# Pekerja pipeline CSAIS harian di GitHub Actions (gratis).
+#
+# Alur: pulihkan database SQLite dari cache (atau dari rilis "bootstrap" pada
+# run pertama), crawl tanpa prompt, olah artikel baru, ambil isi artikel dengan
+# anggaran, terbitkan hasil ke Turso, simpan database ke cache lagi.
+#
+# Rahasia yang harus diisi di Settings > Secrets and variables > Actions:
+#   TURSO_DATABASE_URL, TURSO_AUTH_TOKEN
+# Bootstrap sekali (dari komputer lokal, database saat ini):
+#   gh release create bootstrap database/csais.db --title "Database bootstrap"
+
+name: CSAIS daily pipeline
+
+on:
+  schedule:
+    - cron: "0 21 * * *" # 21:00 UTC = 04:00 WIB
+  workflow_dispatch:
+    inputs:
+      fetch_budget:
+        description: "Maksimal artikel yang diambil isinya"
+        default: "300"
+
+concurrency:
+  group: csais-pipeline
+  cancel-in-progress: false
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Pasang dependensi
+        run: pip install -r requirements.txt
+
+      - name: Pulihkan database dari cache
+        id: db-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: database/csais.db
+          key: csais-db-${{ github.run_id }}
+          restore-keys: |
+            csais-db-
+
+      - name: Bootstrap database dari rilis (run pertama saja)
+        if: steps.db-cache.outputs.cache-matched-key == ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p database
+          gh release download bootstrap --pattern csais.db --dir database || \
+            echo "Tidak ada rilis bootstrap; mulai dari database kosong."
+
+      - name: Crawl, olah, ambil isi artikel, terbitkan ke Turso
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+        run: |
+          python main.py --crawl \
+            --fetch-budget "${{ github.event.inputs.fetch_budget || '300' }}" \
+            --publish
+
+      - name: Simpan database ke cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: database/csais.db
+          key: csais-db-${{ github.run_id }}
+
+      - name: Unggah log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-${{ github.run_id }}
+          path: logs/
+          retention-days: 14

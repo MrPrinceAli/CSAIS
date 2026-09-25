@@ -24,6 +24,7 @@ from csais import (
     crawler,
     export,
     language,
+    publish,
     reset,
     v01_data_collector,
     v02_relevance_detection,
@@ -121,6 +122,17 @@ def parse_args():
         metavar="N",
         help="hanya ekspor incident dengan minimal N artikel (default 1)",
     )
+    parser.add_argument(
+        "--publish",
+        action="store_true",
+        help="setelah pipeline (atau sendiri bersama --no-crawl --no-fetch), "
+        "terbitkan hasil ke Turso (TURSO_DATABASE_URL, TURSO_AUTH_TOKEN)",
+    )
+    parser.add_argument(
+        "--publish-only",
+        action="store_true",
+        help="hanya terbitkan hasil ke Turso, tanpa menjalankan pipeline",
+    )
     return parser.parse_args()
 
 
@@ -148,6 +160,10 @@ def main():
         print(f"Selesai: {total} incident ditulis.")
         return
 
+    if args.publish_only:
+        publish.run()
+        return
+
     if args.reset or args.reset_from:
         from_stage = args.reset_from or 2
         reset.reset_derived_tables(confirm=not args.yes, from_stage=from_stage)
@@ -161,6 +177,9 @@ def main():
         steps.append((name, step))
     if not args.no_crawl:
         steps.insert(0, ("CSAIS Crawler", lambda: crawler.run(ask=not args.crawl)))
+
+    if args.publish:
+        steps.append(("Publish - Terbitkan ke Turso", publish.run))
 
     total = len(steps)
     for number, (name, step) in enumerate(steps, start=1):
