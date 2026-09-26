@@ -1,6 +1,8 @@
 import { cache } from "react";
 import type { InValue } from "@libsql/client";
 import { query, queryOne } from "./db";
+import { fromHex, leafHash, merkleProof, toHex, verifyProof } from "./merkle";
+import type { StoredTrust } from "./trust";
 
 export type IncidentRow = {
   incident_id: string;
@@ -18,7 +20,26 @@ export type IncidentRow = {
   language: string | null;
   domains: number | null;
   independence: number | null;
-};
+  domain_list: string | null; // domain sumber dipisah koma (untuk tumpukan logo)
+} & StoredTrust;
+
+/* --- Keberadaan tabel ---
+ * Tabel baru (v07_trust, evidence_batches, evidence_leaves) baru ada di Turso
+ * setelah pipeline versi baru menerbitkannya. Halaman tidak boleh gagal
+ * sebelum itu, jadi keberadaannya dicek dulu dan diingat per instance;
+ * hasil "belum ada" dicek ulang tiap lima menit. */
+const tableCache = new Map<string, { exists: boolean; checkedAt: number }>();
+const TABLE_TTL_MS = 5 * 60 * 1000;
+
+export async function hasTable(name: string): Promise<boolean> {
+  const cached = tableCache.get(name);
+  const now = Date.now();
+  if (cached && (cached.exists || now - cached.checkedAt < TABLE_TTL_MS)) return cached.exists;
+  const row = await queryOne<{ n: number }>("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = ?", [name]);
+  const exists = Number(row?.n ?? 0) > 0;
+  tableCache.set(name, { exists, checkedAt: now });
+  return exists;
+}
 
 export type Overview = {
   artikel: number;
@@ -54,19 +75,32 @@ export const getOverview = cache(async (): Promise<Overview> => {
   return row ?? { artikel: 0, incident: 0, incident_30: 0, multi_30: 0, bukti: 0, sumber: 0, isi_ok: 0, target_known: 0, multi_all: 0 };
 });
 
-const INCIDENT_SELECT = `
+const TRUST_COLUMNS = `t.score AS trust_score, t.level AS trust_level, t.corroboration AS trust_corroboration,
+         t.independence AS trust_independence, t.claim AS trust_claim, t.content AS trust_content,
+         t.clustering AS trust_clustering`;
+const NO_TRUST_COLUMNS = `NULL AS trust_score, NULL AS trust_level, NULL AS trust_corroboration,
+         NULL AS trust_independence, NULL AS trust_claim, NULL AS trust_content, NULL AS trust_clustering`;
+
+/** SELECT incident beserta skor V0.7 bila tabel v07_trust sudah diterbitkan. */
+async function incidentSelect(): Promise<string> {
+  const withTrust = await hasTable("v07_trust");
+  return `
   SELECT i.incident_id, i.attack_type, i.target, i.threat_actor, i.location, i.attack_date,
          i.document_count, i.incident_confidence, i.anchor_article_id, i.anchor_published_date,
          i.last_published_date, a.title, a.language,
          (SELECT COUNT(DISTINCT e.source_domain) FROM v06_evidence e WHERE e.incident_id = i.incident_id) AS domains,
-         (SELECT AVG(e.evidence_independence_score) FROM v06_evidence e WHERE e.incident_id = i.incident_id) AS independence
+         (SELECT AVG(e.evidence_independence_score) FROM v06_evidence e WHERE e.incident_id = i.incident_id) AS independence,
+         (SELECT GROUP_CONCAT(DISTINCT e.source_domain) FROM v06_evidence e WHERE e.incident_id = i.incident_id AND e.source_domain != '' AND e.source_domain NOT LIKE '%google.%') AS domain_list,
+         ${withTrust ? TRUST_COLUMNS : NO_TRUST_COLUMNS}
   FROM v05_incidents i
   LEFT JOIN articles a ON a.article_id = i.anchor_article_id
+  ${withTrust ? "LEFT JOIN v07_trust t ON t.incident_id = i.incident_id" : ""}
 `;
+}
 
 export const getLatestIncidents = cache(async (limit = 6): Promise<IncidentRow[]> => {
   return query<IncidentRow>(
-    `${INCIDENT_SELECT}
+    `${await incidentSelect()}
      WHERE i.anchor_published_date >= date('now', '-30 days') AND i.document_count >= 2
      ORDER BY i.document_count DESC, i.last_published_date DESC
      LIMIT ?`,
@@ -82,6 +116,44 @@ export const getFeaturedIncidentId = cache(async (): Promise<string | null> => {
      ORDER BY document_count DESC, last_published_date DESC LIMIT 1`,
   );
   return row?.incident_id ?? null;
+});
+
+export type ScanRow = {
+  title: string | null;
+  language: string | null;
+  published_date: string | null;
+  target: string | null;
+  attack_type: string | null;
+  source_domain: string | null;
+  incident_id: string;
+  document_count: number;
+  trust_score: number | null;
+};
+
+/** Artikel terbaru yang sudah bergabung ke incident bersumber 2+, untuk panel pemindai di beranda. */
+export const getScannerFeed = cache(async (limit = 8): Promise<ScanRow[]> => {
+  const withTrust = await hasTable("v07_trust");
+  return query<ScanRow>(
+    `SELECT a.title, a.language, a.published_date, x.target, x.attack_type, e.source_domain,
+            i.incident_id, i.document_count, ${withTrust ? "t.score" : "NULL"} AS trust_score
+     FROM v06_evidence e
+     JOIN articles a ON a.article_id = e.article_id
+     JOIN v03_information_extraction x ON x.article_id = a.article_id
+     JOIN v05_incidents i ON i.incident_id = e.incident_id
+     ${withTrust ? "LEFT JOIN v07_trust t ON t.incident_id = i.incident_id" : ""}
+     WHERE x.target != '' AND x.target != 'UNKNOWN' AND i.document_count >= 2
+       AND e.source_domain != '' AND e.source_domain NOT LIKE '%google.%'
+       AND a.published_date <= date('now', '+1 day')
+     ORDER BY a.published_date DESC
+     LIMIT ?`,
+    [limit],
+  );
+});
+
+/** Domain sumber dengan artikel terbanyak (marquee logo). */
+export const getTopSourceDomains = cache(async (limit = 28): Promise<string[]> => {
+  const rows = await query<{ domain: string }>(`SELECT domain FROM sources WHERE source_type != 'BLOG' ORDER BY article_count DESC LIMIT ?`, [limit]);
+  return rows.map((r) => r.domain);
 });
 
 export type CountryCount = { location: string; n: number };
@@ -151,9 +223,10 @@ export async function getDashboard(f: DashboardFilters) {
   const { where, args } = buildWhere(f);
   const page = f.page && f.page > 0 ? f.page : 1;
   const base = `FROM v05_incidents i LEFT JOIN articles a ON a.article_id = i.anchor_article_id ${where}`;
+  const select = await incidentSelect();
   const [rows, totalRow, daily, types, countries, kpi] = await Promise.all([
     query<IncidentRow>(
-      `${INCIDENT_SELECT} ${where}
+      `${select} ${where}
        ORDER BY i.document_count DESC, i.anchor_published_date DESC
        LIMIT ? OFFSET ?`,
       [...args, PAGE_SIZE, (page - 1) * PAGE_SIZE],
@@ -221,9 +294,10 @@ export type DocumentRow = {
 };
 
 export const getIncident = cache(async (id: string) => {
-  const incident = await queryOne<IncidentRow>(`${INCIDENT_SELECT} WHERE i.incident_id = ?`, [id]);
+  const select = await incidentSelect();
+  const incident = await queryOne<IncidentRow>(`${select} WHERE i.incident_id = ?`, [id]);
   if (!incident) return null;
-  const [docs, relations, related] = await Promise.all([
+  const [docs, relations, related, ledgerCount] = await Promise.all([
     query<DocumentRow>(
       `SELECT a.article_id, a.title, a.published_date, a.resolved_url, a.article_url, a.source_name,
               a.syndicated_of, a.language, a.content_status, a.content_sha256,
@@ -245,14 +319,23 @@ export const getIncident = cache(async (id: string) => {
     ),
     incident.target
       ? query<IncidentRow>(
-          `${INCIDENT_SELECT}
+          `${select}
            WHERE i.target = ? AND i.incident_id != ?
            ORDER BY i.anchor_published_date DESC LIMIT 6`,
           [incident.target, id],
         )
       : Promise.resolve([] as IncidentRow[]),
+    // jumlah bukti incident ini yang sudah masuk batch Merkle (ledger off-chain)
+    hasTable("evidence_leaves").then((ok) =>
+      ok
+        ? queryOne<{ n: number }>(
+            `SELECT COUNT(*) AS n FROM evidence_leaves l JOIN v06_evidence e ON e.evidence_uid = l.evidence_uid WHERE e.incident_id = ?`,
+            [id],
+          ).then((r) => Number(r?.n ?? 0))
+        : 0,
+    ),
   ]);
-  return { incident, docs, relations, related };
+  return { incident, docs, relations, related, ledgerCount };
 });
 
 export type GroupStat = {
@@ -332,6 +415,32 @@ export const getRiskGroups = cache(async (): Promise<GroupStat[]> => {
     .sort((a, b) => b.now - a.now);
 });
 
+/** Posisi satu bukti dalam batch Merkle beserta bukti (proof) yang dihitung ulang dari daun batch. */
+export type LedgerProof = {
+  batch_id: number;
+  leaf_index: number;
+  leaf_count: number;
+  leaf_hash: string;
+  merkle_root: string;
+  created_at: string;
+  anchor_status: string;
+  anchor_chain: string | null;
+  anchor_tx: string | null;
+  proof: string[];
+  valid: boolean; // daun + proof menghasilkan akar batch
+  leaf_matches: boolean; // hash daun tersimpan = SHA-256(0x00 || payload)
+  snapshot_sha256: string | null; // content_sha256 saat batch dibuat
+  snapshot_changed: boolean; // teks artikel diambil/berubah setelah batch
+};
+
+export type VerifyEvidence = {
+  evidence_uid: string;
+  incident_id: string;
+  content_fingerprint: string | null;
+  evidence_type: string | null;
+  ledger: LedgerProof | null;
+};
+
 export type VerifyResult = {
   kind: "hash" | "url" | "uid" | "kosong";
   article: {
@@ -345,8 +454,73 @@ export type VerifyResult = {
     content_fetched_at: string | null;
     published_date: string | null;
   } | null;
-  evidence: { evidence_uid: string; incident_id: string; content_fingerprint: string | null; evidence_type: string | null }[];
+  evidence: VerifyEvidence[];
 };
+
+type LeafRow = {
+  batch_id: number;
+  leaf_index: number;
+  leaf_hash: string;
+  payload: string;
+  merkle_root: string;
+  leaf_count: number;
+  created_at: string;
+  anchor_status: string;
+  anchor_chain: string | null;
+  anchor_tx: string | null;
+};
+
+/** Bukti Merkle satu evidence_uid, dihitung dari daun batch (maksimal 1.024 baris). */
+async function ledgerProof(evidenceUid: string, currentSha256: string | null): Promise<LedgerProof | null> {
+  const leaf = await queryOne<LeafRow>(
+    `SELECT l.batch_id, l.leaf_index, l.leaf_hash, l.payload, b.merkle_root, b.leaf_count, b.created_at,
+            b.anchor_status, b.anchor_chain, b.anchor_tx
+     FROM evidence_leaves l JOIN evidence_batches b ON b.batch_id = l.batch_id
+     WHERE l.evidence_uid = ?`,
+    [evidenceUid],
+  );
+  if (!leaf) return null;
+  const rows = await query<{ leaf_hash: string }>(`SELECT leaf_hash FROM evidence_leaves WHERE batch_id = ? ORDER BY leaf_index`, [leaf.batch_id]);
+  const leaves = rows.map((r) => fromHex(r.leaf_hash));
+  const index = Number(leaf.leaf_index);
+  const proof = index < leaves.length ? merkleProof(leaves, index) : [];
+  let snapshotSha: string | null = null;
+  try {
+    snapshotSha = (JSON.parse(leaf.payload) as { content_sha256?: string | null }).content_sha256 ?? null;
+  } catch {
+    snapshotSha = null;
+  }
+  return {
+    batch_id: Number(leaf.batch_id),
+    leaf_index: index,
+    leaf_count: Number(leaf.leaf_count),
+    leaf_hash: leaf.leaf_hash,
+    merkle_root: leaf.merkle_root,
+    created_at: leaf.created_at,
+    anchor_status: leaf.anchor_status,
+    anchor_chain: leaf.anchor_chain,
+    anchor_tx: leaf.anchor_tx,
+    proof: proof.map(toHex),
+    valid: index < leaves.length && verifyProof(fromHex(leaf.leaf_hash), proof, fromHex(leaf.merkle_root)),
+    leaf_matches: toHex(leafHash(leaf.payload)) === leaf.leaf_hash,
+    snapshot_sha256: snapshotSha,
+    snapshot_changed: (snapshotSha ?? null) !== (currentSha256 ?? null),
+  };
+}
+
+export type LedgerStats = { batches: number; leaves: number; pending: number; latest: string | null };
+
+/** Ringkasan ledger off-chain untuk halaman verifikasi; null bila tabel belum diterbitkan. */
+export const getLedgerStats = cache(async (): Promise<LedgerStats | null> => {
+  if (!(await hasTable("evidence_batches"))) return null;
+  const row = await queryOne<{ batches: number; leaves: number; pending: number; latest: string | null }>(
+    `SELECT COUNT(*) AS batches, COALESCE(SUM(leaf_count), 0) AS leaves,
+            SUM(CASE WHEN anchor_status = 'PENDING' THEN 1 ELSE 0 END) AS pending,
+            MAX(created_at) AS latest
+     FROM evidence_batches`,
+  );
+  return row ? { batches: Number(row.batches), leaves: Number(row.leaves), pending: Number(row.pending), latest: row.latest } : null;
+});
 
 export async function verify(input: string): Promise<VerifyResult> {
   const value = input.trim();
@@ -379,12 +553,19 @@ export async function verify(input: string): Promise<VerifyResult> {
       article = await queryOne(`SELECT ${articleCols} FROM articles WHERE article_uid = ? LIMIT 1`, [value.toLowerCase()]);
     }
   }
-  const evidence = article
-    ? await query<VerifyResult["evidence"][number]>(
+  const rows = article
+    ? await query<Omit<VerifyEvidence, "ledger">>(
         `SELECT evidence_uid, incident_id, content_fingerprint, evidence_type FROM v06_evidence WHERE article_id = ?`,
         [article.article_id],
       )
     : [];
+  const withLedger = rows.length > 0 && (await hasTable("evidence_leaves"));
+  const evidence: VerifyEvidence[] = await Promise.all(
+    rows.map(async (row) => ({
+      ...row,
+      ledger: withLedger ? await ledgerProof(row.evidence_uid, article?.content_sha256 ?? null) : null,
+    })),
+  );
   return { kind, article, evidence };
 }
 

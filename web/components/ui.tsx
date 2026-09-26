@@ -6,11 +6,15 @@ import { attackCode, formatters, incidentTitle, severity, type Severity } from "
 import { attackLabel, getDict, L, languageLabel, type Lang } from "@/lib/i18n";
 import { trustFromRow, TRUST_COLOR, type Trust } from "@/lib/trust";
 
-export function Stat({ label, value, note, tone = "muted" }: { label: string; value: ReactNode; note?: ReactNode; tone?: "muted" | "good" | "high" | "chain" | "accent" }) {
+export function Stat({ label, value, note, tone = "muted", live = false }: { label: string; value: ReactNode; note?: ReactNode; tone?: "muted" | "good" | "high" | "chain" | "accent"; live?: boolean }) {
   const toneClass = { muted: "text-muted", good: "text-good", high: "text-high", chain: "text-chain", accent: "text-accent" }[tone];
+  const topColor = { muted: "var(--line-2)", good: "var(--good)", high: "var(--high)", chain: "var(--chain)", accent: "var(--accent)" }[tone];
   return (
-    <div className="card flex flex-col gap-1 px-4 py-3.5">
-      <span className="label">{label}</span>
+    <div className="card lift flex flex-col gap-1 px-4 py-3.5" style={{ borderTopColor: topColor, borderTopWidth: 2 }}>
+      <span className="label inline-flex items-center gap-2">
+        {live ? <span className="led led-accent" aria-hidden="true" /> : null}
+        {label}
+      </span>
       <span className="tnum text-[26px] font-semibold leading-tight tracking-tight">{value}</span>
       {note ? <span className={`font-mono text-[11.5px] ${toneClass}`}>{note}</span> : null}
     </div>
@@ -59,6 +63,7 @@ export function TrustRing({ trust, lang, size = 44, showLabel = false }: { trust
           strokeLinecap="round"
           strokeDasharray={`${c * trust.score} ${c}`}
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          className="ring-arc"
         />
         <text x="50%" y="50%" dy="0.36em" textAnchor="middle" fontSize={size >= 60 ? 16 : 11} fontWeight="600" fill="var(--fg)" fontFamily="var(--font-jet), monospace">
           {pct}
@@ -73,19 +78,44 @@ export function TrustRing({ trust, lang, size = 44, showLabel = false }: { trust
   );
 }
 
-export function IncidentCard({ row, lang }: { row: IncidentRow; lang: Lang }) {
+/** Tumpukan logo domain sumber (maksimal empat) dengan sisa sebagai angka. */
+export function LogoStack({ domains, max = 4, size = 16 }: { domains: string[]; max?: number; size?: number }) {
+  const shown = domains.slice(0, max);
+  const rest = domains.length - shown.length;
+  if (!shown.length) return null;
+  return (
+    <span className="inline-flex items-center">
+      {shown.map((d, i) => (
+        <span key={d} className={i ? "-ml-2" : ""} style={{ zIndex: max - i }}>
+          <SourceLogo domain={d} size={size} />
+        </span>
+      ))}
+      {rest > 0 ? <span className="ml-1 font-mono text-[10.5px] text-muted">+{rest}</span> : null}
+    </span>
+  );
+}
+
+export function IncidentCard({ row, lang, index = 0 }: { row: IncidentRow; lang: Lang; index?: number }) {
   const f = formatters(lang);
   const t = getDict(lang);
   const level = severity(row);
   const trust = trustFromRow(row);
+  const domains = (row.domain_list ?? "").split(",").map((d) => d.trim()).filter(Boolean);
   return (
-    <Link href={L(lang, `/incidents/${row.incident_id}`)} className="row-link grid grid-cols-[4px_minmax(0,1fr)_auto] items-center gap-3 rounded-md border border-line bg-bg px-3.5 py-3">
+    <Link
+      href={L(lang, `/incidents/${row.incident_id}`)}
+      className="row-link lift fade-up grid grid-cols-[4px_minmax(0,1fr)_auto] items-center gap-3 rounded-md border border-line bg-bg px-3.5 py-3"
+      style={{ "--i": index } as React.CSSProperties}
+    >
       <SeverityBar level={level} lang={lang} className="h-11" />
-      <span className="flex min-w-0 flex-col gap-1">
+      <span className="flex min-w-0 flex-col gap-1.5">
         <span className="truncate text-[14px] font-semibold">{incidentTitle(row.title)}</span>
-        <span className="truncate font-mono text-[11.5px] text-muted">
-          {attackLabel(row.attack_type, lang)} · {f.num(row.document_count)} {t.common.articles} · {f.num(Number(row.domains ?? 0))} {t.common.domains}
-          {row.target ? ` · ${row.target}` : ""}
+        <span className="flex min-w-0 items-center gap-2">
+          <LogoStack domains={domains} />
+          <span className="truncate font-mono text-[11.5px] text-muted">
+            {attackLabel(row.attack_type, lang)} · {f.num(row.document_count)} {t.common.articles} · {f.num(Number(row.domains ?? 0))} {t.common.domains}
+            {row.target ? ` · ${row.target}` : ""}
+          </span>
         </span>
       </span>
       <TrustRing trust={trust} lang={lang} size={40} />
@@ -115,11 +145,11 @@ export function IncidentTable({ rows, lang }: { rows: IncidentRow[]; lang: Lang 
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => {
+            {rows.map((row, i) => {
               const level = severity(row);
               const trust = trustFromRow(row);
               return (
-                <tr key={row.incident_id} className="border-b border-line last:border-b-0 hover:bg-accent/5">
+                <tr key={row.incident_id} className="scan-row row-in border-b border-line last:border-b-0 hover:bg-accent/5" style={{ animationDelay: `${Math.min(i, 20) * 35}ms` }}>
                   <td className="px-3 py-2.5">
                     <SeverityBar level={level} lang={lang} className="h-9" />
                   </td>
@@ -172,7 +202,7 @@ export function DailyBars({ data, lang, height = 120, accent = "var(--accent)" }
           const n = Number(x.n);
           const bh = Math.max(2, ((height - 8) * n) / max);
           return (
-            <rect key={x.d} x={pad + i * bw + 1} y={height - 2 - bh} width={Math.max(2, bw - 2)} height={bh} rx={1} fill={accent} opacity={i === data.length - 1 ? 1 : 0.5}>
+            <rect key={x.d} x={pad + i * bw + 1} y={height - 2 - bh} width={Math.max(2, bw - 2)} height={bh} rx={1} fill={accent} opacity={i === data.length - 1 ? 1 : 0.5} className="bar-rise" style={{ "--i": i } as React.CSSProperties}>
               <title>{`${x.d}: ${n}`}</title>
             </rect>
           );
@@ -193,12 +223,12 @@ export function LabelBars({ data, max }: { data: { label: string; n: number; tex
   const top = max ?? Math.max(...data.map((x) => x.n), 1);
   return (
     <div className="flex flex-col gap-2">
-      {data.map((x) => {
+      {data.map((x, i) => {
         const inner = (
           <>
             <span className="truncate">{x.label}</span>
             <span className="block h-1.5 overflow-hidden rounded-sm bg-line">
-              <span className="block h-full bg-accent" style={{ width: `${Math.max(1, (100 * x.n) / top)}%` }} />
+              <span className="bar-fill block h-full bg-accent" style={{ width: `${Math.max(1, (100 * x.n) / top)}%`, "--i": i } as React.CSSProperties} />
             </span>
             <span className="tnum text-right font-mono">{x.text}</span>
           </>
@@ -227,9 +257,9 @@ export function Sparkline({ values, width = 120, height = 32, color = "var(--acc
   const path = `M${points.join(" L")}`;
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={values.join(", ")}>
-      <path d={`${path} L${width},${height} L0,${height} Z`} fill={color} opacity="0.12" />
-      <path d={path} fill="none" stroke={color} strokeWidth="1.5" />
-      <circle cx={(values.length - 1) * step} cy={height - 2 - ((height - 4) * values[values.length - 1]) / max} r="2.5" fill={color} />
+      <path d={`${path} L${width},${height} L0,${height} Z`} fill={color} opacity="0.12" className="draw-fill" />
+      <path d={path} fill="none" stroke={color} strokeWidth="1.5" pathLength={1} className="draw" />
+      <circle cx={(values.length - 1) * step} cy={height - 2 - ((height - 4) * values[values.length - 1]) / max} r="2.5" fill={color} className="draw-fill" />
     </svg>
   );
 }
@@ -251,6 +281,8 @@ export function HashGrid({ hex, size = 96, label }: { hex: string | null | undef
           height={cell}
           fill={v >= 12 ? "var(--accent)" : v >= 8 ? "var(--chain)" : v >= 4 ? "var(--line-2)" : "transparent"}
           opacity={clean ? 0.35 + (v / 15) * 0.65 : 0.2}
+          className="hash-cell"
+          style={{ "--i": i } as React.CSSProperties}
         />
       ))}
     </svg>

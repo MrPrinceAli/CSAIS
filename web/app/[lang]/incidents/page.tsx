@@ -7,6 +7,7 @@ import { formatters } from "@/lib/format";
 import { attackLabel, getDict, isLang, L } from "@/lib/i18n";
 import { Globe, type GlobeMarker } from "@/components/globe";
 import { Pagination } from "@/components/pagination";
+import { SearchField } from "@/components/search-field";
 import { DailyBars, IncidentTable, LabelBars, SectionTitle, Stat, TrustLegend } from "@/components/ui";
 
 type Search = Record<string, string | string[] | undefined>;
@@ -76,7 +77,9 @@ export default async function IncidentsPage({ params: p, searchParams }: { param
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-col gap-1">
-          <h1 className="text-[24px] font-semibold">{t.incidents.title}</h1>
+          <h1 className="text-[24px] font-semibold">
+            <span className="mark mark-accent on">{t.incidents.title}</span>
+          </h1>
           <span className="text-[13px] text-muted">{t.incidents.subtitle(f.num(data.total), days, active)}</span>
         </div>
         <div className="flex gap-1.5">
@@ -94,6 +97,8 @@ export default async function IncidentsPage({ params: p, searchParams }: { param
             <SectionTitle aside={t.incidents.globeNote(days)}>{t.incidents.globeTitle}</SectionTitle>
             <div className="relative mx-auto aspect-square w-full max-w-[380px]">
               <Globe markers={markers} label={t.incidents.located(f.num(located), globeCountries.length)} />
+              <div className="radar" aria-hidden="true" />
+              <div className="radar-ring" aria-hidden="true" />
             </div>
             <div className="flex items-center justify-between font-mono text-[11px] text-muted">
               <span>{t.incidents.located(f.num(located), globeCountries.length)}</span>
@@ -115,7 +120,7 @@ export default async function IncidentsPage({ params: p, searchParams }: { param
 
         <div className="flex flex-col gap-4">
           <div className="grid grid-cols-2 gap-3">
-            <Stat label={t.incidents.kpi.total} value={f.num(data.kpi.total)} note={t.common.lastDays(days)} />
+            <Stat label={t.incidents.kpi.total} value={f.num(data.kpi.total)} note={t.common.lastDays(days)} tone="accent" live />
             <Stat
               label={t.incidents.kpi.multi}
               value={f.num(data.kpi.multi)}
@@ -148,7 +153,7 @@ export default async function IncidentsPage({ params: p, searchParams }: { param
         {days !== 30 ? <input type="hidden" name="hari" value={days} /> : null}
         <label className="flex min-w-[220px] flex-1 flex-col gap-1 text-[12px] text-muted">
           {t.incidents.filters.search}
-          <input id="q" name="q" type="search" defaultValue={filters.q ?? ""} placeholder={t.incidents.filters.searchPlaceholder} className="field" />
+          <SearchField id="q" name="q" defaultValue={filters.q ?? ""} placeholder={t.incidents.filters.searchPlaceholder} examples={t.incidents.filters.searchExamples} className="field" />
         </label>
         <label className="flex flex-col gap-1 text-[12px] text-muted">
           {t.incidents.filters.type}

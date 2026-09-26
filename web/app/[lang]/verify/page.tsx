@@ -1,10 +1,53 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getSampleEvidence, verify } from "@/lib/queries";
+import { getLedgerStats, getSampleEvidence, verify, type LedgerProof } from "@/lib/queries";
 import { formatters } from "@/lib/format";
-import { evidenceRole, getDict, isLang, L } from "@/lib/i18n";
+import { evidenceRole, getDict, isLang, L, type Lang } from "@/lib/i18n";
 import { HashGrid } from "@/components/ui";
+import { MerkleMini } from "@/components/merkle-mini";
+import { SearchField } from "@/components/search-field";
+
+function short(hex: string): string {
+  return `${hex.slice(0, 10)}…${hex.slice(-6)}`;
+}
+
+/** Posisi bukti dalam batch Merkle: akar, daun, hasil verifikasi proof, status penjangkaran. */
+function LedgerBlock({ ledger, lang }: { ledger: LedgerProof; lang: Lang }) {
+  const t = getDict(lang).verify.ledger;
+  const f = formatters(lang);
+  const ok = ledger.valid && ledger.leaf_matches;
+  return (
+    <div className="mt-1 flex flex-col gap-1.5 rounded-md border border-line bg-bg p-3 text-[12.5px]">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="label text-chain">{t.title}</span>
+        <span className="font-mono text-muted">
+          {t.batch(ledger.batch_id)} · {t.leaf(ledger.leaf_index, f.num(ledger.leaf_count))} · {t.created(f.dateTime(ledger.created_at))}
+        </span>
+      </div>
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 font-mono text-[11.5px]">
+        <span className="text-muted">{t.root}</span>
+        <span className="break-all" title={ledger.merkle_root}>
+          {ledger.merkle_root}
+        </span>
+        <span className="text-muted">{t.leafHash}</span>
+        <span className="break-all" title={ledger.leaf_hash}>
+          {short(ledger.leaf_hash)} · {t.siblings(ledger.proof.length)}
+        </span>
+      </div>
+      <MerkleMini siblings={ledger.proof.length} leafLabel={t.leafHash} rootLabel={t.root} valid={ok} anchored={ledger.anchor_status === "ANCHORED"} />
+      <div className="flex flex-wrap gap-1.5 pt-0.5">
+        <span className={`chip ${ok ? "chip-accent" : ""}`}>{ok ? t.proofValid : ledger.leaf_matches ? t.proofInvalid : t.leafMismatch}</span>
+        <span className="chip chip-chain">
+          {ledger.anchor_status === "ANCHORED" && ledger.anchor_chain ? t.anchored(ledger.anchor_chain) : t.pending}
+        </span>
+        <span className="chip" title={ledger.snapshot_sha256 ?? undefined}>
+          {ledger.snapshot_changed ? t.snapshotChanged : t.snapshotSame}
+        </span>
+      </div>
+    </div>
+  );
+}
 
 type Search = Record<string, string | string[] | undefined>;
 
@@ -21,20 +64,31 @@ export default async function VerifyPage({ params, searchParams }: { params: Pro
   const sp = await searchParams;
   const raw = Array.isArray(sp.q) ? sp.q[0] : sp.q;
   const input = (raw ?? "").trim().slice(0, 600);
-  const [result, samples] = await Promise.all([input ? verify(input) : Promise.resolve(null), getSampleEvidence()]);
+  const [result, samples, ledgerStats] = await Promise.all([input ? verify(input) : Promise.resolve(null), getSampleEvidence(), getLedgerStats()]);
   const base = L(lang, "/verify");
+  const anchoredAny = result?.evidence.some((e) => e.ledger?.anchor_status === "ANCHORED") ?? false;
 
   return (
     <div className="flex flex-col gap-6">
       <section className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
         <div className="flex flex-col gap-3">
-          <h1 className="text-balance text-[26px] font-semibold leading-tight">{t.verify.title}</h1>
+          <h1 className="text-balance text-[26px] font-semibold leading-tight">
+            <span className="mark mark-chain on">{t.verify.title}</span>
+          </h1>
           <p className="max-w-[70ch] text-[14.5px] leading-relaxed text-soft">{t.verify.lead}</p>
           <form method="get" action={base} className="flex w-full flex-col gap-2 sm:flex-row">
             <label htmlFor="q" className="sr-only">
               {t.verify.placeholder}
             </label>
-            <input id="q" name="q" type="text" defaultValue={input} placeholder={t.verify.placeholder} className="field flex-1 py-2.5 font-mono text-[12.5px]" />
+            <SearchField
+              id="q"
+              name="q"
+              type="text"
+              defaultValue={input}
+              placeholder={t.verify.placeholder}
+              examples={[...samples.slice(0, 2).map((s) => s.evidence_uid), "https://"]}
+              className="field flex-1 py-2.5 font-mono text-[12.5px]"
+            />
             <button type="submit" className="btn btn-primary justify-center">
               {t.verify.button}
             </button>
@@ -49,8 +103,11 @@ export default async function VerifyPage({ params, searchParams }: { params: Pro
               ))}
             </div>
           ) : null}
+          <p className="text-[12.5px] text-muted">
+            {ledgerStats ? t.verify.ledger.stats(f.num(ledgerStats.batches), f.num(ledgerStats.leaves), f.num(ledgerStats.pending)) : t.verify.ledger.statsEmpty}
+          </p>
         </div>
-        <div className="card grid grid-cols-[auto_minmax(0,1fr)] items-center gap-4 p-4">
+        <div className="card corners grid grid-cols-[auto_minmax(0,1fr)] items-center gap-4 p-4 grid-bg">
           <HashGrid hex={result?.article?.content_sha256 ?? samples[0]?.content_sha256 ?? null} size={112} label={t.verify.fingerprintTitle} />
           <div className="flex flex-col gap-1 text-[12.5px] text-soft">
             <span className="label">{t.verify.fingerprintTitle}</span>
@@ -94,19 +151,27 @@ export default async function VerifyPage({ params, searchParams }: { params: Pro
                 {result.evidence.map((e) => (
                   <div key={e.evidence_uid} className="contents">
                     <dt className="text-muted">{t.verify.fields.evidence}</dt>
-                    <dd className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono">{e.evidence_uid}</span>
-                      <span className="chip">{evidenceRole(e.evidence_type, lang)}</span>
-                      <Link href={L(lang, `/incidents/${e.incident_id}`)} className="no-underline">
-                        {t.verify.openIncident}
-                      </Link>
+                    <dd className="flex flex-col gap-1">
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono">{e.evidence_uid}</span>
+                        <span className="chip">{evidenceRole(e.evidence_type, lang)}</span>
+                        {!e.ledger ? <span className="chip chip-chain">{t.verify.ledger.notBatched}</span> : null}
+                        <Link href={L(lang, `/incidents/${e.incident_id}`)} className="no-underline">
+                          {t.verify.openIncident}
+                        </Link>
+                      </span>
+                      {e.ledger ? <LedgerBlock ledger={e.ledger} lang={lang} /> : null}
                     </dd>
                   </div>
                 ))}
-                <dt className="text-muted">{t.verify.fields.chain}</dt>
-                <dd>
-                  <span className="chip chip-chain">{t.verify.notAnchored}</span>
-                </dd>
+                {!anchoredAny ? (
+                  <>
+                    <dt className="text-muted">{t.verify.fields.chain}</dt>
+                    <dd>
+                      <span className="chip chip-chain">{t.verify.notAnchored}</span>
+                    </dd>
+                  </>
+                ) : null}
               </dl>
             </div>
           </section>
@@ -120,7 +185,7 @@ export default async function VerifyPage({ params, searchParams }: { params: Pro
 
       <section className="grid gap-3 sm:grid-cols-3">
         {t.verify.steps.map((s, i) => (
-          <div key={s.title} className="card flex flex-col gap-1.5 p-4">
+          <div key={s.title} className="card lift fade-up flex flex-col gap-1.5 p-4" style={{ "--i": i * 2, borderTopColor: i === 2 ? "var(--chain)" : "var(--accent)", borderTopWidth: 2 } as React.CSSProperties}>
             <span className={`label ${i === 2 ? "text-chain" : "text-accent"}`}>
               {t.verify.step} {i + 1}
             </span>

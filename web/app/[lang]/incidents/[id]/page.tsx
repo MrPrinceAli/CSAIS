@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { getIncident, type DocumentRow } from "@/lib/queries";
 import { domainOf, formatters, incidentTitle, severity } from "@/lib/format";
 import { attackLabel, evidenceRole, getDict, isLang, L, languageLabel } from "@/lib/i18n";
-import { trustScore, TRUST_COLOR } from "@/lib/trust";
+import { trustFromStored, trustScore, TRUST_COLOR } from "@/lib/trust";
 import { HashGrid, IncidentCard, SectionTitle, SeverityText, SourceLogo, TrustRing } from "@/components/ui";
 
 type Params = { lang: string; id: string };
@@ -50,21 +50,24 @@ export default async function IncidentDetail({ params }: { params: Promise<Param
   const f = formatters(lang);
   const data = await getIncident(id);
   if (!data) notFound();
-  const { incident, docs, relations, related } = data;
+  const { incident, docs, relations, related, ledgerCount } = data;
   const level = severity(incident);
   const claims = bestClaims(docs);
   const domains = new Set(docs.map((d) => d.source_domain || domainOf(d.resolved_url) || d.source_name || "").filter(Boolean));
   const syndicated = docs.filter((d) => d.syndicated_of).length;
   const withContent = docs.filter((d) => d.content_status === "ok").length;
   const targetClaim = claims.find((c) => c.key === "target");
-  const trust = trustScore({
-    independence: incident.independence,
-    domains: domains.size,
-    docs: docs.length,
-    targetConfidence: targetClaim?.best?.confidence ?? 0,
-    contentShare: docs.length ? withContent / docs.length : 0,
-    clustering: incident.incident_confidence,
-  });
+  // Skor V0.7 dari pipeline bila sudah diterbitkan; perhitungan halaman hanya cadangan
+  const trust =
+    trustFromStored(incident) ??
+    trustScore({
+      independence: incident.independence,
+      domains: domains.size,
+      docs: docs.length,
+      targetConfidence: targetClaim?.best?.confidence ?? 0,
+      contentShare: docs.length ? withContent / docs.length : 0,
+      clustering: incident.incident_confidence,
+    });
   const firstHash = docs.find((d) => d.content_sha256)?.content_sha256 ?? docs.find((d) => d.content_fingerprint)?.content_fingerprint ?? null;
   const firstUid = docs.find((d) => d.evidence_uid)?.evidence_uid ?? "";
   const firstTs = docs[0]?.published_date ? new Date(docs[0].published_date).getTime() : 0;
@@ -89,7 +92,9 @@ export default async function IncidentDetail({ params }: { params: Promise<Param
               {incident.language ? ` · ${t.detail.anchorLanguage}: ${languageLabel(incident.language, lang)}` : ""}
             </span>
           </div>
-          <h1 className="text-balance text-[26px] font-semibold leading-tight">{incidentTitle(incident.title)}</h1>
+          <h1 className="text-balance text-[26px] font-semibold leading-tight">
+            <span className="mark on">{incidentTitle(incident.title)}</span>
+          </h1>
           <div className="flex flex-wrap gap-x-5 gap-y-1 text-[13px] text-soft">
             <span>
               {t.detail.firstSeen} <b className="font-medium text-fg">{f.dateTime(incident.anchor_published_date)}</b>
@@ -118,12 +123,13 @@ export default async function IncidentDetail({ params }: { params: Promise<Param
             </Link>
           </div>
         </div>
-        <div className="card flex items-center gap-4 p-4">
+        <div className="card lift flex items-center gap-4 p-4" style={{ borderTopColor: TRUST_COLOR[trust.level], borderTopWidth: 2 }}>
           <TrustRing trust={trust} lang={lang} size={84} />
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
             <span className="label">
               {t.trust.title} · {t.trust.preliminary}
             </span>
+            <span className="text-[11px] text-muted">{t.trust.computedBy[trust.source]}</span>
             <span className="text-[15px] font-semibold capitalize" style={{ color: TRUST_COLOR[trust.level] }}>
               {t.levels[trust.level]}
             </span>
@@ -144,8 +150,8 @@ export default async function IncidentDetail({ params }: { params: Promise<Param
           <div>
             <SectionTitle>{t.detail.claimsTitle}</SectionTitle>
             <div className="card flex flex-col gap-3.5 p-3.5">
-              {claims.map((c) => (
-                <div key={c.key} className="flex flex-col gap-1">
+              {claims.map((c, i) => (
+                <div key={c.key} className="fade-up flex flex-col gap-1" style={{ "--i": i } as React.CSSProperties}>
                   <div className="flex justify-between text-[12px] text-muted">
                     <span>{t.detail.claims[c.key]}</span>
                     <span className="font-mono">{c.best ? t.detail.confidence(f.score(c.best.confidence)) : t.detail.notFound}</span>
@@ -155,8 +161,8 @@ export default async function IncidentDetail({ params }: { params: Promise<Param
                   </span>
                   <span className="block h-1 overflow-hidden rounded-sm bg-line">
                     <span
-                      className={`block h-full ${c.best && c.best.confidence >= 0.8 ? "bg-good" : c.best && c.best.confidence >= 0.5 ? "bg-med" : "bg-high"}`}
-                      style={{ width: `${Math.round(100 * (c.best?.confidence ?? 0))}%` }}
+                      className={`bar-fill block h-full ${c.best && c.best.confidence >= 0.8 ? "bg-good" : c.best && c.best.confidence >= 0.5 ? "bg-med" : "bg-high"}`}
+                      style={{ width: `${Math.round(100 * (c.best?.confidence ?? 0))}%`, "--i": i } as React.CSSProperties}
                     />
                   </span>
                   {c.variants > 1 ? <span className="text-[12px] text-high">{t.detail.variants(c.variants)}</span> : null}
@@ -189,10 +195,10 @@ export default async function IncidentDetail({ params }: { params: Promise<Param
                 const dot = i === 0 ? "bg-accent" : role === t.roles.independent ? "bg-good" : role === t.roles.syndicated || role === t.roles.duplicate ? "bg-line-2" : "bg-med";
                 const hours = d.published_date && firstTs ? Math.round((new Date(d.published_date).getTime() - firstTs) / 3600000) : null;
                 return (
-                  <li key={d.article_id} className="grid grid-cols-[18px_minmax(0,1fr)] gap-3 border-b border-line py-3 last:border-b-0">
+                  <li key={d.article_id} className="fade-up grid grid-cols-[18px_minmax(0,1fr)] gap-3 border-b border-line py-3 last:border-b-0" style={{ "--i": Math.min(i, 24) } as React.CSSProperties}>
                     <span className="relative flex justify-center">
-                      <span className="absolute top-3 bottom-[-14px] w-px bg-line" aria-hidden="true" />
-                      <span className={`relative mt-1.5 h-2.5 w-2.5 rounded-full ${dot}`} aria-hidden="true" />
+                      <span className="tl-line absolute top-3 bottom-[-14px] w-px bg-line-2" aria-hidden="true" style={{ "--i": Math.min(i, 24) } as React.CSSProperties} />
+                      <span className={`tl-dot relative mt-1.5 h-2.5 w-2.5 rounded-full ${dot}`} aria-hidden="true" style={{ "--i": Math.min(i, 24) } as React.CSSProperties} />
                     </span>
                     <div className="flex min-w-0 flex-col gap-1">
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-muted">
@@ -239,7 +245,7 @@ export default async function IncidentDetail({ params }: { params: Promise<Param
         <section className="flex flex-col gap-4">
           <div>
             <SectionTitle>{t.detail.evidenceTitle}</SectionTitle>
-            <div className="card flex flex-col gap-3 p-3.5 text-[12.5px]">
+            <div className="card corners flex flex-col gap-3 p-3.5 text-[12.5px]" style={{ borderTopColor: "var(--chain)", borderTopWidth: 2 }}>
               <div className="flex items-center gap-3">
                 <HashGrid hex={firstHash} size={72} label={t.detail.fingerprintFirst} />
                 <div className="flex flex-col gap-1">
@@ -254,6 +260,7 @@ export default async function IncidentDetail({ params }: { params: Promise<Param
                   <span className="break-all font-mono text-[11.5px]">{firstUid}</span>
                 </div>
               ) : null}
+              <span className="text-muted">{ledgerCount > 0 ? t.detail.ledgerCount(f.num(ledgerCount), f.num(docs.filter((d) => d.evidence_uid).length)) : t.detail.ledgerNone}</span>
               <span className="chip chip-chain self-start">{t.detail.anchoring}</span>
             </div>
           </div>

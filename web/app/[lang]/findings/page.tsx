@@ -54,7 +54,9 @@ export default async function FindingsPage({ params }: { params: Promise<{ lang:
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h1 className="text-[24px] font-semibold">{t.findings.title}</h1>
+        <h1 className="text-[24px] font-semibold">
+          <span className="mark on" style={{ "--mark-color": "rgba(242, 85, 90, 0.3)" } as React.CSSProperties}>{t.findings.title}</span>
+        </h1>
         <p className="max-w-[90ch] text-[13.5px] text-muted">{t.findings.subtitle(f.num(totalNow), f.num(rising), f.num(groups.length))}</p>
       </div>
 
@@ -75,11 +77,11 @@ export default async function FindingsPage({ params }: { params: Promise<{ lang:
                   </tr>
                 </thead>
                 <tbody>
-                  {groups.map((g) => {
+                  {groups.map((g, i) => {
                     const level = levelOf(g.now, g.prev);
                     const change = changeText(g);
                     return (
-                      <tr key={g.group} className="border-b border-line align-middle last:border-b-0">
+                      <tr key={g.group} className="scan-row row-in border-b border-line align-middle last:border-b-0" style={{ animationDelay: `${Math.min(i, 20) * 45}ms` }}>
                         <td className="px-4 py-3">
                           <span className="block font-semibold">{groupLabel(g.group, lang)}</span>
                           {g.samples[0] ? (
@@ -90,7 +92,7 @@ export default async function FindingsPage({ params }: { params: Promise<{ lang:
                         </td>
                         <td className="px-2 py-3">
                           <span className="inline-flex items-center gap-2 text-[12.5px] font-semibold" style={{ color: LEVEL_COLOR[level] }}>
-                            <span className="inline-block h-2 w-2 rounded-full" style={{ background: LEVEL_COLOR[level] }} aria-hidden="true" />
+                            <span className={level === "high" ? "led led-crit" : "inline-block h-2 w-2 rounded-full"} style={{ background: LEVEL_COLOR[level] }} aria-hidden="true" />
                             {t.findings.levels[level]}
                           </span>
                         </td>
@@ -98,7 +100,7 @@ export default async function FindingsPage({ params }: { params: Promise<{ lang:
                           <div className="grid grid-cols-[36px_minmax(0,1fr)] items-center gap-2">
                             <span className="tnum font-mono">{f.num(g.now)}</span>
                             <span className="block h-1.5 w-full max-w-[140px] overflow-hidden rounded-sm bg-line">
-                              <span className="block h-full" style={{ width: `${Math.max(2, (100 * g.now) / maxNow)}%`, background: LEVEL_COLOR[level] }} />
+                              <span className="bar-fill block h-full" style={{ width: `${Math.max(2, (100 * g.now) / maxNow)}%`, background: LEVEL_COLOR[level], "--i": i } as React.CSSProperties} />
                             </span>
                           </div>
                         </td>
@@ -141,18 +143,18 @@ export default async function FindingsPage({ params }: { params: Promise<{ lang:
                   {attackLabel(type, lang)}
                 </span>
               ))}
-              {heatGroups.map((g) => (
+              {heatGroups.map((g, gi) => (
                 <div key={g.group} className="contents">
                   <span className="truncate pr-3 text-[12.5px] leading-[38px]">{groupLabel(g.group, lang)}</span>
-                  {topTypes.map((type) => {
+                  {topTypes.map((type, ti) => {
                     const n = g.typesAll[type] ?? 0;
                     const alpha = n ? 0.15 + 0.75 * (n / heatMax) : 0;
                     return (
                       <Link
                         key={type}
                         href={`${L(lang, "/incidents")}?jenis=${encodeURIComponent(type)}`}
-                        className="flex h-[38px] items-center justify-center rounded-sm border border-line font-mono text-[12px] no-underline"
-                        style={{ background: `rgba(47, 183, 201, ${alpha})`, color: n ? "var(--fg)" : "var(--muted)" }}
+                        className="heat-cell flex h-[38px] items-center justify-center rounded-sm border border-line font-mono text-[12px] no-underline"
+                        style={{ background: `rgba(242, 85, 90, ${alpha})`, color: n ? "var(--fg)" : "var(--muted)", "--i": gi * topTypes.length + ti } as React.CSSProperties}
                         title={`${groupLabel(g.group, lang)} · ${attackLabel(type, lang)}: ${n}`}
                       >
                         {n || "·"}
@@ -167,12 +169,12 @@ export default async function FindingsPage({ params }: { params: Promise<{ lang:
       ) : null}
 
       <section className="grid gap-3 lg:grid-cols-2">
-        <div className="card flex flex-col gap-2 p-4">
+        <div className="card lift flex flex-col gap-2 p-4">
           <span className="label">{t.findings.nextTitle}</span>
           <span className="text-[15px] font-semibold">{t.findings.next4.title}</span>
           <p className="text-[13.5px] leading-relaxed text-soft">{t.findings.next4.text}</p>
         </div>
-        <div className="card flex flex-col gap-2 p-4" style={{ borderColor: "color-mix(in srgb, var(--chain) 60%, transparent)" }}>
+        <div className="card lift flex flex-col gap-2 p-4" style={{ borderColor: "color-mix(in srgb, var(--chain) 60%, transparent)" }}>
           <span className="label text-chain">{t.findings.nextTitle}</span>
           <span className="text-[15px] font-semibold">{t.findings.next5.title}</span>
           <p className="text-[13.5px] leading-relaxed text-soft">{t.findings.next5.text}</p>

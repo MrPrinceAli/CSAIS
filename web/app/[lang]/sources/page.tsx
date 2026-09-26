@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getSources, type SourceFilters } from "@/lib/queries";
+import { getSources, getTopSourceDomains, type SourceFilters } from "@/lib/queries";
+import { LogoMarquee } from "@/components/logo-marquee";
+import { SearchField } from "@/components/search-field";
 import { isoLabel } from "@/lib/geo";
 import { formatters } from "@/lib/format";
 import { getDict, isLang, L } from "@/lib/i18n";
@@ -47,16 +49,20 @@ export default async function SourcesPage({ params: p, searchParams }: { params:
     const s = sp.toString();
     return s ? `${base}?${s}` : base;
   };
-  const data = await getSources(filters);
+  const [data, topDomains] = await Promise.all([getSources(filters), getTopSourceDomains(28)]);
   const totalArticles = data.byType.reduce((acc, x) => acc + Number(x.artikel), 0);
   const typeLabel = (type: string) => t.sources.types[type.toLowerCase() as keyof typeof t.sources.types] ?? type.toLowerCase();
 
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-1">
-        <h1 className="text-[24px] font-semibold">{t.sources.title}</h1>
+        <h1 className="text-[24px] font-semibold">
+          <span className="mark mark-good on">{t.sources.title}</span>
+        </h1>
         <p className="max-w-[84ch] text-[13.5px] text-muted">{t.sources.lead}</p>
       </div>
+
+      <LogoMarquee domains={topDomains} note={t.sources.marqueeNote} />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label={t.sources.stats.domains} value={f.num(data.byType.reduce((acc, x) => acc + Number(x.n), 0))} note={t.sources.statNotes.domains(f.num(totalArticles))} />
@@ -77,10 +83,10 @@ export default async function SourcesPage({ params: p, searchParams }: { params:
             }))}
           />
         </div>
-        <form method="get" action={base} className="card flex flex-wrap items-end gap-3 p-3.5">
+        <form method="get" action={base} className="card flex flex-wrap content-start items-end gap-3 p-3.5">
           <label className="flex min-w-[200px] flex-1 flex-col gap-1 text-[12px] text-muted">
             {t.sources.filters.search}
-            <input id="q" name="q" type="search" defaultValue={filters.q ?? ""} placeholder={t.sources.filters.searchPlaceholder} className="field" />
+            <SearchField id="q" name="q" defaultValue={filters.q ?? ""} placeholder={t.sources.filters.searchPlaceholder} examples={["detik", "bleepingcomputer", "kompas", "bssn"]} className="field" />
           </label>
           <label className="flex flex-col gap-1 text-[12px] text-muted">
             {t.sources.filters.type}
@@ -123,8 +129,8 @@ export default async function SourcesPage({ params: p, searchParams }: { params:
 
       {data.rows.length ? (
         <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-          {data.rows.map((s) => (
-            <div key={s.domain} className="card flex items-center gap-3 p-3">
+          {data.rows.map((s, i) => (
+            <div key={s.domain} className="card lift fade-up flex items-center gap-3 p-3" style={{ "--i": Math.min(i, 24) } as React.CSSProperties}>
               <SourceLogo domain={s.domain} size={28} />
               <div className="flex min-w-0 flex-1 flex-col gap-1">
                 <div className="flex items-center justify-between gap-2">
@@ -138,7 +144,7 @@ export default async function SourcesPage({ params: p, searchParams }: { params:
                 </span>
                 <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
                   <span className="block h-1.5 overflow-hidden rounded-sm bg-line">
-                    <span className="block h-full bg-accent" style={{ width: `${Math.max(3, (100 * Number(s.article_count)) / data.max)}%` }} />
+                    <span className="bar-fill block h-full bg-accent" style={{ width: `${Math.max(3, (100 * Number(s.article_count)) / data.max)}%`, "--i": Math.min(i, 24) } as React.CSSProperties} />
                   </span>
                   <span className="tnum font-mono text-[11.5px] text-muted">
                     {f.num(s.article_count)} · {f.date(s.last_seen)}

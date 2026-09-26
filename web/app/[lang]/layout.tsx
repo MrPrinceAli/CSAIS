@@ -8,6 +8,7 @@ import { getLastRun } from "@/lib/queries";
 import { formatters } from "@/lib/format";
 import { getDict, isLang, L, LANGS, type Lang } from "@/lib/i18n";
 import { LangToggle } from "@/components/lang-toggle";
+import { NavLinks } from "@/components/nav-links";
 
 const plex = IBM_Plex_Sans({ variable: "--font-plex", subsets: ["latin"], weight: ["400", "500", "600", "700"] });
 const jet = JetBrains_Mono({ variable: "--font-jet", subsets: ["latin"], weight: ["400", "600"] });
@@ -49,30 +50,23 @@ export default async function RootLayout({ children, params }: { children: React
         <header className="sticky top-0 z-20 border-b border-line bg-nav/95 backdrop-blur">
           <div className="mx-auto flex h-14 w-full max-w-7xl items-center gap-6 px-4 sm:px-6">
             <Link href={L(lang, "/")} className="flex items-center gap-2.5 text-[15px] font-semibold tracking-wide text-fg no-underline hover:text-fg">
-              <span className="inline-block h-4.5 w-4.5 rounded-[4px] bg-accent" aria-hidden="true" />
+              <span className="signal" aria-hidden="true">
+                <i />
+              </span>
               {t.brand}
             </Link>
-            <nav className="hidden items-center gap-5 text-[13.5px] md:flex" aria-label="Main">
-              {NAV.map((item) => (
-                <Link key={item.key} href={L(lang, item.path)} className="text-soft no-underline hover:text-fg">
-                  {t.nav[item.key]}
-                </Link>
-              ))}
-            </nav>
+            <NavLinks items={NAV.map((item) => ({ href: L(lang, item.path), label: t.nav[item.key] }))} className="hidden items-center gap-5 text-[13.5px] md:flex" />
             <div className="ml-auto flex items-center gap-3">
               {lastRun ? (
-                <span className="hidden font-mono text-[11px] text-muted lg:inline">{t.status(f.dateTime(lastRun.finished_at), lastRun.pipeline_version.split("+")[0])}</span>
+                <span className="hidden items-center gap-2 font-mono text-[11px] text-muted lg:inline-flex">
+                  <span className="led" aria-hidden="true" />
+                  {t.status(f.dateTime(lastRun.finished_at), lastRun.pipeline_version.split("+")[0])}
+                </span>
               ) : null}
               <LangToggle lang={lang} />
             </div>
           </div>
-          <nav className="mx-auto flex w-full max-w-7xl gap-4 overflow-x-auto px-4 pb-2 text-[13px] md:hidden" aria-label="Main (mobile)">
-            {NAV.map((item) => (
-              <Link key={item.key} href={L(lang, item.path)} className="whitespace-nowrap text-soft no-underline">
-                {t.nav[item.key]}
-              </Link>
-            ))}
-          </nav>
+          <NavLinks items={NAV.map((item) => ({ href: L(lang, item.path), label: t.nav[item.key] }))} className="mx-auto flex w-full max-w-7xl gap-4 overflow-x-auto px-4 pb-2 text-[13px] md:hidden" linkClass="whitespace-nowrap" />
         </header>
 
         <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">{children}</div>

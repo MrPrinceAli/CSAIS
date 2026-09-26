@@ -1,17 +1,20 @@
 import { createClient, type InValue } from "@libsql/client";
 
 // Turso dibaca lewat HTTP (bukan websocket) agar aman di serverless Vercel.
+// Untuk pengembangan lokal, TURSO_DATABASE_URL boleh berupa file:/path/csais.db
+// (salinan database pipeline) tanpa token.
 const url = (process.env.TURSO_DATABASE_URL ?? "").replace(/^libsql:\/\//, "https://");
 const authToken = process.env.TURSO_AUTH_TOKEN;
+const isLocalFile = url.startsWith("file:");
 
 let client: ReturnType<typeof createClient> | null = null;
 
 function getClient() {
   if (!client) {
-    if (!url || !authToken) {
+    if (!url || (!authToken && !isLocalFile)) {
       throw new Error("TURSO_DATABASE_URL dan TURSO_AUTH_TOKEN belum diisi.");
     }
-    client = createClient({ url, authToken });
+    client = isLocalFile ? createClient({ url }) : createClient({ url, authToken });
   }
   return client;
 }
