@@ -20,6 +20,7 @@ pembuka tautan Google News dibatasi) dicoba lagi setelah RETRY_AFTER_DAYS.
 """
 
 import hashlib
+import html as html_lib
 import re
 import random
 import time
@@ -124,7 +125,7 @@ def extract_image_url(html, base_url):
         content = _META_CONTENT.search(tag)
         if not content:
             continue
-        url = urljoin(base_url or "", content.group(1).strip())
+        url = urljoin(base_url or "", html_lib.unescape(content.group(1).strip()))
         if url.startswith(("http://", "https://")):
             found.setdefault(key.group(1).lower(), url[:1000])
     for key in _IMAGE_KEYS:  # og:image lebih diutamakan daripada twitter:image
