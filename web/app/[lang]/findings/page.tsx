@@ -178,7 +178,7 @@ export default async function FindingsPage({ params }: { params: Promise<{ lang:
             <div className="grid min-w-[720px] gap-px" style={{ gridTemplateColumns: `180px repeat(${topTypes.length}, minmax(0, 1fr))` }}>
               <span />
               {topTypes.map((type) => (
-                <span key={type} className="label truncate px-2 pb-2 text-[10.5px]" title={attackLabel(type, lang)}>
+                <span key={type} className="label truncate px-2 pb-2 text-[11px]" title={attackLabel(type, lang)}>
                   {attackLabel(type, lang)}
                 </span>
               ))}

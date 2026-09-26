@@ -71,11 +71,11 @@ export function NewsSlider({ items, prevLabel, nextLabel }: { items: NewsItem[];
                     </span>
                     <span className="max-w-[220px] truncate font-mono text-[11px] text-fg">{it.domain}</span>
                   </span>
-                  <span className="absolute bottom-2.5 right-2.5 font-mono text-[10.5px] text-soft">{it.date}</span>
+                  <span className="absolute bottom-2.5 right-2.5 font-mono text-[11px] text-soft">{it.date}</span>
                 </span>
                 <span className="flex flex-1 flex-col gap-1.5 p-3">
                   <span className="line-clamp-2 text-[13.5px] font-semibold leading-snug">{it.title}</span>
-                  <span className="mt-auto truncate font-mono text-[10.5px] text-accent">
+                  <span className="mt-auto truncate text-[12px] text-accent">
                     {it.type} · {it.language}
                   </span>
                 </span>

@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import type { IncidentRow } from "@/lib/queries";
 import { attackCode, formatters, incidentTitle, severity, type Severity } from "@/lib/format";
-import { attackLabel, getDict, L, languageLabel, type Lang } from "@/lib/i18n";
+import { attackLabel, getDict, L, type Lang } from "@/lib/i18n";
 import { trustFromRow, TRUST_COLOR, type Trust } from "@/lib/trust";
 
 export function Stat({ label, value, note, tone = "muted", live = false }: { label: string; value: ReactNode; note?: ReactNode; tone?: "muted" | "good" | "high" | "chain" | "accent"; live?: boolean }) {
@@ -16,7 +16,7 @@ export function Stat({ label, value, note, tone = "muted", live = false }: { lab
         {label}
       </span>
       <span className="tnum text-[26px] font-semibold leading-tight tracking-tight">{value}</span>
-      {note ? <span className={`font-mono text-[11.5px] ${toneClass}`}>{note}</span> : null}
+      {note ? <span className={`text-[12.5px] ${toneClass}`}>{note}</span> : null}
     </div>
   );
 }
@@ -90,7 +90,7 @@ export function LogoStack({ domains, max = 4, size = 16 }: { domains: string[]; 
           <SourceLogo domain={d} size={size} />
         </span>
       ))}
-      {rest > 0 ? <span className="ml-1 font-mono text-[10.5px] text-muted">+{rest}</span> : null}
+      {rest > 0 ? <span className="ml-1 font-mono text-[11px] text-muted">+{rest}</span> : null}
     </span>
   );
 }
@@ -112,7 +112,7 @@ export function IncidentCard({ row, lang, index = 0 }: { row: IncidentRow; lang:
         <span className="truncate text-[14px] font-semibold">{incidentTitle(row.title)}</span>
         <span className="flex min-w-0 items-center gap-2">
           <LogoStack domains={domains} />
-          <span className="truncate font-mono text-[11.5px] text-muted">
+          <span className="truncate text-[12.5px] text-muted">
             {attackLabel(row.attack_type, lang)} · {f.num(row.document_count)} {t.common.articles} · {f.num(Number(row.domains ?? 0))} {t.common.domains}
             {row.target ? ` · ${row.target}` : ""}
           </span>
@@ -120,68 +120,6 @@ export function IncidentCard({ row, lang, index = 0 }: { row: IncidentRow; lang:
       </span>
       <TrustRing trust={trust} lang={lang} size={40} />
     </Link>
-  );
-}
-
-export function IncidentTable({ rows, lang }: { rows: IncidentRow[]; lang: Lang }) {
-  const f = formatters(lang);
-  const t = getDict(lang);
-  if (!rows.length) {
-    return <div className="card px-4 py-8 text-center text-[13.5px] text-muted">{t.incidents.empty}</div>;
-  }
-  return (
-    <div className="card overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[920px] border-collapse text-[13px]">
-          <thead>
-            <tr className="label border-b border-line text-left">
-              <th className="w-2 px-3 py-2.5" aria-hidden="true" />
-              <th className="px-2 py-2.5 font-medium">{t.incidents.table.incident}</th>
-              <th className="px-2 py-2.5 font-medium">{t.incidents.table.type}</th>
-              <th className="px-2 py-2.5 font-medium">{t.incidents.table.sources}</th>
-              <th className="px-2 py-2.5 font-medium">{t.incidents.table.confidence}</th>
-              <th className="px-2 py-2.5 font-medium">{t.incidents.table.language}</th>
-              <th className="px-3 py-2.5 font-medium">{t.incidents.table.latest}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, i) => {
-              const level = severity(row);
-              const trust = trustFromRow(row);
-              return (
-                <tr key={row.incident_id} className="scan-row row-in border-b border-line last:border-b-0 hover:bg-accent/5" style={{ animationDelay: `${Math.min(i, 20) * 35}ms` }}>
-                  <td className="px-3 py-2.5">
-                    <SeverityBar level={level} lang={lang} className="h-9" />
-                  </td>
-                  <td className="max-w-[480px] px-2 py-2.5">
-                    <Link href={L(lang, `/incidents/${row.incident_id}`)} className="row-link block truncate font-semibold">
-                      {incidentTitle(row.title)}
-                    </Link>
-                    <span className="flex flex-wrap gap-1.5 pt-1">
-                      <span className={`chip ${row.target ? "" : "text-muted"}`}>{row.target ?? t.common.unknown}</span>
-                      {row.threat_actor ? <span className="chip chip-accent">{row.threat_actor.split(",")[0]}</span> : null}
-                      {row.location ? <span className="chip">{row.location.split(",")[0]}</span> : null}
-                    </span>
-                  </td>
-                  <td className="px-2 py-2.5 text-[12.5px]">{attackLabel(row.attack_type, lang)}</td>
-                  <td className="px-2 py-2.5">
-                    <span className="tnum font-mono text-[13px]">{f.num(row.document_count)}</span>
-                    <span className="block font-mono text-[11px] text-muted">
-                      {f.num(Number(row.domains ?? 0))} {t.common.domains}
-                    </span>
-                  </td>
-                  <td className="px-2 py-2.5">
-                    <TrustRing trust={trust} lang={lang} size={40} />
-                  </td>
-                  <td className="px-2 py-2.5 text-[12px] text-soft">{languageLabel(row.language, lang)}</td>
-                  <td className="px-3 py-2.5 font-mono text-[11.5px] text-muted">{f.date(row.last_published_date)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
   );
 }
 
@@ -208,7 +146,7 @@ export function DailyBars({ data, lang, height = 120, accent = "var(--accent)" }
           );
         })}
       </svg>
-      <div className="flex justify-between font-mono text-[10.5px] text-muted">
+      <div className="flex justify-between font-mono text-[11px] text-muted">
         <span>{f.date(data[0].d)}</span>
         <span>max {f.num(max)}</span>
         <span>

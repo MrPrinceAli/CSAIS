@@ -48,7 +48,7 @@ function Publishers({ item, labels, size = 18 }: { item: CoverageItem; labels: L
           </span>
         ),
       )}
-      {item.morePublishers > 0 ? <span className="font-mono text-[11px] text-muted">{labels.more(String(item.morePublishers))}</span> : null}
+      {item.morePublishers > 0 ? <span className="text-[12px] text-muted">{labels.more(String(item.morePublishers))}</span> : null}
     </span>
   );
 }
@@ -119,7 +119,7 @@ export function CoverageFeature({ item, labels, lang, locale }: { item: Coverage
 
         <span className="flex flex-col gap-2">
           <DotHistogram item={item} />
-          <span className="flex flex-wrap items-center justify-between gap-2 font-mono text-[10.5px] text-muted">
+          <span className="flex flex-wrap items-center justify-between gap-2 text-[12px] text-muted">
             <span>{item.firstDate}</span>
             <span className="flex items-center gap-2">
               <span className="inline-block h-2 w-2 rounded-[2px] bg-white shadow-[0_0_0_2px_var(--accent)]" aria-hidden="true" />
@@ -145,7 +145,7 @@ export function CoverageRow({ item, labels, lang, index }: { item: CoverageItem;
       <span className="cov-rank w-[2.2ch] text-[40px]">{String(item.rank).padStart(2, "0")}</span>
       <span className="flex min-w-0 flex-col gap-2">
         <span className="line-clamp-2 text-[14.5px] font-semibold leading-snug">{item.title}</span>
-        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-muted">
+        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px] text-muted">
           <span>{item.type}</span>
           <span>·</span>
           <span>

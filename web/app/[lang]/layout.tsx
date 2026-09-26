@@ -78,7 +78,7 @@ export default async function RootLayout({ children, params }: { children: React
                 {t.brand} <span className="font-normal text-muted">· {t.tagline}</span>
               </span>
               <p className="max-w-[52ch] leading-relaxed text-muted">{t.footer.about}</p>
-              <span className="font-mono text-[11px] text-muted">{t.footer.updated}</span>
+              <span className="text-[12px] text-muted">{t.footer.updated}</span>
             </div>
             <div className="flex flex-col gap-2">
               <span className="label">{t.footer.columns.product}</span>

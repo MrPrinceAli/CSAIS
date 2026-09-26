@@ -144,7 +144,7 @@ export default async function SourcesPage({ params: p, searchParams }: { params:
                   <span className="block h-1.5 overflow-hidden rounded-sm bg-line">
                     <span className="bar-fill block h-full bg-accent" style={{ width: `${Math.max(3, (100 * Number(s.article_count)) / data.max)}%`, "--i": Math.min(i, 24) } as React.CSSProperties} />
                   </span>
-                  <span className="tnum font-mono text-[11.5px] text-muted">
+                  <span className="tnum font-mono text-[12px] text-muted">
                     {f.num(s.article_count)} · {f.date(s.last_seen)}
                   </span>
                 </div>

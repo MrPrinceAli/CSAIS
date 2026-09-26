@@ -41,7 +41,7 @@ export function AttestationSection({ lang }: { lang: Lang }) {
                 </span>
                 <div className="mt-1 flex flex-col gap-0.5">
                   <Signature width={200} />
-                  <span className="font-mono text-[10.5px] text-muted">{t.institutions.signature}</span>
+                  <span className="text-[12px] text-muted">{t.institutions.signature}</span>
                 </div>
               </div>
             </div>

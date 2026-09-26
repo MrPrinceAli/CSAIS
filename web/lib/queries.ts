@@ -340,7 +340,7 @@ export async function getDashboard(f: DashboardFilters) {
   const page = f.page && f.page > 0 ? f.page : 1;
   const base = `FROM v05_incidents i LEFT JOIN articles a ON a.article_id = i.anchor_article_id ${where}`;
   const select = await incidentSelect();
-  const [rows, totalRow, daily, types, countries, kpi] = await Promise.all([
+  const [rows, totalRow, daily, types, countries, kpi, allCountries, multi] = await Promise.all([
     query<IncidentRow>(
       `${select} ${where}
        ORDER BY i.document_count DESC, i.anchor_published_date DESC
@@ -350,7 +350,10 @@ export async function getDashboard(f: DashboardFilters) {
     queryOne<{ n: number }>(`SELECT COUNT(*) AS n ${base}`, args),
     query<{ d: string; n: number }>(`SELECT substr(i.anchor_published_date, 1, 10) AS d, COUNT(*) AS n ${base} GROUP BY d ORDER BY d`, args),
     query<{ t: string; n: number }>(
-      `SELECT LOWER(COALESCE(NULLIF(i.attack_type, ''), 'unknown')) AS t, COUNT(*) AS n ${base} GROUP BY t ORDER BY n DESC LIMIT 8`,
+      // jenis utama = kategori pertama ("ransomware, malware" dihitung sebagai ransomware)
+      `SELECT CASE WHEN instr(x, ',') > 0 THEN trim(substr(x, 1, instr(x, ',') - 1)) ELSE x END AS t, COUNT(*) AS n
+       FROM (SELECT LOWER(COALESCE(NULLIF(i.attack_type, ''), 'unknown')) AS x ${base})
+       GROUP BY t ORDER BY n DESC LIMIT 16`,
       args,
     ),
     query<CountryCount>(`SELECT LOWER(i.location) AS location, COUNT(*) AS n ${base} AND i.location != '' GROUP BY location ORDER BY n DESC LIMIT 8`, args),
@@ -362,6 +365,8 @@ export async function getDashboard(f: DashboardFilters) {
        ${base}`,
       args,
     ),
+    query<CountryCount>(`SELECT LOWER(i.location) AS location, COUNT(*) AS n ${base} AND i.location != '' GROUP BY LOWER(i.location) ORDER BY n DESC`, args),
+    query<{ location: string }>(`SELECT LOWER(i.location) AS location ${base} AND i.location LIKE '%,%' LIMIT 3000`, args),
   ]);
   const total = Number(totalRow?.n ?? 0);
   return {
@@ -374,7 +379,30 @@ export async function getDashboard(f: DashboardFilters) {
     types,
     countries,
     kpi: kpi ?? { total: 0, multi: 0, target_known: 0, indonesia: 0 },
+    allCountries,
+    pairs: countryPairs(multi.map((m) => m.location)),
   };
+}
+
+/** Pasangan negara yang disebut bersama dalam satu incident, terbanyak dulu (bahan busur globe). */
+function countryPairs(locations: string[]): { a: string; b: string; n: number }[] {
+  const counts = new Map<string, number>();
+  for (const value of locations) {
+    const names = [...new Set(value.split(",").map((x) => x.trim()).filter(Boolean))].sort();
+    for (let i = 0; i < names.length; i++) {
+      for (let j = i + 1; j < names.length; j++) {
+        const key = `${names[i]}|${names[j]}`;
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+    }
+  }
+  return [...counts.entries()]
+    .map(([key, n]) => {
+      const [a, b] = key.split("|");
+      return { a, b, n };
+    })
+    .sort((x, y) => y.n - x.n)
+    .slice(0, 24);
 }
 
 export const getAttackTypeOptions = cache(async () => {

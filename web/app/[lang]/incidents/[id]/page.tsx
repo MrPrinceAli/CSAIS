@@ -104,7 +104,8 @@ export default async function IncidentDetail({ params }: { params: Promise<Param
   // artikel paling awal (incident lanjutan dirangkai ke incident lama).
   const dates = [incident.anchor_published_date, ...docs.map((d) => d.published_date)].filter((v): v is string => Boolean(v));
   const firstSeen = dates.reduce((a, b) => (new Date(b) < new Date(a) ? b : a), dates[0] ?? "");
-  const lastSeen = [incident.last_published_date, ...docs.map((d) => d.published_date)].filter((v): v is string => Boolean(v)).reduce((a, b) => (new Date(b) > new Date(a) ? b : a), "");
+  const lastDates = [incident.last_published_date, ...docs.map((d) => d.published_date)].filter((v): v is string => Boolean(v));
+  const lastSeen = lastDates.reduce((a, b) => (new Date(b) > new Date(a) ? b : a), lastDates[0] ?? "");
 
   /** Satu artikel dalam kronologi; peran hanya ditulis bila bukan "independen". */
   const renderRow = ({ d, i }: Row) => {
@@ -120,8 +121,8 @@ export default async function IncidentDetail({ params }: { params: Promise<Param
           <span className={`relative mt-1.5 h-2.5 w-2.5 rounded-full ${dot}`} aria-hidden="true" />
         </span>
         <div className="flex min-w-0 flex-col gap-1">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-muted">
-            <span>{f.clock(d.published_date)}</span>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-muted">
+            <span className="font-mono">{f.clock(d.published_date)}</span>
             {hours !== null && i > 0 ? <span>{t.detail.hoursAfter(hours)}</span> : null}
             {!quiet ? <span className={i === 0 ? "text-accent" : "text-soft"}>{role}</span> : null}
             {d.content_status === "ok" ? <span className="text-chain">{t.detail.fullText}</span> : null}
@@ -159,7 +160,7 @@ export default async function IncidentDetail({ params }: { params: Promise<Param
               {f.dateLong(day.rows[0].d.published_date)}
               {continued ? <span className="font-normal text-muted"> · {t.detail.continued}</span> : null}
             </span>
-            <span className="font-mono text-[11px] text-muted">{t.detail.dayCount(f.num(day.rows.length))}</span>
+            <span className="text-[12px] text-muted">{t.detail.dayCount(f.num(day.rows.length))}</span>
           </h3>
           <ol className="flex flex-col">{rows.map(renderRow)}</ol>
         </section>
