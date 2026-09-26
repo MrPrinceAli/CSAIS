@@ -112,7 +112,7 @@ export function IncidentCard({ row, lang, index = 0, thumb = false }: { row: Inc
       style={{ "--i": index } as React.CSSProperties}
     >
       <SeverityBar level={level} lang={lang} className={thumb ? "h-14" : "h-11"} />
-      {thumb ? <IncidentThumb src={row.image_url} attackType={row.attack_type} className="aspect-[4/3] w-full" /> : null}
+      {thumb ? <IncidentThumb id={row.incident_id} attackType={row.attack_type} className="aspect-[4/3] w-full" /> : null}
       <span className="flex min-w-0 flex-col gap-1.5">
         <span className={`text-[14px] font-semibold ${thumb ? "line-clamp-2 leading-snug" : "truncate"}`}>{incidentTitle(row.title)}</span>
         <span className="flex min-w-0 items-center gap-2">

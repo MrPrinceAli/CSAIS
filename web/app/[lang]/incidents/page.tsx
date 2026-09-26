@@ -305,7 +305,7 @@ export default async function IncidentsPage({ params: p, searchParams }: { param
                     scroll={false}
                     className="row-link grid grid-cols-[52px_minmax(0,1fr)] items-start gap-2.5 rounded-md border border-line bg-[rgba(7,12,18,0.6)] p-2 hover:border-accent"
                   >
-                    <IncidentThumb src={row.image_url} attackType={row.attack_type} className="aspect-square w-full" />
+                    <IncidentThumb id={row.incident_id} attackType={row.attack_type} className="aspect-square w-full" />
                     <span className="flex min-w-0 flex-col gap-1">
                       <span className="line-clamp-2 text-[13px] font-semibold leading-snug">{incidentTitle(row.title)}</span>
                       <span className="truncate text-[12px] text-muted">

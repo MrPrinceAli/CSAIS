@@ -53,19 +53,20 @@ export function glyphFor(attackType: string | null | undefined): Glyph {
 }
 
 /**
- * Gambar incident: og:image salah satu artikelnya bila ada, di atas ubin grafis
- * bernada jenis serangan. Gambar yang gagal dimuat menghilang sehingga ubinnya
- * tetap terlihat; dengan begitu setiap kartu selalu bergambar.
+ * Foto berita incident (og:image salah satu artikelnya, lewat route
+ * /api/incident-image) di atas ubin bernada jenis serangan. Ubin hanya
+ * terlihat selama foto dimuat atau bila tidak ada artikel yang gambarnya
+ * bisa ditarik.
  */
-export function IncidentThumb({ src, attackType, className = "" }: { src?: string | null; attackType: string | null; className?: string }) {
+export function IncidentThumb({ id, attackType, className = "" }: { id: string; attackType: string | null; className?: string }) {
   const glyph = glyphFor(attackType);
-  const url = src ? src.replace(/&amp;/g, "&") : null;
+  const url = `/api/incident-image/${encodeURIComponent(id)}`;
   return (
     <span className={`inc-thumb ${className}`} style={{ "--tone": glyph.tone } as React.CSSProperties} aria-hidden="true">
       <svg viewBox="0 0 24 24" className="inc-thumb-glyph" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
         <path d={glyph.d} />
       </svg>
-      {url ? <SafeImage src={url} alt="" fill unoptimized referrerPolicy="no-referrer" sizes="112px" className="object-cover" /> : null}
+      <SafeImage src={url} alt="" fill unoptimized referrerPolicy="no-referrer" sizes="112px" className="object-cover" />
     </span>
   );
 }

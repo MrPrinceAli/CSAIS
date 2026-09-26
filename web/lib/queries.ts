@@ -22,7 +22,6 @@ export type IncidentRow = {
   domains: number | null;
   independence: number | null;
   domain_list: string | null; // domain sumber dipisah koma (untuk tumpukan logo)
-  image_url: string | null; // og:image salah satu artikel (artikel jangkar lebih dulu)
 } & StoredTrust;
 
 /* --- Keberadaan tabel ---
@@ -99,13 +98,7 @@ const NO_TRUST_COLUMNS = `NULL AS trust_score, NULL AS trust_level, NULL AS trus
 
 /** SELECT incident beserta skor V0.7 bila tabel v07_trust sudah diterbitkan. */
 async function incidentSelect(): Promise<string> {
-  const [withTrust, withImage] = await Promise.all([hasTable("v07_trust"), hasColumn("articles", "image_url")]);
-  const image = withImage
-    ? `COALESCE(
-        (SELECT g.image_url FROM articles g WHERE g.article_id = i.anchor_article_id),
-        (SELECT g.image_url FROM v05_incident_documents gd JOIN articles g ON g.article_id = gd.article_id
-         WHERE gd.incident_id = i.incident_id AND g.image_url IS NOT NULL LIMIT 1))`
-    : "NULL";
+  const withTrust = await hasTable("v07_trust");
   return `
   SELECT i.incident_id, i.attack_type, i.target, i.threat_actor, i.location, i.attack_date,
          i.document_count, i.incident_confidence, i.anchor_article_id, i.anchor_published_date,
@@ -113,7 +106,6 @@ async function incidentSelect(): Promise<string> {
          (SELECT COUNT(DISTINCT e.source_domain) FROM v06_evidence e WHERE e.incident_id = i.incident_id) AS domains,
          (SELECT AVG(e.evidence_independence_score) FROM v06_evidence e WHERE e.incident_id = i.incident_id) AS independence,
          (SELECT GROUP_CONCAT(DISTINCT e.source_domain) FROM v06_evidence e WHERE e.incident_id = i.incident_id AND e.source_domain != '' AND e.source_domain NOT LIKE '%google.%') AS domain_list,
-         ${image} AS image_url,
          ${withTrust ? TRUST_COLUMNS : NO_TRUST_COLUMNS}
   FROM v05_incidents i
   LEFT JOIN articles a ON a.article_id = i.anchor_article_id
