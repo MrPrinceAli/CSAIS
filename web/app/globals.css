@@ -335,24 +335,39 @@ button:focus-visible {
 }
 
 /* ==========================================================================
-   Cara kerja: lima adegan scroll-driven, masing-masing dengan teknik berbeda.
-   .scene tingginya beberapa layar; .scene-pin menempel di bawah header selama
-   adegan digulir. components/scroll-scenes.tsx hanya mengisi --p (0..1) per
-   adegan; seluruh gerak dihitung CSS dari --p (calc, clamp, @property,
-   clip-path, 3D preserve-3d, mix-blend-mode, conic-gradient, counter).
+   Cara kerja: lima adegan scroll-driven, masing-masing dengan teknik berbeda,
+   ditumpuk dalam satu panggung yang menempel di bawah header.
+   components/scroll-scenes.tsx hanya mengisi --p, --enter, --exit per adegan;
+   seluruh gerak dihitung CSS (calc, clamp, @property, clip-path, 3D
+   preserve-3d, mix-blend-mode, conic-gradient, counter).
    ========================================================================== */
 @property --score { syntax: "<integer>"; inherits: false; initial-value: 0; }
 
 :root { --hdr: 56px; }
 body { overflow-x: clip; }
 .bleed { width: 100vw; margin-left: calc(50% - 50vw); }
-.scene { --p: 1; position: relative; }
-.scene-pin { position: sticky; top: var(--hdr); height: calc(100vh - var(--hdr)); height: calc(100svh - var(--hdr)); overflow: hidden; isolation: isolate; }
-.scene-1 { height: 230vh; }
-.scene-2 { height: 320vh; }
-.scene-3 { height: 270vh; }
-.scene-4 { height: 240vh; }
-.scene-5 { height: 270vh; }
+
+/* Satu panggung menempel untuk kelima adegan. ScrollScenes mengisi per adegan
+   --p (gerak di dalam adegan), --enter (0..1 masuk) dan --exit (0..1 keluar);
+   adegan di luar jendelanya diberi data-off agar tidak dilukis. */
+.scenes { position: relative; }
+.scenes-pin { position: sticky; top: var(--hdr); height: calc(100vh - var(--hdr)); height: calc(100svh - var(--hdr)); overflow: hidden; isolation: isolate; background: var(--bg); }
+.scene { --p: 1; --enter: 1; --exit: 0; position: absolute; inset: 0; will-change: transform, opacity; }
+.scene[data-off] { visibility: hidden; }
+.scene-frame { position: absolute; inset: 0; overflow: hidden; isolation: isolate; }
+.scene-dim::after { content: ""; position: absolute; inset: 0; background: #000; opacity: calc(var(--exit) * 0.6); pointer-events: none; z-index: 2; }
+.scenes-progress { position: absolute; left: 0; right: 0; top: 0; z-index: 10; display: grid; gap: 3px; pointer-events: none; }
+.scenes-progress > i { position: relative; display: block; height: 2px; overflow: hidden; background: rgba(255, 255, 255, 0.08); }
+.scenes-progress > i::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, var(--accent), var(--chain)); transform-origin: left; transform: scaleX(var(--f, 0)); }
+
+/* Transisi antaradegan, berbeda di setiap sambungan:
+   1→2 menyelam ke cincin incident; 2→3 dorongan horizontal searah rel;
+   3→4 bukaan lingkaran (iris) dari arah cincin skor; 4→5 tirai diagonal. */
+.s1 { transform-origin: 68% 52%; transform: scale(calc(1 + var(--exit) * 0.75)); opacity: clamp(0, 1 - var(--exit) * 1.7, 1); }
+.s2 { transform-origin: 68% 52%; transform: scale(calc(0.84 + var(--enter) * 0.16)) translateX(calc(var(--exit) * -30%)); opacity: clamp(0, (var(--enter) - 0.35) * 1.6, 1); }
+.s3 { transform: translateX(calc((1 - var(--enter)) * 100%)) scale(calc(1 - var(--exit) * 0.07)); box-shadow: -40px 0 80px -20px rgba(0, 0, 0, calc(0.8 * (1 - var(--enter)))); }
+.s4 { clip-path: circle(calc(var(--enter) * 150%) at 26% 64%); transform: translateY(calc(var(--exit) * -8%)) scale(calc(1 - var(--exit) * 0.05)); }
+.s5 { clip-path: polygon(0 calc(125% - var(--enter) * 150%), 100% calc(100% - var(--enter) * 150%), 100% 100%, 0 100%); }
 
 /* 01 Konvergensi 3D: kartu tersebar dalam ruang, menyatu jadi satu incident. */
 .s1 {
@@ -399,7 +414,7 @@ body { overflow-x: clip; }
 
 /* 02 Rel horizontal: gulir vertikal menggeser rel; hash berputar seperti mesin slot. */
 .s2 { background: #05080c; }
-.s2 .scene-pin::before {
+.s2 .scene-frame::before {
   content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
   background:
     repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.028) 0 1px, transparent 1px 3px),
@@ -520,8 +535,11 @@ body { overflow-x: clip; }
 .s5-glow { opacity: var(--flip); }
 
 @media (prefers-reduced-motion: reduce) {
-  .scene { height: auto !important; --p: 1 !important; }
-  .scene-pin { position: relative; top: 0; height: auto; min-height: 640px; }
+  .scenes { height: auto !important; }
+  .scenes-pin { position: relative; top: 0; height: auto; overflow: visible; }
+  .scenes-progress { display: none; }
+  .scene { position: relative; inset: auto; --p: 1 !important; --enter: 1 !important; --exit: 0 !important; transform: none !important; opacity: 1 !important; clip-path: none !important; }
+  .scene-frame { position: relative; inset: auto; min-height: 640px; }
   .s2-track { transform: none; flex-wrap: wrap; width: auto; }
   .s1-ring::before, .s3-ticks, .s4-sweep { animation: none; }
 }

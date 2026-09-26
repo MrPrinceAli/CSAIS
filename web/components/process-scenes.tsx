@@ -1,7 +1,9 @@
 /**
- * Lima adegan "Cara kerja". Komponen server: hanya markup dan variabel CSS;
- * gerak dihitung CSS dari --p yang diisi ScrollScenes. Setiap adegan memakai
- * teknik berbeda (lihat blok "Cara kerja" di app/globals.css).
+ * Lima adegan "Cara kerja". Komponen server: hanya markup dan variabel CSS.
+ * Kelimanya ditumpuk dalam satu panggung yang menempel (ScrollScenes); gerak
+ * di dalam adegan dihitung CSS dari --p, dan pergantian antaradegan dari
+ * --enter/--exit. Setiap adegan memakai teknik berbeda (lihat blok
+ * "Cara kerja" di app/globals.css).
  */
 import type { getDict } from "@/lib/i18n";
 import { SourceLogo } from "@/components/ui";
@@ -54,8 +56,8 @@ const TAGS: [number, number][] = [
 export function SceneCluster({ step, index, total, aiTag, data }: Common & { data: ClusterData }) {
   const words = step.text.split(/\s+/).filter(Boolean);
   return (
-    <section data-scene className="scene scene-1 bleed s1">
-      <div className="scene-pin">
+    <section data-scene className="scene s1">
+      <div className="scene-frame">
         <div className="s1-floor" aria-hidden="true" />
         <div className="relative mx-auto grid h-full max-w-7xl grid-rows-[auto_minmax(0,1fr)] gap-4 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:grid-rows-1 lg:items-center lg:gap-10">
           <div className="relative z-10 flex flex-col gap-4">
@@ -138,8 +140,8 @@ export function SceneEvidence({ step, index, total, aiTag, labels, data }: Commo
     <path key={key} d={`M${x1} ${y1} L${x2} ${y2}`} pathLength={1} className="s2-edge" fill="none" stroke={hl ? "var(--chain)" : "var(--line-2)"} strokeWidth={hl ? 2.2 : 1.4} style={sv({ "--o": o })} />
   );
   return (
-    <section data-scene className="scene scene-2 bleed s2">
-      <div className="scene-pin flex flex-col">
+    <section data-scene className="scene scene-dim s2">
+      <div className="scene-frame flex flex-col">
         <div className="relative z-10 mx-auto flex w-full max-w-7xl flex-col gap-3 px-4 pt-6 sm:px-6">
           <Meta index={index} total={total} tag={step.tag} aiTag={aiTag} />
           <h3 className="s2-title font-mono text-[24px] font-semibold leading-tight tracking-tight sm:text-[38px]">{step.title}</h3>
@@ -285,8 +287,8 @@ export function SceneTrust({ step, index, total, aiTag, labels, data }: Common &
     vars[`--c${i}`] = `clamp(0, (var(--p) - ${(0.05 + i * 0.16).toFixed(2)}) / 0.16, 1)`;
   });
   return (
-    <section data-scene className="scene scene-3 bleed s3" style={sv(vars)}>
-      <div className="scene-pin">
+    <section data-scene className="scene scene-dim s3" style={sv(vars)}>
+      <div className="scene-frame">
         <div className="mx-auto grid h-full max-w-7xl content-center gap-6 px-4 py-6 sm:px-6 lg:grid-cols-2 lg:items-center lg:gap-14">
           <div className="flex flex-col gap-4">
             <Meta index={index} total={total} tag={step.tag} aiTag={aiTag} />
@@ -353,8 +355,8 @@ export function SceneRisk({ step, index, total, aiTag, labels, data }: Common & 
     }),
   );
   return (
-    <section data-scene className="scene scene-4 bleed s4">
-      <div className="scene-pin">
+    <section data-scene className="scene scene-dim s4">
+      <div className="scene-frame">
         <div className="s4-reveal" aria-hidden="true">
           <div className="s4-rings" />
           <div className="s4-sweep" />
@@ -424,8 +426,8 @@ export function ScenePackage({ step, index, total, aiTag, labels, data }: Common
   const chars = Array.from(step.title);
   const layer = (i: number, z: number) => sv({ "--i": i, "--z": `${z}px` });
   return (
-    <section data-scene className="scene scene-5 bleed s5">
-      <div className="scene-pin">
+    <section data-scene className="scene s5">
+      <div className="scene-frame">
         <div className="mx-auto grid h-full max-w-7xl grid-rows-[auto_minmax(0,1fr)] gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:grid-rows-1 lg:items-center">
           <div className="flex flex-col gap-4 lg:order-2">
             <Meta index={index} total={total} tag={step.tag} aiTag={aiTag} />

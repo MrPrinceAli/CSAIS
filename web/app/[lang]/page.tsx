@@ -73,6 +73,9 @@ function riskLevel(g: GroupStat): "high" | "medium" | "low" {
 
 const LEVEL_COLOR = { high: "var(--crit)", medium: "var(--high)", low: "var(--med)" } as const;
 
+/** Panjang gulir relatif tiap adegan "Cara kerja" (rel bukti paling panjang). */
+const SCENE_WEIGHTS = [1, 1.4, 1.2, 1, 1.2];
+
 async function processData(lang: Lang, featuredId: string | null, riskGroups: GroupStat[], batches: number) {
   const t = getDict(lang);
   const f = formatters(lang);
@@ -334,7 +337,7 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
           <h2 className="text-[22px] font-semibold">{t.home.processTitle}</h2>
           <span className="text-[13px] text-muted">{t.home.processNote}</span>
         </div>
-        <ScrollScenes>
+        <ScrollScenes weights={SCENE_WEIGHTS}>
           <SceneCluster {...common} step={steps[0]} index={0} data={scenes.cluster} />
           <SceneEvidence {...common} step={steps[1]} index={1} data={scenes.evidence} />
           <SceneTrust {...common} step={steps[2]} index={2} data={scenes.trust} />
