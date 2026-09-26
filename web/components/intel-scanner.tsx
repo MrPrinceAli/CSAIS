@@ -147,7 +147,7 @@ export function IntelScanner({ items, labels, stamp, reduceMotion = false }: { i
       {/* antrean artikel berikutnya */}
       <div className="flex flex-col gap-1.5" aria-hidden="true">
         {[after, next].map((q, i) => (
-          <div key={`${q.incident_id}-${i}`} className="truncate rounded-md border border-line/70 bg-bg/60 px-3 py-1.5 text-[12px] text-muted" style={{ opacity: 0.35 + i * 0.25 }}>
+          <div key={`${q.incident_id}-${i}`} className="h-8 truncate rounded-md border border-line/70 bg-bg/60 px-3 py-1.5 text-[12px] leading-[1.35] text-muted" style={{ opacity: 0.35 + i * 0.25 }}>
             {q.title}
           </div>
         ))}
@@ -160,10 +160,10 @@ export function IntelScanner({ items, labels, stamp, reduceMotion = false }: { i
           <span className="truncate">{item.domain}</span>
           <span>{item.date}</span>
         </div>
-        <p className="text-[14.5px] font-semibold leading-snug">
+        <p className="line-clamp-2 min-h-[2.7em] text-[14.5px] font-semibold leading-snug">
           <Highlighted item={item} />
         </p>
-        <div className={`mt-3 flex flex-wrap gap-1.5 ${stage >= 2 ? "" : "invisible"}`}>
+        <div className={`mt-3 flex min-h-[26px] flex-wrap gap-1.5 overflow-hidden ${stage >= 2 ? "" : "invisible"}`}>
           {[
             { k: "type", label: labels.type, value: item.attackLabel, cls: "" },
             { k: "target", label: labels.target, value: item.target ?? "—", cls: "chip-accent" },
@@ -188,8 +188,8 @@ export function IntelScanner({ items, labels, stamp, reduceMotion = false }: { i
         </div>
       </div>
 
-      {/* log terminal */}
-      <div className="flex flex-col gap-0.5 font-mono text-[11px]">
+      {/* log terminal: tinggi tetap empat baris agar panel tidak berubah ukuran */}
+      <div className="flex min-h-[4.6em] flex-col gap-0.5 font-mono text-[11px] leading-[1.15]">
         {logs.map((l, i) => (
           <span key={l.k} className={`${l.tone} ${animate ? "fade-up" : ""} truncate`} style={{ "--i": 0 } as React.CSSProperties}>
             <span className="text-line-2">{String(i + 1).padStart(2, "0")}</span> {l.text}

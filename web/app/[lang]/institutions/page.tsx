@@ -3,7 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDict, isLang, L } from "@/lib/i18n";
 import { Reveal } from "@/components/reveal";
-import { Seal, Signature } from "@/components/seal";
+import { OrgLogo } from "@/components/org-logo";
+import { Signature } from "@/components/seal";
 
 export async function generateMetadata({ params }: { params: Promise<{ lang: string }> }): Promise<Metadata> {
   const { lang } = await params;
@@ -36,7 +37,7 @@ export default async function InstitutionsPage({ params }: { params: Promise<{ l
         <section className="grid gap-3 sm:grid-cols-2">
           {t.institutions.orgs.map((m, i) => (
             <div key={m.org} className="card lift fade-up grid grid-cols-[auto_minmax(0,1fr)] gap-4 p-4" style={{ "--i": i * 2, borderTopColor: "var(--chain)", borderTopWidth: 2 } as React.CSSProperties}>
-              <Seal org={m.org} />
+              <OrgLogo org={m.org} size={64} />
               <div className="flex min-w-0 flex-col gap-1.5">
                 <span className="text-[16px] font-semibold">{m.org}</span>
                 <span className="text-[13px] text-soft">

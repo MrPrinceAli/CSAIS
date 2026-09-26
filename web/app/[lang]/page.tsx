@@ -7,7 +7,7 @@ import { attackLabel, getDict, isLang, L, languageLabel } from "@/lib/i18n";
 import { CountUp, Reveal } from "@/components/reveal";
 import { IntelScanner, type ScanItem } from "@/components/intel-scanner";
 import { PipelineFlow } from "@/components/pipeline-flow";
-import { Seal } from "@/components/seal";
+import { OrgLogo, ORGS } from "@/components/org-logo";
 import { DailyBars, IncidentCard, LabelBars, SectionTitle, Stat } from "@/components/ui";
 
 export const revalidate = 3600;
@@ -54,10 +54,13 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
       {/* Pembuka: judul berstabilo + panel pemindai artikel sungguhan */}
       <section className="grid items-start gap-8 pt-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.95fr)] lg:pt-8">
         <Reveal className="flex flex-col gap-5">
-          <span className="label inline-flex items-center gap-2 text-accent">
-            <span className="led led-accent" aria-hidden="true" />
-            {t.home.eyebrow}
-          </span>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="label inline-flex items-center gap-2 text-accent">
+              <span className="led led-accent" aria-hidden="true" />
+              {t.brand}
+            </span>
+            <span className="text-[13.5px] font-medium text-soft">{t.tagline}</span>
+          </div>
           <h1 className="max-w-[22ch] text-balance text-[34px] font-semibold leading-[1.12] sm:text-[42px]">
             {t.home.title.before}
             <span className="mark">{t.home.title.mark}</span>
@@ -72,36 +75,23 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
               {t.home.ctaSecondary}
             </Link>
           </div>
-          <dl className="grid grid-cols-3 gap-4 border-t border-line pt-4">
-            {[
-              { label: t.home.metrics.incidents, value: Number(overview.incident), cls: "" },
-              { label: t.home.metrics.articles, value: Number(overview.artikel), cls: "" },
-              { label: t.home.metrics.evidence, value: Number(overview.bukti), cls: "text-chain" },
-            ].map((m) => (
-              <div key={m.label} className="flex flex-col">
-                <dd className="order-1">
-                  <CountUp value={m.value} locale={locale} className={`text-[24px] font-semibold leading-tight ${m.cls}`} />
-                </dd>
-                <dt className="label order-2">{m.label}</dt>
-              </div>
-            ))}
-          </dl>
+          <span className="label pt-1 text-muted">{t.home.eyebrow}</span>
         </Reveal>
         <div className="flex flex-col gap-2">
           <IntelScanner items={scanItems} labels={t.home.scanner} stamp={version ? `pipeline ${version}` : ""} />
           <span className="text-[11.5px] text-muted">{t.home.scanner.note}</span>
         </div>
       </section>
-      <div className="hairline -mt-8" aria-hidden="true" />
+      <div className="hairline -mt-6" aria-hidden="true" />
 
       {/* Instrumen: empat angka dan volume harian */}
       <Reveal>
         <section className="flex flex-col gap-3">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Stat label={t.home.metrics.incidents} value={f.num(overview.incident)} note={t.home.metricNotes.incidents(f.num(overview.incident_30))} tone="accent" live />
-            <Stat label={t.home.metrics.articles} value={f.num(overview.artikel)} note={t.home.metricNotes.articles(f.num(overview.sumber))} />
-            <Stat label={t.home.metrics.corroborated} value={f.num(overview.multi_all)} note={t.home.metricNotes.corroborated} tone="good" />
-            <Stat label={t.home.metrics.evidence} value={f.num(overview.bukti)} note={t.home.metricNotes.evidence} tone="chain" />
+            <Stat label={t.home.metrics.incidents} value={<CountUp value={Number(overview.incident)} locale={locale} />} note={t.home.metricNotes.incidents(f.num(overview.incident_30))} tone="accent" live />
+            <Stat label={t.home.metrics.articles} value={<CountUp value={Number(overview.artikel)} locale={locale} />} note={t.home.metricNotes.articles(f.num(overview.sumber))} />
+            <Stat label={t.home.metrics.corroborated} value={<CountUp value={Number(overview.multi_all)} locale={locale} />} note={t.home.metricNotes.corroborated} tone="good" />
+            <Stat label={t.home.metrics.evidence} value={<CountUp value={Number(overview.bukti)} locale={locale} />} note={t.home.metricNotes.evidence} tone="chain" />
           </div>
           <div className="card p-4 sm:p-5">
             <SectionTitle aside={t.home.volumeNote}>{t.home.volumeTitle}</SectionTitle>
@@ -167,10 +157,10 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
           <div className="card lift flex flex-col gap-3 p-5" style={{ borderTopColor: "var(--chain)", borderTopWidth: 2 }}>
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-[18px] font-semibold">{t.home.institutionsTitle}</h2>
-              <div className="hidden gap-1 sm:flex">
-                {["BSSN", "OJK", "Polri", "Komdigi"].map((org, i) => (
+              <div className="hidden gap-2 sm:flex">
+                {ORGS.map((org, i) => (
                   <span key={org} className="fade-up" style={{ "--i": i * 2 } as React.CSSProperties}>
-                    <Seal org={org} size={56} />
+                    <OrgLogo org={org} size={40} />
                   </span>
                 ))}
               </div>
