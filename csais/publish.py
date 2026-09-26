@@ -18,7 +18,7 @@ from concurrent.futures import ThreadPoolExecutor
 import requests
 
 from csais.db import get_connection, get_timestamp
-from csais.schema import record_run
+from csais.schema import ensure_content_columns, record_run
 
 CHUNK_ROWS = 2000  # baris per permintaan HTTP (satu transaksi)
 ROWS_PER_STATEMENT = 100  # baris per statement INSERT multi-baris
@@ -33,7 +33,7 @@ PUBLISH_TABLES = {
         """
         SELECT article_id, article_uid, article_url, resolved_url, title, summary,
                language, published_date, source_name, source_type, syndicated_of,
-               content_status, content_sha256, content_fetched_at
+               content_status, content_sha256, content_fetched_at, image_url
         FROM articles
         WHERE article_id IN (SELECT article_id FROM v05_incident_documents)
         """,
@@ -198,6 +198,13 @@ def publish_all(client=None, tables=None, log=print, workers=WORKERS):
     auth_token = os.environ.get("TURSO_AUTH_TOKEN")
     if client is None:
         TursoClient(database_url, auth_token)  # validasi kredensial lebih awal
+    conn = get_connection()
+    try:
+        ensure_content_columns(conn)  # kolom articles yang dipilih SELECT harus ada
+    except sqlite3.OperationalError:
+        pass  # tabel articles belum ada (database kosong); tabel itu akan dilewati
+    finally:
+        conn.close()
     started_at = get_timestamp()
     items = list((tables or PUBLISH_TABLES).items())
 

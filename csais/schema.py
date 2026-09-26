@@ -65,6 +65,7 @@ def ensure_content_columns(conn):
         ("content_status", "TEXT"),
         ("content_sha256", "TEXT"),
         ("content_fetched_at", "TEXT"),
+        ("image_url", "TEXT"),  # og:image artikel, untuk kartu berita di web
     ):
         ensure_column(conn, "articles", column, definition)
 

@@ -20,11 +20,12 @@ pembuka tautan Google News dibatasi) dicoba lagi setelah RETRY_AFTER_DAYS.
 """
 
 import hashlib
+import re
 import random
 import time
 from datetime import datetime, timedelta, timezone
 from urllib import robotparser
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 
 import requests
 import trafilatura
@@ -101,10 +102,41 @@ def resolve_google_news_url(url):
     return None
 
 
+_META_TAG = re.compile(r"<meta\b[^>]*>", re.I)
+_META_KEY = re.compile(r"""(?:property|name)\s*=\s*["']([^"']+)["']""", re.I)
+_META_CONTENT = re.compile(r"""content\s*=\s*["']([^"']+)["']""", re.I)
+_IMAGE_KEYS = (
+    "og:image", "og:image:url", "og:image:secure_url", "twitter:image", "twitter:image:src",
+)
+
+
+def extract_image_url(html, base_url):
+    """URL gambar utama artikel dari tag meta Open Graph/Twitter; None bila tidak ada.
+
+    Dipakai kartu berita di web. URL relatif dijadikan absolut terhadap halaman;
+    hanya http(s) yang diterima.
+    """
+    found = {}
+    for tag in _META_TAG.findall(html or ""):
+        key = _META_KEY.search(tag)
+        if not key or key.group(1).lower() not in _IMAGE_KEYS:
+            continue
+        content = _META_CONTENT.search(tag)
+        if not content:
+            continue
+        url = urljoin(base_url or "", content.group(1).strip())
+        if url.startswith(("http://", "https://")):
+            found.setdefault(key.group(1).lower(), url[:1000])
+    for key in _IMAGE_KEYS:  # og:image lebih diutamakan daripada twitter:image
+        if key in found:
+            return found[key]
+    return None
+
+
 def fetch_article_text(url):
-    """(status, teks) untuk satu URL media."""
+    """(status, teks, url gambar) untuk satu URL media."""
     if not robots_allows(url):
-        return "robots", None
+        return "robots", None, None
     polite_delay(url)
     try:
         response = requests.get(
@@ -113,19 +145,20 @@ def fetch_article_text(url):
             timeout=REQUEST_TIMEOUT,
         )
     except requests.RequestException:
-        return "error", None
+        return "error", None, None
     if response.status_code in (401, 403, 429, 451):
-        return "blocked", None
+        return "blocked", None, None
     if response.status_code >= 400:
-        return "error", None
+        return "error", None, None
     html = response.text
+    image_url = extract_image_url(html, response.url or url)
     text = trafilatura.extract(html, include_comments=False, include_tables=False) or ""
     text = text.strip()
     if any(marker in text.lower()[:200] for marker in BLOCKED_MARKERS):
-        return "blocked", None
+        return "blocked", None, None
     if len(text) < MIN_CONTENT_CHARS:
-        return "empty", None
-    return "ok", text[:MAX_CONTENT_CHARS]
+        return "empty", None, image_url
+    return "ok", text[:MAX_CONTENT_CHARS], image_url
 
 
 # --- Database ---
@@ -152,28 +185,29 @@ def get_pending(conn, budget):
     return cursor.fetchall()
 
 
-def save_result(conn, article_id, resolved_url, status, text):
+def save_result(conn, article_id, resolved_url, status, text, image_url=None):
     """Simpan hasil pengambilan satu artikel."""
     sha256 = hashlib.sha256(text.encode("utf-8")).hexdigest() if text else None
     conn.execute(
         """
         UPDATE articles
         SET content = ?, resolved_url = ?, content_status = ?,
-            content_sha256 = ?, content_fetched_at = ?
+            content_sha256 = ?, content_fetched_at = ?,
+            image_url = COALESCE(?, image_url)
         WHERE article_id = ?
         """,
-        (text, resolved_url, status, sha256, get_timestamp(), article_id),
+        (text, resolved_url, status, sha256, get_timestamp(), image_url, article_id),
     )
 
 
 def fetch_one(conn, article_id, article_url):
-    """Buka tautan, ambil teks, simpan; kembalikan status."""
+    """Buka tautan, ambil teks dan gambar utama, simpan; kembalikan status."""
     resolved_url = resolve_google_news_url(article_url)
     if resolved_url is None:
         save_result(conn, article_id, None, "unresolved", None)
         return "unresolved"
-    status, text = fetch_article_text(resolved_url)
-    save_result(conn, article_id, resolved_url, status, text)
+    status, text, image_url = fetch_article_text(resolved_url)
+    save_result(conn, article_id, resolved_url, status, text, image_url)
     return status
 
 
