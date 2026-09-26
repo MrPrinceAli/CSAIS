@@ -100,6 +100,11 @@ export default async function IncidentDetail({ params }: { params: Promise<Param
   const firstUid = docs.find((d) => d.evidence_uid)?.evidence_uid ?? "";
   const firstTs = docs[0]?.published_date ? new Date(docs[0].published_date).getTime() : 0;
   const days = groupByDay(docs, (v) => f.dayKey(v));
+  // Tanggal dari artikel sendiri: artikel jangkar bisa terbit lebih lambat dari
+  // artikel paling awal (incident lanjutan dirangkai ke incident lama).
+  const dates = [incident.anchor_published_date, ...docs.map((d) => d.published_date)].filter((v): v is string => Boolean(v));
+  const firstSeen = dates.reduce((a, b) => (new Date(b) < new Date(a) ? b : a), dates[0] ?? "");
+  const lastSeen = [incident.last_published_date, ...docs.map((d) => d.published_date)].filter((v): v is string => Boolean(v)).reduce((a, b) => (new Date(b) > new Date(a) ? b : a), "");
 
   /** Satu artikel dalam kronologi; peran hanya ditulis bila bukan "independen". */
   const renderRow = ({ d, i }: Row) => {
@@ -184,10 +189,10 @@ export default async function IncidentDetail({ params }: { params: Promise<Param
           <h1 className="text-balance text-[26px] font-semibold leading-tight">{incidentTitle(incident.title)}</h1>
           <div className="flex flex-wrap gap-x-5 gap-y-1 text-[13px] text-soft">
             <span>
-              {t.detail.firstSeen} <b className="font-medium text-fg">{f.dateTime(incident.anchor_published_date)}</b>
+              {t.detail.firstSeen} <b className="font-medium text-fg">{f.dateTime(firstSeen || null)}</b>
             </span>
             <span>
-              {t.detail.latest} <b className="font-medium text-fg">{f.date(incident.last_published_date)}</b>
+              {t.detail.latest} <b className="font-medium text-fg">{f.date(lastSeen || null)}</b>
             </span>
             <span>
               <b className="font-medium text-fg">{f.num(docs.length)}</b> {t.common.articles} · <b className="font-medium text-fg">{f.num(publishers.size)}</b> {t.detail.publishers}

@@ -298,10 +298,6 @@ export function SourceLogo({ domain, size = 24 }: { domain: string; size?: numbe
   );
 }
 
-export function Empty({ children }: { children: ReactNode }) {
-  return <div className="card px-4 py-6 text-[13.5px] text-muted">{children}</div>;
-}
-
 export function TrustLegend({ lang }: { lang: Lang }) {
   return <p className="max-w-[100ch] text-[12px] leading-relaxed text-muted">{getDict(lang).trust.legend}</p>;
 }

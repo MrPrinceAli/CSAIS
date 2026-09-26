@@ -1,20 +1,4 @@
-/**
- * Segel lembaga: cincin putus-putus berputar pelan, inisial di tengah, dan
- * garis tanda tangan yang menggambar dirinya (lambang atestasi EIP-712).
- */
-export function Seal({ org, size = 84 }: { org: string; size?: number }) {
-  const c = size / 2;
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={org}>
-      <circle cx={c} cy={c} r={c - 3} fill="none" stroke="var(--chain)" strokeWidth="1.5" strokeDasharray="4 5" className="seal-ring" opacity="0.8" />
-      <circle cx={c} cy={c} r={c - 12} fill="var(--nav)" stroke="var(--line-2)" strokeWidth="1" />
-      <text x={c} y={c} dy="0.36em" textAnchor="middle" fontSize={org.length > 4 ? 13 : 15} fontWeight="700" fill="var(--fg)" fontFamily="var(--font-jet), monospace" letterSpacing="0.06em">
-        {org}
-      </text>
-    </svg>
-  );
-}
-
+/** Garis tanda tangan yang menggambar dirinya (lambang atestasi EIP-712). */
 export function Signature({ width = 220 }: { width?: number }) {
   const h = 34;
   return (
