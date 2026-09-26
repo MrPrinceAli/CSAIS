@@ -441,7 +441,7 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
               </div>
             </div>
             <p className="text-[14px] leading-relaxed text-soft">{t.home.institutionsText}</p>
-            <Link href={L(lang, "/institutions")} className="btn btn-ghost self-start">
+            <Link href={`${L(lang, "/verify")}#lembaga`} className="btn btn-ghost self-start">
               {t.home.institutionsCta}
             </Link>
           </div>

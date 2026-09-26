@@ -5,6 +5,7 @@ import { getLedgerStats, getSampleEvidence, verify, type LedgerProof } from "@/l
 import { formatters } from "@/lib/format";
 import { evidenceRole, getDict, isLang, L, type Lang } from "@/lib/i18n";
 import { HashGrid } from "@/components/ui";
+import { AttestationSection } from "@/components/attestation-section";
 import { MerkleMini } from "@/components/merkle-mini";
 import { SearchField } from "@/components/search-field";
 
@@ -106,6 +107,9 @@ export default async function VerifyPage({ params, searchParams }: { params: Pro
             <Link href={`${L(lang, "/")}#process`} className="no-underline">
               {t.verify.howLink} →
             </Link>
+            <a href="#lembaga" className="no-underline">
+              {t.verify.attestLink} ↓
+            </a>
           </p>
         </div>
         <div className="card corners grid grid-cols-[auto_minmax(0,1fr)] items-center gap-4 p-4 grid-bg">
@@ -184,6 +188,7 @@ export default async function VerifyPage({ params, searchParams }: { params: Pro
         )
       ) : null}
 
+      <AttestationSection lang={lang} />
     </div>
   );
 }

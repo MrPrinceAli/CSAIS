@@ -33,7 +33,6 @@ const NAV: { key: keyof ReturnType<typeof getDict>["nav"]; path: string }[] = [
   { key: "findings", path: "/findings" },
   { key: "verify", path: "/verify" },
   { key: "sources", path: "/sources" },
-  { key: "institutions", path: "/institutions" },
 ];
 
 export default async function RootLayout({ children, params }: { children: ReactNode; params: Promise<{ lang: string }> }) {
@@ -95,7 +94,7 @@ export default async function RootLayout({ children, params }: { children: React
             </div>
             <div className="flex flex-col gap-2">
               <span className="label">{t.footer.columns.access}</span>
-              <Link href={L(lang, "/institutions")} className="text-soft no-underline hover:text-fg">{t.nav.institutions}</Link>
+              <Link href={`${L(lang, "/verify")}#lembaga`} className="text-soft no-underline hover:text-fg">{t.nav.institutions}</Link>
               <span className="text-muted">{t.footer.links.api}</span>
             </div>
           </div>
