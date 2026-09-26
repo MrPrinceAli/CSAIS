@@ -6,7 +6,7 @@ import { formatters, incidentTitle } from "@/lib/format";
 import { attackLabel, getDict, isLang, L, languageLabel } from "@/lib/i18n";
 import { CountUp, Reveal } from "@/components/reveal";
 import { IntelScanner, type ScanItem } from "@/components/intel-scanner";
-import { NewsWall, type NewsItem } from "@/components/news-wall";
+import { NewsSlider, type NewsItem } from "@/components/news-slider";
 import { OrgLogo, ORGS } from "@/components/org-logo";
 import { ProcessScroll } from "@/components/process-scroll";
 import { IncidentCard, LabelBars, SectionTitle, Stat } from "@/components/ui";
@@ -37,6 +37,7 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
     type: attackLabel((r.attack_type ?? "").split(",")[0].trim(), lang),
     language: languageLabel(r.language, lang),
     href: L(lang, `/incidents/${r.incident_id}`),
+    image: r.image_url ?? `/api/og/${r.article_id}`,
   }));
   const totalLang = languages.reduce((acc, l) => acc + Number(l.n), 0) || 1;
   const scanItems: ScanItem[] = feed.map((r) => {
@@ -105,7 +106,7 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
           </div>
           <div className="flex flex-col gap-3 pt-2">
             <SectionTitle aside={t.home.newsNote}>{t.home.newsTitle}</SectionTitle>
-            <NewsWall items={newsItems} />
+            <NewsSlider items={newsItems} prevLabel={t.common.prev} nextLabel={t.common.next} />
           </div>
         </section>
       </Reveal>

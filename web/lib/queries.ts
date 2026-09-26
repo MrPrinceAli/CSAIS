@@ -31,6 +31,20 @@ export type IncidentRow = {
 const tableCache = new Map<string, { exists: boolean; checkedAt: number }>();
 const TABLE_TTL_MS = 5 * 60 * 1000;
 
+/** Kolom yang ditambahkan pipeline belakangan (misalnya articles.image_url) dicek lewat definisi tabel di sqlite_master. */
+const columnCache = new Map<string, { exists: boolean; checkedAt: number }>();
+
+export async function hasColumn(table: string, column: string): Promise<boolean> {
+  const key = `${table}.${column}`;
+  const cached = columnCache.get(key);
+  const now = Date.now();
+  if (cached && (cached.exists || now - cached.checkedAt < TABLE_TTL_MS)) return cached.exists;
+  const row = await queryOne<{ sql: string | null }>("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", [table]);
+  const exists = new RegExp(`["\\s]${column}["\\s]`).test(row?.sql ?? "");
+  columnCache.set(key, { exists, checkedAt: now });
+  return exists;
+}
+
 export async function hasTable(name: string): Promise<boolean> {
   const cached = tableCache.get(name);
   const now = Date.now();
@@ -152,6 +166,7 @@ export const getScannerFeed = cache(async (limit = 8): Promise<ScanRow[]> => {
 
 export type NewsRow = {
   article_id: number;
+  image_url: string | null;
   title: string | null;
   published_date: string | null;
   language: string | null;
@@ -162,8 +177,9 @@ export type NewsRow = {
 
 /** Artikel terbaru dengan domain media asli, untuk dinding berita di beranda. */
 export const getNewsFeed = cache(async (limit = 36): Promise<NewsRow[]> => {
+  const withImage = await hasColumn("articles", "image_url");
   return query<NewsRow>(
-    `SELECT a.article_id, a.title, a.published_date, a.language, e.source_domain, x.attack_type, e.incident_id
+    `SELECT a.article_id, ${withImage ? "a.image_url" : "NULL AS image_url"}, a.title, a.published_date, a.language, e.source_domain, x.attack_type, e.incident_id
      FROM v06_evidence e
      JOIN articles a ON a.article_id = e.article_id
      LEFT JOIN v03_information_extraction x ON x.article_id = a.article_id
