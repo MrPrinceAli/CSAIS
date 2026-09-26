@@ -2,12 +2,12 @@
  * Beranda, "incident dengan liputan terluas": kartu sorotan untuk peringkat 1
  * dan baris peringkat untuk sisanya. Komponen server; angka memakai CountUp.
  */
-import Image from "next/image";
 import Link from "next/link";
 import type { Severity } from "@/lib/format";
 import type { getDict, Lang } from "@/lib/i18n";
 import type { Trust } from "@/lib/trust";
 import { CountUp } from "@/components/reveal";
+import { SafeImage } from "@/components/safe-image";
 import { SeverityText, SourceLogo, TrustRing } from "@/components/ui";
 
 type Labels = ReturnType<typeof getDict>["home"]["coverage"];
@@ -77,13 +77,14 @@ function DotHistogram({ item }: { item: CoverageItem }) {
 export function CoverageFeature({ item, labels, lang, locale }: { item: CoverageItem; labels: Labels; lang: Lang; locale: string }) {
   return (
     <Link href={item.href} className="cov-feature card lift row-link flex min-h-[480px] flex-col justify-end p-5 sm:p-6">
+      <span className="cov-fallback absolute inset-0 -z-10" aria-hidden="true">
+        <span className="cov-bgword">{item.type}</span>
+      </span>
       {item.image ? (
-        <Image src={item.image} alt="" fill unoptimized sizes="(min-width: 1024px) 55vw, 100vw" className="cov-img -z-10 object-cover opacity-50" />
-      ) : (
-        <span className="cov-fallback absolute inset-0 -z-10" aria-hidden="true">
-          <span className="cov-bgword">{item.type}</span>
+        <span className="absolute inset-0 -z-10 overflow-hidden" aria-hidden="true">
+          <SafeImage src={item.image} alt="" fill unoptimized sizes="(min-width: 1024px) 55vw, 100vw" className="cov-img object-cover opacity-55" />
         </span>
-      )}
+      ) : null}
       <span className="cov-shade absolute inset-0 -z-10" aria-hidden="true" />
 
       <span className="flex flex-col gap-4">

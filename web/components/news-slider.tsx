@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { SafeImage } from "@/components/safe-image";
 
 export type NewsItem = {
   id: number;
@@ -61,8 +62,8 @@ export function NewsSlider({ items, prevLabel, nextLabel }: { items: NewsItem[];
           {all.map((it, i) => (
             <div key={`${it.id}-${i}`} className="news-card px-1.5" aria-hidden={i >= items.length}>
               <Link href={it.href} className="card lift row-link flex h-full flex-col overflow-hidden">
-                <span className="relative block aspect-[16/9] w-full overflow-hidden bg-nav">
-                  <Image src={it.image} alt="" fill unoptimized sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw" className="object-cover" />
+                <span className="cov-fallback relative block aspect-[16/9] w-full overflow-hidden">
+                  <SafeImage src={it.image} alt="" fill unoptimized sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw" className="object-cover" />
                   <span className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-[rgba(11,18,25,0.92)] to-transparent" aria-hidden="true" />
                   <span className="absolute bottom-2.5 left-2.5 flex items-center gap-2">
                     <span className="inline-flex h-7 w-7 items-center justify-center overflow-hidden rounded-md border border-line bg-nav">

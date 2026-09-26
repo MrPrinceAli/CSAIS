@@ -15,9 +15,23 @@ const META_KEYS = new Set(["og:image", "og:image:url", "og:image:secure_url", "t
 const CACHE = "public, s-maxage=86400, stale-while-revalidate=604800";
 const memo = new Map<number, string | null>();
 
+/** Dekode entitas HTML pada nilai atribut ("&amp;" -> "&"), yang lazim di URL og:image. */
+function decodeEntities(value: string): string {
+  return value.replace(/&(amp|quot|apos|lt|gt|#\d+|#x[0-9a-f]+);/gi, (_, code: string) => {
+    const key = code.toLowerCase();
+    if (key === "amp") return "&";
+    if (key === "quot") return '"';
+    if (key === "apos") return "'";
+    if (key === "lt") return "<";
+    if (key === "gt") return ">";
+    const n = key.startsWith("#x") ? Number.parseInt(key.slice(2), 16) : Number.parseInt(key.slice(1), 10);
+    return Number.isFinite(n) ? String.fromCodePoint(n) : "";
+  });
+}
+
 function absolute(value: string, base: string): string | null {
   try {
-    const url = new URL(value.trim(), base).toString();
+    const url = new URL(decodeEntities(value.trim()), base).toString();
     return /^https?:/.test(url) ? url : null;
   } catch {
     return null;
@@ -61,7 +75,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   );
   if (!row) return new NextResponse("not found", { status: 404 });
   const headers = { "Cache-Control": CACHE };
-  if (row.image_url) return NextResponse.redirect(row.image_url, { status: 302, headers });
+  if (row.image_url) return NextResponse.redirect(decodeEntities(row.image_url), { status: 302, headers });
 
   const pageUrl = row.resolved_url && /^https?:\/\//.test(row.resolved_url) && !/google\./.test(row.resolved_url) ? row.resolved_url : null;
   let domain = row.source_name ?? "";
