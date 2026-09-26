@@ -608,7 +608,8 @@
     ],
     "Singapore": [
       "singapore",
-      "singaporean"
+      "singaporean",
+      "singapura"
     ],
     "Malaysia": [
       "malaysia",
@@ -624,7 +625,8 @@
     ],
     "Philippines": [
       "philippines",
-      "filipino"
+      "filipino",
+      "filipina"
     ],
     "India": [
       "india",
@@ -632,15 +634,20 @@
     ],
     "China": [
       "china",
-      "chinese"
+      "chinese",
+      "tiongkok",
+      "cina"
     ],
     "Japan": [
       "japan",
-      "japanese"
+      "japanese",
+      "jepang"
     ],
     "South Korea": [
       "south korea",
-      "korean"
+      "korean",
+      "korea selatan",
+      "korsel"
     ],
     "Australia": [
       "australia",
@@ -649,36 +656,171 @@
     "United States": [
       "united states",
       "u.s.",
-      "american"
+      "american",
+      "amerika serikat",
+      "amerika"
     ],
     "United Kingdom": [
       "united kingdom",
       "britain",
-      "british"
+      "british",
+      "inggris",
+      "britania"
     ],
     "Germany": [
       "germany",
-      "german"
+      "german",
+      "jerman"
     ],
     "France": [
       "france",
-      "french"
+      "french",
+      "prancis",
+      "perancis"
     ],
     "Russia": [
       "russia",
-      "russian"
+      "russian",
+      "rusia"
     ],
     "Ukraine": [
       "ukraine",
-      "ukrainian"
+      "ukrainian",
+      "ukraina"
     ],
     "Canada": [
       "canada",
-      "canadian"
+      "canadian",
+      "kanada"
     ],
     "Brazil": [
       "brazil",
-      "brazilian"
+      "brazilian",
+      "brasil"
+    ],
+    "North Korea": [
+      "north korea",
+      "north korean",
+      "korea utara",
+      "korut"
+    ],
+    "Iran": [
+      "iran",
+      "iranian"
+    ],
+    "Israel": [
+      "israel",
+      "israeli"
+    ],
+    "Taiwan": [
+      "taiwan",
+      "taiwanese"
+    ],
+    "Netherlands": [
+      "netherlands",
+      "dutch",
+      "belanda"
+    ],
+    "Hong Kong": [
+      "hong kong",
+      "hongkong"
+    ],
+    "Pakistan": [
+      "pakistan",
+      "pakistani"
+    ],
+    "Bangladesh": [
+      "bangladesh",
+      "bangladeshi"
+    ],
+    "Sri Lanka": [
+      "sri lanka",
+      "sri lankan"
+    ],
+    "Myanmar": [
+      "myanmar"
+    ],
+    "Cambodia": [
+      "cambodia",
+      "cambodian",
+      "kamboja"
+    ],
+    "Saudi Arabia": [
+      "saudi arabia",
+      "saudi",
+      "arab saudi"
+    ],
+    "United Arab Emirates": [
+      "united arab emirates",
+      "uae",
+      "uni emirat arab"
+    ],
+    "Turkey": [
+      "turkey",
+      "türkiye",
+      "turkish",
+      "turki"
+    ],
+    "Egypt": [
+      "egypt",
+      "egyptian",
+      "mesir"
+    ],
+    "Nigeria": [
+      "nigeria",
+      "nigerian"
+    ],
+    "South Africa": [
+      "south africa",
+      "south african",
+      "afrika selatan"
+    ],
+    "Mexico": [
+      "mexico",
+      "mexican",
+      "meksiko"
+    ],
+    "Argentina": [
+      "argentina",
+      "argentine"
+    ],
+    "Italy": [
+      "italy",
+      "italian",
+      "italia"
+    ],
+    "Spain": [
+      "spain",
+      "spanish",
+      "spanyol"
+    ],
+    "Poland": [
+      "poland",
+      "polish",
+      "polandia"
+    ],
+    "Sweden": [
+      "sweden",
+      "swedish",
+      "swedia"
+    ],
+    "Switzerland": [
+      "switzerland",
+      "swiss"
+    ],
+    "Belgium": [
+      "belgium",
+      "belgian",
+      "belgia"
+    ],
+    "New Zealand": [
+      "new zealand",
+      "selandia baru"
+    ],
+    "Colombia": [
+      "colombia",
+      "colombian",
+      "kolombia"
     ]
   },
   "known_threat_actors": [
@@ -725,6 +867,14 @@
     "Royal ransomware",
     "Hive ransomware",
     "Cactus ransomware",
-    "Interlock ransomware"
+    "Interlock ransomware",
+    "Silver Fox",
+    "RedDelta",
+    "Handala",
+    "DragonForce",
+    "RomCom",
+    "Mysterious Elephant",
+    "W3LL",
+    "Desorden"
   ]
 }

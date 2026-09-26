@@ -73,6 +73,49 @@ ORGANIZATION_ALIASES = {
     "Mandiant": ["mandiant", "mandiant inc"],
     "FireEye": ["fireeye", "fireeye inc"],
     "Cisco Talos": ["cisco talos", "talos"],
+    # Lembaga dan perusahaan Indonesia yang sering muncul dengan beberapa ejaan
+    "Pusat Data Nasional": [
+        "pusat data nasional", "pdn", "pdns", "pusat data nasional sementara",
+    ],
+    "BPJS Kesehatan": ["bpjs kesehatan", "bpjs"],
+    "Komdigi": [
+        "komdigi", "kemkomdigi", "kementerian komunikasi dan digital", "kominfo",
+        "kemenkominfo", "kementerian komunikasi dan informatika",
+    ],
+    "BSSN": ["bssn", "badan siber dan sandi negara"],
+    "Polri": [
+        "polri", "mabes polri", "kepolisian republik indonesia",
+        "kepolisian negara republik indonesia",
+    ],
+    "OJK": ["ojk", "otoritas jasa keuangan"],
+    "Bank Indonesia": ["bank indonesia"],
+    "Bank Syariah Indonesia": ["bank syariah indonesia", "bsi", "bank bsi"],
+    "BCA": ["bca", "bank bca", "bank central asia", "pt bank central asia"],
+    "BRI": ["bri", "bank bri", "bank rakyat indonesia", "pt bank rakyat indonesia"],
+    "BNI": ["bni", "bank bni", "bank negara indonesia", "pt bank negara indonesia"],
+    "Bank DKI": ["bank dki"],
+    "Bank Jambi": ["bank jambi", "bank pembangunan daerah jambi"],
+    "Bank Jatim": ["bank jatim", "bank pembangunan daerah jawa timur"],
+    "Telkomsel": ["telkomsel", "pt telkomsel"],
+    "Telkom Indonesia": ["telkom", "telkom indonesia", "pt telkom", "pt telkom indonesia"],
+    "KPU": ["kpu", "komisi pemilihan umum"],
+    "Kemenhan": ["kemenhan", "kementerian pertahanan"],
+    "Kemenkes": ["kemenkes", "kementerian kesehatan"],
+    "Kemenkeu": ["kemenkeu", "kementerian keuangan"],
+    "DJP": ["djp", "ditjen pajak", "direktorat jenderal pajak"],
+    "Dukcapil": [
+        "dukcapil", "ditjen dukcapil",
+        "direktorat jenderal kependudukan dan pencatatan sipil",
+    ],
+    "Kejaksaan Agung": ["kejaksaan agung", "kejagung"],
+    "BKN": ["bkn", "badan kepegawaian negara"],
+    "Pertamina": ["pertamina", "pt pertamina"],
+    "PLN": ["pln", "pt pln", "perusahaan listrik negara"],
+    "Garuda Indonesia": ["garuda indonesia", "pt garuda indonesia"],
+    "Tokopedia": ["tokopedia", "pt tokopedia"],
+    "Indodax": ["indodax"],
+    "PeduliLindungi": ["pedulilindungi", "peduli lindungi"],
+    "Pemprov Jawa Barat": ["pemprov jawa barat", "pemprov jabar", "pemerintah provinsi jawa barat"],
 }
 
 THREAT_ACTOR_ALIASES = {
@@ -114,7 +157,15 @@ THREAT_ACTOR_ALIASES = {
     "KillNet": ["killnet", "kill net"],
     "NoName057(16)": ["noname057(16)", "noname05716", "noname057"],
     "Bjorka": ["bjorka"],
-    "Brain Cipher": ["brain cipher"],
+    "Brain Cipher": ["brain cipher", "brain cipher ransomware"],
+    "Mysterious Elephant": ["mysterious elephant", "gajah misterius", "apt-k-47"],
+    "RomCom": ["romcom", "storm-0978", "void rabisu", "tropical scorpius"],
+    "W3LL": ["w3ll", "w3ll store"],
+    "Desorden": ["desorden", "desorden group"],
+    "DragonForce": ["dragonforce", "dragonforce malaysia", "dragonforce ransomware"],
+    "Handala": ["handala", "handala hack"],
+    "Silver Fox": ["silver fox", "silver fox apt", "void arachne"],
+    "RedDelta": ["reddelta", "red delta", "mustang panda", "twill typhoon"],
 }
 
 

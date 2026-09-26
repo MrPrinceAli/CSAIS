@@ -170,3 +170,13 @@ def test_save_entity_mention_increments_count_once(temp_conn, empty_cache):
         "SELECT pipeline_version FROM v04_entity_mentions"
     ).fetchone()[0]
     assert version
+
+
+def test_indonesian_aliases_resolve_to_canonical_names():
+    index = v04.build_alias_index()
+    assert v04.resolve_known_alias("ORGANIZATION", "Kejagung", index) == "Kejaksaan Agung"
+    assert v04.resolve_known_alias("ORGANIZATION", "PDNS", index) == "Pusat Data Nasional"
+    assert v04.resolve_known_alias("ORGANIZATION", "Kominfo", index) == "Komdigi"
+    assert v04.resolve_known_alias("THREAT_ACTOR", "Gajah Misterius", index) == "Mysterious Elephant"
+    assert v04.resolve_known_alias("THREAT_ACTOR", "Mustang Panda", index) == "RedDelta"
+    assert v04.resolve_known_alias("ORGANIZATION", "Gajah Misterius", index) is None

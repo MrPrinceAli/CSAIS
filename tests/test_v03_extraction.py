@@ -221,3 +221,66 @@ def test_indonesian_attack_type_and_victim_groups():
     groups = v03.extract_target_group(text)
     for group in ("BANK_CUSTOMERS", "SMES", "CIVIL_SERVANTS", "ELDERLY"):
         assert group in groups
+
+
+@pytest.mark.parametrize(
+    "headline,expected",
+    [
+        ("Bank Jambi Dibobol Hacker, Rp 143 Miliar Raib", "Bank Jambi"),
+        ("Situs PeduliLindungi Diretas, Kini Beralih ke SatuSehat", "PeduliLindungi"),
+        ("Bybit Kena Hack, Rp23,8 Triliun ETH Lenyap!", "Bybit"),
+        ("Hacker Diduga Jebol Server Telkomsel, Muncul Penjualan Data di Dark Web", "Telkomsel"),
+        ("Polda Jambi Sebut Bank Jambi Dibobol Hacker, Audit Forensik Belum Selesai", "Bank Jambi"),
+        ("Data 20 Juta Nasabah BCA Bocor? Ini Bantahan Manajemen", "BCA"),
+        ("700 Ribu Data Kemenhan Diduga Bocor, Siapa Biang Keroknya?", "Kemenhan"),
+        ("Akun Instagram Kejaksaan Agung Diretas, Promosi Tempat Judi Kasino", "Kejaksaan Agung"),
+        ("Situs Resmi Pemkab Bandung Diretas, Disusupi Pesan Judol!", "Pemkab Bandung"),
+        ("Peretasan Jaguar Land Rover Rugikan Ekonomi Inggris Rp 42 Triliun", "Jaguar Land Rover"),
+        ("Polda Metro Jaya Dalami Dugaan Pembobolan Data Pribadi 341 Ribu Personel Polri", "Polri"),
+        ("ITB Sebut Data Mahasiswa dan Alumni Bocor, Diteror Penipuan", "ITB"),
+        ("Starbucks Akui Kebocoran Data yang Berdampak pada Ratusan Karyawan", "Starbucks"),
+        ("Venus Protocol Pulih Rp205 M Setelah Serangan Phishing Terkait Korea Utara", "Venus Protocol"),
+        ("Ecopetrol cegah serangan ransomware setelah aksi cepat tim keamanan", "Ecopetrol"),
+        ("Pramono Anung Akui Kebocoran Dana Bank DKI, Nasabah Terdampak?", "Bank DKI"),
+        ("Kebocoran Data dan Penerbitan Kartu Kredit Fiktif Tanpa Izin di Bank UOB Indonesia", "Bank UOB Indonesia"),
+    ],
+)
+def test_extract_target_organization_indonesian(headline, expected):
+    assert v03.extract_target_organization(headline, "") == expected
+
+
+@pytest.mark.parametrize(
+    "headline",
+    [
+        "Rekening Dibobol, Polda Kepulauan Riau Selidiki Dugaan Kejahatan Siber",
+        "Awas! Jutaan Rekening Bank Diretas, Kejahatan Siber Beralih ke Dark Web",
+        "Waspada! Data ASN dan PPPK Diduga Bocor, Penipu Gunakan MyASN untuk Modus Baru",
+        "Korea Utara Bantah Jadi Dalang Peretasan Kripto dan Serangan Siber Global",
+        "Cara Mengetahui Data Pribadi Bocor atau Tidak",
+        "Deretan Skandal Kebocoran Data dan Serangan Siber Paling Ngeri di 2026",
+        "Hacker Klaim Kuasai Data Pribadi 4,6 Juta Warga Jawa Barat",  # tempat, bukan organisasi
+    ],
+)
+def test_extract_target_organization_indonesian_rejects_generic(headline):
+    assert v03.extract_target_organization(headline, "") == "UNKNOWN"
+
+
+@pytest.mark.parametrize(
+    "sentence,expected",
+    [
+        ("BSSN Ungkap Modus Hacker 'Gajah Misterius' Incar Data WA", "Gajah Misterius"),
+        ("kelompok hacker Bjorka kembali beraksi", "Bjorka"),
+        ("peretas yang mengaku sebagai DigitalGhostt menjual data", "DigitalGhostt"),
+        ("DigitalGhostt mengaku telah membobol server", "DigitalGhostt"),
+        ("geng ransomware Qilin klaim bertanggung jawab", "Qilin"),
+        ("Kelompok Hacker Asal Rusia Serang Situs Pemerintah", "UNKNOWN"),
+        ("kelompok hacker Indonesia menyerang situs Malaysia", "UNKNOWN"),
+        ("Hacker Diduga Jebol Server Telkomsel", "UNKNOWN"),
+    ],
+)
+def test_extract_threat_actor_indonesian(sentence, expected):
+    assert v03.extract_threat_actor(sentence) == expected
+
+
+def test_extract_location_indonesian_country_names():
+    assert v03.extract_location("serangan dari korea utara ke jepang") == "Japan, North Korea"

@@ -173,11 +173,37 @@ _REJECT_FIRST_WORDS = {
     "recommendations", "references", "attribution", "indicators", "advertisement",
     "sponsored", "trending", "recommended", "popular", "newsletter", "podcast",
     "video", "editorial", "opinion", "click", "download", "print", "email",
-    "copyright", "tags", "topics", "comments",
+    "copyright", "tags", "topics", "comments", "verify", "verifying", "please",
+    "checking", "javascript", "cookies", "enable", "tbps", "gbps", "mbps",
     # Nama dan singkatan bulan ("Dec 28 was breached")
     "january", "february", "march", "april", "may", "june", "july", "august",
     "september", "october", "november", "december", "jan", "feb", "mar", "apr",
     "jun", "jul", "aug", "sep", "sept", "oct", "nov", "dec",
+    # Indonesia: kata kerja judul (tanpa awalan me-), keterangan, kata tunjuk,
+    # dan kata benda pelaku/serangan; judul berita Indonesia memakai Title Case
+    # sehingga kata-kata ini ikut berhuruf besar
+    "hacker", "peretas", "pelaku", "penjahat", "kelompok", "geng", "grup", "sindikat",
+    "serangan", "peretasan", "pembobolan", "kebocoran", "penipuan", "penipu",
+    "diduga", "dikabarkan", "disebut", "dilaporkan", "berhasil", "sempat", "kembali",
+    "resmi", "ini", "itu", "tersebut", "yang", "asal", "asing", "internasional",
+    "global", "lokal", "misterius", "begini", "beginilah", "inilah", "ternyata",
+    "waspada", "awas", "hati-hati", "jangan", "cara", "tips", "daftar", "deretan",
+    "siapa", "apa", "mengapa", "kenapa", "bagaimana", "kok", "bisa", "usai",
+    "setelah", "pasca", "imbas", "akibat", "karena", "gara-gara", "soal", "terkait",
+    "hingga", "sampai", "saat", "ketika", "kini", "lagi", "makin", "semakin",
+    "kian", "paling", "isu", "kasus", "dugaan", "heboh", "viral", "gawat",
+    "serang", "bobol", "retas", "jebol", "curi", "jual", "sebar", "kuasai",
+    "lumpuhkan", "sadap", "bajak", "susupi", "peras", "klaim", "mengaku", "ancam",
+    "incar", "akui", "bantah", "sebut", "ungkap", "bongkar", "tangkap", "usut",
+    "selidiki", "dalami", "jamin", "tolak", "cegah", "gagalkan", "tangkal", "rebut",
+    "imbau", "minta", "desak", "pastikan", "benarkan", "tegaskan", "pulih", "rugi",
+    "merugi", "kehilangan", "raib", "lenyap", "hilang", "rugikan", "terancam",
+    "ancaman", "jutaan", "ribuan", "puluhan", "ratusan", "juta", "ribu", "miliar",
+    "triliun", "sejumlah", "beberapa", "banyak", "para", "terjadi", "penjual",
+    "pembeli", "selain", "selama", "seperti", "sehingga", "namun", "tetapi", "meski",
+    "meskipun", "walau", "bahkan", "juga", "yakni", "yaitu", "adalah", "ialah",
+    "hanya", "sudah", "telah", "masih", "akan", "bakal", "harus", "perlu", "dapat",
+    "mulai", "sejak", "menurut", "kata", "ujar", "tutur",
 }
 
 # Kata umum yang tidak boleh menjadi satu-satunya isi sebuah nama. Kata benda
@@ -260,6 +286,241 @@ _ADJECTIVE_COMPOUND = re.compile(
 )
 
 
+# --- Pola bahasa Indonesia ---
+#
+# Judul berita Indonesia memakai Title Case, jadi setiap kata berhuruf besar dan
+# batas nama tidak bisa ditebak dari huruf besar saja. Dua penangkal: token nama
+# tidak boleh berupa kata kerja/keterangan judul (``_ID_STOP_WORDS``, dicek
+# dengan lookahead), dan kata aset atau kelompok di depan nama ("Situs Resmi",
+# "Data Nasabah", "Akun Instagram") dibuang setelah tangkapan.
+_ID_STOP_WORDS = (
+    r"diduga|dikabarkan|disebut|dilaporkan|berhasil|sempat|kembali|resmi|ini|itu|"
+    r"tersebut|yang|usai|setelah|pasca|imbas|akibat|karena|gara-gara|soal|terkait|"
+    r"hingga|sampai|saat|ketika|kini|lagi|makin|semakin|kian|paling|ternyata|kok|"
+    r"bisa|begini|inilah|jadi|menjadi|serang|bobol|retas|jebol|curi|jual|sebar|"
+    r"kuasai|lumpuhkan|sadap|bajak|susupi|peras|klaim|mengaku|ancam|incar|akui|"
+    r"bantah|sebut|ungkap|bongkar|tangkap|usut|selidiki|dalami|jamin|tolak|cegah|"
+    r"gagalkan|tangkal|rebut|imbau|minta|desak|pastikan|benarkan|tegaskan|pulih|"
+    r"rugi|merugi|kehilangan|raib|lenyap|hilang|rugikan|terancam|ancam|jutaan|"
+    r"ribuan|puluhan|ratusan|juta|ribu|miliar|triliun|sejumlah|beberapa|banyak|"
+    r"para|diretas|dibobol|dijebol|diserang|disusupi|dibajak|diperas|dilumpuhkan|"
+    r"disadap|dicuri|bocor|kena|terkena|alami|mengalami|korban|sasaran|hacker|"
+    r"peretas|pelaku|kelompok|geng|grup|sindikat|serangan|peretasan|pembobolan|"
+    r"kebocoran|penipuan|penipu|waspada|awas|hati-hati|jangan|cara|tips|daftar|"
+    r"deretan|siapa|apa|mengapa|kenapa|bagaimana|isu|kasus|dugaan|heboh|viral|"
+    r"gawat|terjadi|verify|penjual|pembeli|selain|selama|seperti|sehingga|namun|"
+    r"tetapi|meski|meskipun|walau|bahkan|juga|yakni|yaitu|adalah|ialah|hanya|"
+    r"sudah|telah|masih|akan|bakal|harus|perlu|dapat|mulai|sejak|menurut|kata|"
+    r"ujar|tutur|m|t|rp\d+[\w,.]*|"
+    # kata kerja berawalan me- yang lazim di judul dan isi berita
+    r"membenarkan|membantah|mengakui|menyebut|mengungkap|mengungkapkan|membongkar|"
+    r"menangkap|mengusut|menyelidiki|mendalami|menjamin|menolak|mencegah|"
+    r"menggagalkan|menangkal|merebut|mengimbau|meminta|mendesak|memastikan|"
+    r"menegaskan|mengklaim|menguasai|mencuri|menjual|menyebar|menyerang|membobol|"
+    r"meretas|menjebol|menyusupi|membajak|memeras|melumpuhkan|menyadap|mengancam|"
+    r"mengincar|merugikan|menghadapi|mendeteksi|melaporkan|mengonfirmasi|"
+    r"menemukan|menyatakan|mengatakan|menilai|menduga|memperingatkan|memburu|"
+    r"meringkus|membekuk|menetapkan|memblokir|menutup|menghapus|memulihkan|"
+    r"mengembalikan|menggunakan|memakai|memanfaatkan|menawarkan|mengirim|menerima|"
+    r"membuka|membuat|mengetahui|mengecek|memeriksa|mengamankan|melindungi|"
+    r"menyerukan|mengumumkan|menjelaskan|menyampaikan|mengaku"
+)
+_ID_NAME_TOKEN = rf"(?!(?i:{_ID_STOP_WORDS})\b)[A-Z][\w&.'’-]*"
+_ID_CONNECTOR = r"(?:dan|dari|untuk|di|of|and|&)"
+_ID_ORG_NAME = rf"({_ID_NAME_TOKEN}(?:{_SP}(?:{_ID_CONNECTOR}{_SP})?{_ID_NAME_TOKEN}){{0,5}})"
+_ID_ORG_NAME_SHORT = rf"({_ID_NAME_TOKEN}(?:{_SP}(?:{_ID_CONNECTOR}{_SP})?{_ID_NAME_TOKEN}){{0,3}})"
+# Kata aset, kelompok orang, gelar, dan bilangan di depan nama yang dibuang
+_ID_STRIP_WORDS = {
+    "situs", "web", "website", "laman", "portal", "resmi", "akun", "instagram", "ig",
+    "twitter", "x", "facebook", "tiktok", "whatsapp", "wa", "telegram", "email",
+    "server", "sistem", "aplikasi", "layanan", "jaringan", "database", "basis",
+    "data", "rekening", "nomor", "kamera", "ponsel", "hp", "laptop", "komputer",
+    "perangkat", "dokumen", "rahasia", "pribadi", "medis", "akademik", "milik",
+    "nasabah", "pelanggan", "konsumen", "pengguna", "pasien", "karyawan", "pegawai",
+    "mahasiswa", "siswa", "alumni", "warga", "penduduk", "wajib", "pajak", "wp", "peserta",
+    "anggota", "personel", "asn", "pns", "pppk", "jutaan", "ribuan", "puluhan",
+    "ratusan", "juta", "ribu", "miliar", "triliun", "sejumlah", "beberapa", "banyak",
+    "para", "wakil", "ketua", "kepala", "direktur", "dirut", "ceo", "bos", "menteri",
+    "gubernur", "bupati", "walikota", "wali", "kota", "isu", "kasus", "dugaan", "soal",
+    "informasi", "info", "kabar", "berita", "insiden", "dana", "uang", "saldo",
+    "aset", "kripto", "koin", "token", "dompet", "wallet", "malware", "virus",
+    "trojan", "spyware", "ransomware", "android", "aplikasi",
+}
+# Kata umum Indonesia yang tidak boleh menjadi satu-satunya isi nama
+_ID_GENERIC_WORDS = _ID_STRIP_WORDS | {
+    "bank", "perusahaan", "pemerintah", "instansi", "lembaga", "kementerian",
+    "rumah", "sakit", "kampus", "universitas", "sekolah", "kantor", "dinas",
+    "pemkot", "pemkab", "pemprov", "pemda", "kripto", "ip", "internet", "online",
+    "digital", "siber", "nasional", "indonesia", "negara", "publik", "swasta",
+    "bumn", "startup", "fintech", "e-commerce", "marketplace", "platform", "media",
+    "sosial", "game", "mod", "android", "ios", "windows", "iphone", "samsung",
+    "asuransi", "koperasi", "fintech", "e-wallet", "dompet", "exchange",
+}
+# Nama tempat dan wilayah: lokasi, bukan organisasi korban. "Bank Jambi" atau
+# "Pemkab Bandung" tetap sah karena ada kata lembaga di depannya; nama yang
+# seluruhnya tempat ("Jawa Barat", "Texas") ditolak.
+_ID_PLACE_WORDS = {
+    "jakarta", "bandung", "surabaya", "medan", "semarang", "makassar", "yogyakarta",
+    "jogja", "palembang", "denpasar", "bali", "batam", "malang", "bogor", "depok",
+    "tangerang", "bekasi", "jawa", "barat", "tengah", "timur", "utara", "selatan",
+    "pusat", "sumatera", "sumatra", "kalimantan", "sulawesi", "papua", "maluku",
+    "nusa", "tenggara", "aceh", "riau", "lampung", "banten", "jambi", "bengkulu",
+    "jabar", "jateng", "jatim", "sumut", "sumsel", "sulsel", "kaltim", "asia",
+    "eropa", "amerika", "afrika", "australia", "dunia", "global", "texas",
+    "california", "florida", "new", "york", "london", "moskow", "moscow", "beijing",
+    "tokyo", "seoul", "sydney", "washington", "paris", "berlin", "delhi", "mumbai",
+    "dubai", "hong", "kong", "silicon", "valley",
+}
+# Awalan aset/bilangan/kelompok yang dilewati sebelum nama pada pola berkata
+# kerja aktif dan kata benda serangan ("Jebol Server Telkomsel",
+# "Pembobolan Data Pribadi 341 Ribu Personel Polri")
+_ID_ASSET_PREFIX = (
+    r"(?:(?i:data|akun|situs|website|server|sistem|jaringan|database|rekening|"
+    r"dokumen|dana|aset|layanan|aplikasi)\s+(?:(?i:pribadi|medis|milik|resmi|"
+    r"internal|rahasia)\s+)?)?"
+    r"(?:\d[\d.,]*\s+(?:(?i:juta|ribu|miliar|triliun)\s+)?)?"
+    r"(?:(?i:warga|nasabah|pelanggan|konsumen|pengguna|pasien|karyawan|pegawai|"
+    r"mahasiswa|siswa|personel|anggota|penduduk|peserta|wajib\s+pajak)\s+)?"
+    r"(?:(?i:di|milik|dari)\s+)?"
+)
+_ID_PASSIVE = (
+    r"(?i:(?:diduga|dikabarkan|disebut|dilaporkan|sempat|kembali|resmi)\s+)?"
+    r"(?i:diretas|dibobol|dijebol|diserang|disusupi|dibajak|diperas|dilumpuhkan|"
+    r"disadap|dicuri|diacak-acak|bocor|jebol|kena\s+hack|kena\s+retas|"
+    r"kena\s+serangan|terkena\s+serangan|(?:jadi|menjadi)\s+(?:korban|sasaran)|"
+    r"(?:alami|mengalami)\s+(?:serangan|peretasan|kebocoran|pembobolan|gangguan|"
+    r"insiden))\b"
+)
+_ID_ATTACK_NOUNS = (
+    r"(?i:(?:dugaan\s+|upaya\s+)?(?:peretasan|pembobolan|kebocoran|serangan\s+siber|"
+    r"serangan\s+ransomware|serangan\s+ddos|serangan\s+phishing|insiden\s+siber))"
+)
+_ID_ACTIVE_VERBS = (
+    r"(?i:(?:diduga|dikabarkan|berhasil|sempat|kembali|klaim|mengklaim|mengaku)\s+)?"
+    r"(?i:jebol|bobol|retas|serang|susupi|bajak|curi|kuasai|lumpuhkan|sadap|"
+    r"menjebol|membobol|meretas|menyerang|menyusupi|membajak|mencuri|menguasai|"
+    r"melumpuhkan|menyadap)\s+"
+)
+_ID_STATEMENT_VERBS = (
+    r"(?i:bantah|membantah|akui|mengakui|sebut|menyebut|konfirmasi|mengonfirmasi|"
+    r"pastikan|memastikan|benarkan|membenarkan|ungkap|mengungkap|laporkan|"
+    r"melaporkan|cegah|mencegah|gagalkan|menggagalkan|tangkal|menangkal|hadapi|"
+    r"menghadapi|deteksi|mendeteksi|alami|mengalami|tegaskan|menegaskan)\s+"
+)
+_ID_INCIDENT_WORDS = (
+    r"(?i:peretasan|pembobolan|kebocoran|serangan|diretas|dibobol|bocor|jebol|"
+    r"dijebol|dibajak|disusupi|ransomware|phishing|insiden\s+siber|upaya\s+peretasan)"
+)
+_ORGANIZATION_PATTERNS_ID = [
+    # "Bank Jambi Dibobol Hacker", "Situs PeduliLindungi Diretas", "Bybit Kena Hack"
+    re.compile(rf"{_ID_ORG_NAME}\s+{_ID_PASSIVE}"),
+    # "Hacker Diduga Jebol Server Telkomsel", "Hacker Klaim Kuasai Data ... Jawa Barat"
+    re.compile(
+        rf"(?i:hacker|peretas|pelaku|penjahat\s+siber|kelompok\s+\w+|geng\s+\w+)\s+"
+        rf"{_ID_ACTIVE_VERBS}{_ID_ASSET_PREFIX}{_ID_ORG_NAME}"
+    ),
+    # "Kebocoran Data dan Penerbitan Kartu Kredit Fiktif ... di Bank UOB Indonesia"
+    re.compile(
+        rf"{_ID_ATTACK_NOUNS}\s+(?:[^\s.]+\s+){{0,8}}?(?i:di|pada|terhadap|menimpa)\s+"
+        rf"{_ID_ASSET_PREFIX}{_ID_ORG_NAME_SHORT}"
+    ),
+    # "Peretasan Jaguar Land Rover Rugikan ...", "Pembobolan Data Pribadi 341 Ribu Personel Polri"
+    re.compile(
+        rf"{_ID_ATTACK_NOUNS}\s+(?:(?i:terhadap|pada|di|ke|menimpa|yang\s+menimpa|"
+        rf"dialami)\s+)?{_ID_ASSET_PREFIX}{_ID_ORG_NAME_SHORT}"
+    ),
+    # "ITB Sebut Data Mahasiswa Bocor", "Starbucks Akui Kebocoran Data",
+    # "Ecopetrol cegah serangan ransomware"
+    re.compile(
+        rf"{_ID_ORG_NAME}\s+{_ID_STATEMENT_VERBS}(?:[^\s.]+\s+){{0,6}}?{_ID_INCIDENT_WORDS}"
+    ),
+    # "Venus Protocol Pulih Rp205 M Setelah Serangan Phishing"
+    re.compile(
+        rf"{_ID_ORG_NAME}\s+(?:[^\s.]+\s+){{0,4}}?(?i:setelah|usai|akibat|imbas|pasca|"
+        rf"pascaserangan|karena)\s+{_ID_INCIDENT_WORDS}"
+    ),
+]
+# Subjek pola pernyataan yang lazimnya penyidik atau pengamat, bukan korban
+_ID_REPORTER_WORDS = {
+    "polda", "polres", "polsek", "polri", "polisi", "bareskrim", "ditressiber",
+    "ditreskrimsus", "satgas", "bssn", "komdigi", "kominfo", "kemkomdigi", "ojk",
+    "kpk", "ppatk", "fbi", "interpol", "europol", "pakar", "praktisi", "pengamat",
+    "peneliti", "analis", "menteri", "menkeu", "menkominfo", "wamen", "presiden",
+    "gubernur", "walikota", "bupati", "dpr", "dprd", "mpr", "komisi", "anggota",
+    "ketua", "kapolri", "kapolda", "kapolres", "kabid", "kadis", "kadiskominfo",
+    "kepala", "dirjen", "kejari", "kejati", "kejaksaan", "pengadilan", "hakim",
+    "jaksa", "bpk", "bpkp", "ombudsman", "kaspersky", "eset", "microsoft", "google",
+    "cisa",
+}
+_ID_STATEMENT_PATTERN_INDEX = 4
+
+_ACTOR_TERMS_ID = (
+    r"(?i:kelompok\s+(?:hacker|peretas|ransomware|hacktivis|siber|apt)|"
+    r"geng\s+(?:ransomware|hacker)|grup\s+(?:hacker|ransomware)|"
+    r"sindikat\s+(?:hacker|ransomware|siber)|kolektif\s+(?:hacker|peretas))"
+)
+_ACTOR_PATTERNS_ID = [
+    # "kelompok hacker Bjorka", "geng ransomware asal Rusia bernama Qilin"
+    re.compile(
+        rf"{_ACTOR_TERMS_ID}{_SP}(?:(?i:asal|dari){_SP}\w+{_SP})?"
+        rf"(?:(?i:bernama|berjuluk|dijuluki|berinisial|yang{_SP}menamakan{_SP}diri){_SP})?"
+        rf"[\"“']?{_ACTOR_NAME}"
+    ),
+    # "hacker bernama Zyaire", "peretas yang mengaku sebagai DigitalGhostt"
+    re.compile(
+        rf"(?i:hacker|peretas|pelaku){_SP}(?i:bernama|berjuluk|dijuluki|berinisial|"
+        rf"beridentitas|dengan{_SP}nama|yang{_SP}menamakan{_SP}diri|"
+        rf"yang{_SP}mengaku{_SP}sebagai){_SP}[\"“']?{_ACTOR_NAME}"
+    ),
+    # "Hacker 'Gajah Misterius'", 'dengan nama akun "DigitalGhostt"': julukan dalam tanda kutip
+    re.compile(
+        rf"(?i:hacker|peretas|akun|nama{_SP}akun|dengan{_SP}nama|julukan|alias){_SP}"
+        rf"[\"“']{_ACTOR_NAME}[\"”']"
+    ),
+    # "Bjorka Mengaku Bertanggung Jawab", "DigitalGhostt klaim menguasai data"
+    re.compile(
+        rf"{_ACTOR_NAME}{_SP}(?i:mengaku|mengklaim|klaim){_SP}(?i:bertanggung{_SP}jawab|"
+        rf"meretas|membobol|menguasai|mencuri|memiliki|telah|sudah)"
+    ),
+]
+
+
+_ID_LEADING_CONNECTORS = {"dan", "dari", "untuk", "di", "&", "and", "of"}
+
+
+def _strip_leading_id(words):
+    """Buang kata aset/kelompok/gelar Indonesia di awal nama (termasuk bentuk -nya).
+
+    Kata sambung yang tersisa di depan ("Data ASN dan PPPK" -> "dan PPPK") ikut
+    dibuang, lalu penyaringan diulang.
+    """
+    while words:
+        word = words[0].lower().strip("?!,:;'\"“”’")
+        if word in _ID_LEADING_CONNECTORS or word in _ID_STRIP_WORDS:
+            words.pop(0)
+        elif word.endswith("nya") and word[:-3] in _ID_STRIP_WORDS:
+            words.pop(0)
+        else:
+            break
+    return words
+
+
+def _clean_name_id(name):
+    """Rapikan nama hasil pola Indonesia; None bila tinggal kata umum saja."""
+    words = _strip_leading_id(re.sub(r"\s+", " ", name).strip(" .,;:'\"“”’-").split())
+    if not words:
+        return None
+    cleaned = _clean_name(" ".join(words))
+    if cleaned is None:
+        return None
+    lowered = [word.lower() for word in cleaned.split()]
+    if all(word in _ID_GENERIC_WORDS or word in _ID_LEADING_CONNECTORS for word in lowered):
+        return None
+    if all(word in _ID_PLACE_WORDS or word in _ID_LEADING_CONNECTORS for word in lowered):
+        return None
+    return cleaned
+
+
 def _clean_name(name):
     """Rapikan nama hasil regex; None bila bukan nama (kata umum saja)."""
     name = re.sub(r"\s+", " ", name).strip(" .,;:'\"“”’-")
@@ -288,9 +549,11 @@ def extract_threat_actor(raw_text):
     for name in known:
         actors.append(re.sub(r"\s+ransomware$", "", name))
 
-    for pattern in _ACTOR_PATTERNS:
+    for pattern in _ACTOR_PATTERNS + _ACTOR_PATTERNS_ID:
         for match in pattern.finditer(raw_text):
             name = _clean_name(match.group(1))
+            if name and name.lower() in _COUNTRY_WORDS:
+                name = None  # "kelompok hacker Indonesia": kebangsaan, bukan nama
             if name and name.lower() not in {a.lower() for a in actors}:
                 actors.append(name[:100])
             if len(actors) >= 3:
@@ -307,12 +570,25 @@ _COUNTRY_WORDS = {name.lower() for name in COUNTRY_NAMES} | {
 
 
 def _first_organization(text):
-    """Nama organisasi pertama yang cocok pola serangan di satu teks; None bila tidak ada."""
+    """Nama organisasi pertama yang cocok pola serangan di satu teks; None bila tidak ada.
+
+    Pola Inggris dicoba dulu, lalu pola Indonesia. Kata kerja tiap bahasa tidak
+    muncul di bahasa lain, jadi keduanya aman dijalankan pada semua artikel.
+    """
     for pattern in _ORGANIZATION_PATTERNS:
         for match in pattern.finditer(text):
             name = _clean_name(match.group(1))
             if name and name.lower() not in _COUNTRY_WORDS:
                 return name[:150]
+    for index, pattern in enumerate(_ORGANIZATION_PATTERNS_ID):
+        for match in pattern.finditer(text):
+            name = _clean_name_id(match.group(1))
+            if not name or name.lower() in _COUNTRY_WORDS:
+                continue
+            first_word = re.split(r"[-/]", name.split()[0].lower())[0]
+            if index == _ID_STATEMENT_PATTERN_INDEX and first_word in _ID_REPORTER_WORDS:
+                continue  # "Polda Jambi Sebut ...": penyidik, bukan korban
+            return name[:150]
     return None
 
 
