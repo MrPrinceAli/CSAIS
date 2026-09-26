@@ -1,17 +1,190 @@
+import { createHash } from "node:crypto";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getCountryCounts, getLanguageCounts, getLastRun, getLatestIncidents, getNewsFeed, getOverview, getScannerFeed } from "@/lib/queries";
+import {
+  getCountryCounts,
+  getEvidenceLeaf,
+  getFeaturedIncidentId,
+  getIncident,
+  getLanguageCounts,
+  getLastRun,
+  getLatestIncidents,
+  getLedgerStats,
+  getNewsFeed,
+  getOverview,
+  getRiskGroups,
+  getScannerFeed,
+  getShowcaseIncidentId,
+  type DocumentRow,
+  type GroupStat,
+} from "@/lib/queries";
 import { countryOf } from "@/lib/geo";
-import { formatters, incidentTitle } from "@/lib/format";
-import { attackLabel, getDict, isLang, L, languageLabel } from "@/lib/i18n";
+import { domainOf, formatters, incidentTitle, publisherOf } from "@/lib/format";
+import { attackLabel, getDict, groupLabel, isLang, L, languageLabel, type Lang } from "@/lib/i18n";
+import { trustFromStored, trustScore } from "@/lib/trust";
 import { CountUp, Reveal } from "@/components/reveal";
 import { IntelScanner, type ScanItem } from "@/components/intel-scanner";
 import { NewsSlider, type NewsItem } from "@/components/news-slider";
 import { OrgLogo, ORGS } from "@/components/org-logo";
-import { ProcessScroll } from "@/components/process-scroll";
+import { ScrollScenes } from "@/components/scroll-scenes";
+import {
+  SceneCluster,
+  SceneEvidence,
+  ScenePackage,
+  SceneRisk,
+  SceneTrust,
+  type ClusterData,
+  type EvidenceData,
+  type PackageData,
+  type RiskData,
+  type TrustData,
+} from "@/components/process-scenes";
 import { IncidentCard, LabelBars, SectionTitle, Stat } from "@/components/ui";
 
 export const revalidate = 3600;
+
+/** Domain media asli sebuah artikel (URL media, lalu domain bukti); kosong bila hanya tautan Google News. */
+function docDomain(d: DocumentRow): string {
+  for (const domain of [domainOf(d.resolved_url), d.source_domain ?? ""]) {
+    if (domain && !domain.includes("google.")) return domain;
+  }
+  return "";
+}
+
+/** Nama sumber untuk ditampilkan: domain asli, atau penerbit dari akhiran judul. */
+function docSource(d: DocumentRow): string {
+  return docDomain(d) || publisherOf(d.title) || "news";
+}
+
+function isoWeek(date: Date): number {
+  const t = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const day = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - day);
+  const start = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  return Math.ceil(((t.getTime() - start.getTime()) / 86400000 + 1) / 7);
+}
+
+/** Tingkat kelompok berisiko, aturan yang sama dengan halaman temuan. */
+function riskLevel(g: GroupStat): "high" | "medium" | "low" {
+  if (g.now >= 20 || (g.now >= 8 && g.now > g.prev * 1.5)) return "high";
+  if (g.now >= 5) return "medium";
+  return "low";
+}
+
+const LEVEL_COLOR = { high: "var(--crit)", medium: "var(--high)", low: "var(--med)" } as const;
+
+async function processData(lang: Lang, featuredId: string | null, riskGroups: GroupStat[], batches: number) {
+  const t = getDict(lang);
+  const f = formatters(lang);
+  const sc = t.home.scenes;
+  const featured = featuredId ? await getIncident(featuredId) : null;
+  const docs = featured?.docs ?? [];
+  const inc = featured?.incident ?? null;
+
+  // 01 ekstraksi: artikel incident dengan liputan terluas, satu per domain dulu
+  const seen = new Set<string>();
+  const picked: DocumentRow[] = [];
+  for (const d of docs) {
+    const publisher = docSource(d).toLowerCase();
+    if (!seen.has(publisher)) {
+      seen.add(publisher);
+      picked.push(d);
+    }
+  }
+  for (const d of docs) if (picked.length < 8 && !picked.includes(d)) picked.push(d);
+  const domains = new Set(docs.map((d) => docSource(d).toLowerCase()));
+  const cluster: ClusterData = {
+    docs: picked.slice(0, 8).map((d) => ({ title: incidentTitle(d.title), domain: docSource(d) })),
+    fields: [
+      { label: sc.fields.target, value: inc?.target || t.common.unknown },
+      { label: sc.fields.type, value: attackLabel(inc?.attack_type ?? null, lang) },
+      { label: sc.fields.actor, value: inc?.threat_actor?.split(",")[0] || t.common.unknown },
+      { label: sc.fields.sources, value: f.num(domains.size) },
+    ],
+    summary: sc.summary(f.num(docs.length), f.num(domains.size)),
+  };
+
+  // 02 bukti: artikel yang teksnya ter-hash, beserta posisinya di batch Merkle bila sudah ada
+  const ev = docs.find((d) => d.content_sha256) ?? docs.find((d) => d.content_fingerprint) ?? docs[0] ?? null;
+  const leaf = ev ? await getEvidenceLeaf(ev.evidence_uid, ev.content_sha256) : null;
+  const evidence: EvidenceData = {
+    title: incidentTitle(ev?.title ?? t.home.processTitle),
+    domain: ev ? docSource(ev) : "news",
+    url: (ev?.resolved_url || ev?.article_url || "").replace(/^https?:\/\//, ""),
+    fetched: f.dateTime(ev?.content_fetched_at ?? ev?.published_date),
+    hash: ev?.content_sha256 ?? ev?.content_fingerprint ?? "",
+    leaf: leaf ? { index: f.num(leaf.leaf_index + 1), count: f.num(leaf.leaf_count), batch: leaf.batch_id } : null,
+    root: leaf?.merkle_root ?? null,
+  };
+
+  // 03 kepercayaan: skor incident yang sama (pipeline V0.7 bila sudah terbit)
+  const bestTarget = Math.max(
+    0,
+    ...docs.map((d) => {
+      if (!d.target || d.target === "UNKNOWN" || !d.field_confidence) return 0;
+      try {
+        return Number((JSON.parse(d.field_confidence) as Record<string, number>).target ?? 0);
+      } catch {
+        return 0;
+      }
+    }),
+  );
+  const detailDomains = new Set(docs.map((d) => d.source_domain || domainOf(d.resolved_url) || d.source_name || "").filter(Boolean));
+  const trust =
+    (inc && trustFromStored(inc)) ??
+    trustScore({
+      independence: inc?.independence ?? null,
+      domains: detailDomains.size,
+      docs: docs.length,
+      targetConfidence: bestTarget,
+      contentShare: docs.length ? docs.filter((d) => d.content_status === "ok").length / docs.length : 0,
+      clustering: Number(inc?.incident_confidence ?? 0),
+    });
+  const trustData: TrustData = {
+    score: Math.round(trust.score * 100),
+    level: t.levels[trust.level],
+    parts: trust.parts.map((p) => ({
+      label: t.trust.parts[p.key],
+      weight: p.weight,
+      value: p.value,
+      weightText: f.score(p.weight),
+      valueText: f.score(p.value),
+      plus: `+${Math.round(p.weight * p.value * 100)}`,
+    })),
+  };
+
+  // 04 temuan: kelompok sasaran × jenis serangan, 30 hari
+  const top = riskGroups.filter((g) => g.now > 0).slice(0, 6);
+  const typeTotals = new Map<string, number>();
+  for (const g of top) for (const [type, n] of Object.entries(g.typesAll)) if (type !== "unknown") typeTotals.set(type, (typeTotals.get(type) ?? 0) + n);
+  const types = [...typeTotals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([type]) => type);
+  const rows = top.map((g) => {
+    const level = riskLevel(g);
+    const pct = g.prev ? Math.round((100 * (g.now - g.prev)) / g.prev) : null;
+    return {
+      label: groupLabel(g.group, lang),
+      counts: types.map((type) => g.typesAll[type] ?? 0),
+      now: f.num(g.now),
+      change: pct === null ? t.findings.change.new : pct > 0 ? t.findings.change.up(pct) : pct < 0 ? t.findings.change.down(Math.abs(pct)) : t.findings.change.same,
+      changeColor: pct !== null && pct < 0 ? "var(--good)" : "var(--high)",
+      levelColor: LEVEL_COLOR[level],
+      levelLabel: t.findings.levels[level],
+    };
+  });
+  const risk: RiskData = { types: types.map((type) => attackLabel(type, lang)), rows, max: Math.max(1, ...rows.flatMap((r) => r.counts)) };
+
+  // 05 paket: pratinjau paket mingguan dari temuan di atas, tertaut ke batch bukti terakhir
+  const week = isoWeek(new Date());
+  const findings = top.slice(0, 3).map((g) => `${groupLabel(g.group, lang)} · ${attackLabel(g.types[0]?.t ?? "unknown", lang)}`);
+  const batchChips = batches > 0 ? [batches - 2, batches - 1, batches].filter((n) => n > 0).map((n) => sc.batch(n)) : ["batch …"];
+  const pkg: PackageData = {
+    week: sc.week(week),
+    findings,
+    batches: batchChips,
+    hash: createHash("sha256").update(JSON.stringify({ week, findings, batches: batchChips })).digest("hex"),
+  };
+  return { cluster, evidence, trust: trustData, risk, pkg };
+}
 
 export default async function Home({ params }: { params: Promise<{ lang: string }> }) {
   const { lang } = await params;
@@ -20,7 +193,7 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
   const f = formatters(lang);
   const locale = lang === "en" ? "en-GB" : "id-ID";
 
-  const [overview, latest, countries, news, languages, feed, lastRun] = await Promise.all([
+  const [overview, latest, countries, news, languages, feed, lastRun, featuredId, riskGroups, ledgerStats] = await Promise.all([
     getOverview(),
     getLatestIncidents(5),
     getCountryCounts(90),
@@ -28,7 +201,13 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
     getLanguageCounts(),
     getScannerFeed(8),
     getLastRun(),
+    getShowcaseIncidentId(),
+    getRiskGroups(),
+    getLedgerStats(),
   ]);
+  const scenes = await processData(lang, featuredId ?? (await getFeaturedIncidentId()) ?? latest[0]?.incident_id ?? null, riskGroups, ledgerStats?.batches ?? 0);
+  const steps = t.home.steps;
+  const common = { total: steps.length, aiTag: "AI", labels: t.home.scenes };
   const newsItems: NewsItem[] = news.map((r) => ({
     id: Number(r.article_id),
     title: incidentTitle(r.title),
@@ -149,16 +328,20 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
         </section>
       </Reveal>
 
-      {/* Cara kerja: alur dengan titik mengalir */}
-      <Reveal>
-        <section id="process" className="flex flex-col gap-4 scroll-mt-20">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="text-[22px] font-semibold">{t.home.processTitle}</h2>
-            <span className="text-[13px] text-muted">{t.home.processNote}</span>
-          </div>
-          <ProcessScroll steps={t.home.steps} aiTag="AI" hint={t.home.processHint} />
-        </section>
-      </Reveal>
+      {/* Cara kerja: lima adegan scroll-driven, teknik berbeda per langkah (tanpa Reveal: tinggi adegan melebihi layar) */}
+      <section id="process" className="flex scroll-mt-20 flex-col gap-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-[22px] font-semibold">{t.home.processTitle}</h2>
+          <span className="text-[13px] text-muted">{t.home.processNote}</span>
+        </div>
+        <ScrollScenes>
+          <SceneCluster {...common} step={steps[0]} index={0} data={scenes.cluster} />
+          <SceneEvidence {...common} step={steps[1]} index={1} data={scenes.evidence} />
+          <SceneTrust {...common} step={steps[2]} index={2} data={scenes.trust} />
+          <SceneRisk {...common} step={steps[3]} index={3} data={scenes.risk} />
+          <ScenePackage {...common} step={steps[4]} index={4} data={scenes.pkg} />
+        </ScrollScenes>
+      </section>
 
       {/* Lembaga dan program literasi */}
       <Reveal>

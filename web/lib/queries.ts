@@ -1,6 +1,7 @@
 import { cache } from "react";
 import type { InValue } from "@libsql/client";
 import { query, queryOne } from "./db";
+import { publisherOf } from "./format";
 import { fromHex, leafHash, merkleProof, toHex, verifyProof } from "./merkle";
 import type { StoredTrust } from "./trust";
 
@@ -197,6 +198,43 @@ export const getTopSourceDomains = cache(async (limit = 28): Promise<string[]> =
   return rows.map((r) => r.domain);
 });
 
+/**
+ * Incident 60 hari dengan penerbit berbeda terbanyak (korban dikenali): contoh
+ * nyata di bagian "Cara kerja". Penerbit diambil dari akhiran judul Google News
+ * karena source_name selalu "Google News" dan domain bukti lama masih
+ * news.google.com; kandidatnya 15 incident dengan artikel terbanyak.
+ */
+export const getShowcaseIncidentId = cache(async (): Promise<string | null> => {
+  const rows = await query<{ incident_id: string; title: string | null }>(
+    `SELECT d.incident_id, a.title
+     FROM v05_incident_documents d
+     JOIN articles a ON a.article_id = d.article_id
+     WHERE d.incident_id IN (
+       SELECT incident_id FROM v05_incidents
+       WHERE anchor_published_date >= date('now', '-60 days')
+         AND target IS NOT NULL AND target NOT IN ('', 'UNKNOWN') AND document_count >= 3
+       ORDER BY document_count DESC
+       LIMIT 15
+     )`,
+  );
+  const publishers = new Map<string, Set<string>>();
+  for (const row of rows) {
+    const set = publishers.get(row.incident_id) ?? new Set<string>();
+    const name = publisherOf(row.title).toLowerCase();
+    if (name) set.add(name);
+    publishers.set(row.incident_id, set);
+  }
+  let best: string | null = null;
+  let bestSize = 0;
+  for (const [id, set] of publishers) {
+    if (set.size > bestSize) {
+      best = id;
+      bestSize = set.size;
+    }
+  }
+  return best;
+});
+
 export type CountryCount = { location: string; n: number };
 
 export const getCountryCounts = cache(async (days = 90): Promise<CountryCount[]> => {
@@ -321,6 +359,7 @@ export type DocumentRow = {
   language: string | null;
   content_status: string | null;
   content_sha256: string | null;
+  content_fetched_at: string | null;
   similarity_score: number | null;
   evidence_type: string | null;
   evidence_uid: string | null;
@@ -341,7 +380,7 @@ export const getIncident = cache(async (id: string) => {
   const [docs, relations, related, ledgerCount] = await Promise.all([
     query<DocumentRow>(
       `SELECT a.article_id, a.title, a.published_date, a.resolved_url, a.article_url, a.source_name,
-              a.syndicated_of, a.language, a.content_status, a.content_sha256,
+              a.syndicated_of, a.language, a.content_status, a.content_sha256, a.content_fetched_at,
               d.similarity_score,
               e.evidence_type, e.evidence_uid, e.source_domain, e.evidence_independence_score, e.content_fingerprint,
               x.target, x.threat_actor, x.attack_type, x.attack_date, x.field_confidence
@@ -547,6 +586,12 @@ async function ledgerProof(evidenceUid: string, currentSha256: string | null): P
     snapshot_sha256: snapshotSha,
     snapshot_changed: (snapshotSha ?? null) !== (currentSha256 ?? null),
   };
+}
+
+/** Posisi satu bukti di batch Merkle; null bila tabel ledger belum terbit atau bukti belum masuk batch. */
+export async function getEvidenceLeaf(evidenceUid: string | null, currentSha256: string | null): Promise<LedgerProof | null> {
+  if (!evidenceUid || !(await hasTable("evidence_leaves"))) return null;
+  return ledgerProof(evidenceUid, currentSha256);
 }
 
 export type LedgerStats = { batches: number; leaves: number; pending: number; latest: string | null };

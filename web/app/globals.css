@@ -320,77 +320,208 @@ button:focus-visible {
 }
 
 /* ==========================================================================
-   Panel pemindai tanpa gerak vertikal, dinding berita, dan panggung
-   "Cara kerja" scroll-driven (satu gaya per langkah).
+   Panel pemindai (pudar saja) dan slider berita.
    ========================================================================== */
 .fade-in { animation: fade-in 0.5s ease-out both; animation-delay: calc(var(--i, 0) * 70ms); }
-.card-swap { animation: card-swap 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
-@keyframes card-swap { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: none; } }
-
-/* Panggung: masuk dengan pudar dan sedikit membesar. */
-.stage-enter { animation: stage-enter 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
-@keyframes stage-enter { from { opacity: 0; transform: scale(0.985); } to { opacity: 1; transform: none; } }
-.stage-1 { background: radial-gradient(120% 90% at 20% 10%, rgba(47, 183, 201, 0.14), transparent 60%), var(--surface); }
-.stage-2 { background: radial-gradient(90% 90% at 80% 90%, rgba(167, 139, 250, 0.16), transparent 60%), #05080c; }
-.stage-3 { background: radial-gradient(100% 80% at 50% 100%, rgba(76, 195, 138, 0.16), transparent 60%), var(--surface); }
-.stage-4 { background: radial-gradient(90% 90% at 20% 80%, rgba(242, 85, 90, 0.18), transparent 60%), #140f14; }
-.stage-5 { background: radial-gradient(100% 90% at 80% 10%, rgba(167, 139, 250, 0.2), transparent 60%), linear-gradient(180deg, #151223, #0f1720); }
-
-/* Langkah 1: stabilo menyapu di kertas dan garis pindai turun. */
-.sweep { transform-box: fill-box; transform-origin: left center; animation: fill-x 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: calc(var(--i, 0) * 260ms + 500ms); }
-.scan-y { animation: scan-y 2.6s cubic-bezier(0.4, 0, 0.2, 1) both; }
-@keyframes scan-y { from { transform: translateY(0); opacity: 0.9; } 85% { opacity: 0.9; } to { transform: translateY(210px); opacity: 0; } }
-.slide-r { animation: slide-r 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: calc(var(--i, 0) * 260ms + 900ms); }
-@keyframes slide-r { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
-
-/* Langkah 2: baris terminal muncul berurutan dengan kursor. */
-.type-line { animation: fade-in 0.25s steps(1) both; animation-delay: calc(var(--i, 0) * 420ms + 200ms); }
-.pulse-node { animation: pulse-node 1.6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
-@keyframes pulse-node { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
-
-/* Langkah 3: jarum instrumen berayun ke skor. */
-.needle { transform-box: fill-box; transform-origin: 50% 100%; animation: needle 1.6s cubic-bezier(0.3, 1.3, 0.4, 1) both; animation-delay: 300ms; }
-@keyframes needle { from { transform: rotate(-90deg); } to { transform: rotate(var(--deg, 40deg)); } }
-
-/* Langkah 4: sapuan radar dan titik merah berdenyut. */
-.sweep-arm { transform-box: view-box; transform-origin: 120px 150px; animation: spin 5s linear infinite; }
-.blip { transform-box: fill-box; transform-origin: center; animation: blip 2s ease-out infinite; animation-delay: calc(var(--i, 0) * 500ms); }
-@keyframes blip { 0% { transform: scale(0.6); opacity: 1; } 100% { transform: scale(2.4); opacity: 0; } }
-
-/* Langkah 5: cap turun ke dokumen. */
-.stamp { transform-box: fill-box; transform-origin: center; animation: stamp 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; animation-delay: 1400ms; }
-@keyframes stamp { from { opacity: 0; transform: scale(2.2) rotate(-18deg); } to { opacity: 1; transform: scale(1) rotate(-10deg); } }
-
-/* Teks langkah: yang aktif terang, lainnya redup. */
-.step-item { transition: opacity 0.35s ease, transform 0.35s ease; opacity: 0.4; }
-.step-item[data-active="true"] { opacity: 1; }
-.rail-dot { transition: background-color 0.3s ease, box-shadow 0.3s ease; }
-.rail-dot[data-active="true"] { box-shadow: 0 0 0 4px rgba(47, 183, 201, 0.2); }
-
-@media (prefers-reduced-motion: reduce) {
-  .fade-in, .card-swap, .stage-enter, .sweep, .scan-y, .slide-r, .type-line, .pulse-node, .needle, .sweep-arm, .blip, .stamp { animation: none !important; opacity: 1; transform: none; }
-  .needle { transform: rotate(var(--deg, 40deg)); }
-  .stamp { transform: rotate(-10deg); }
-  .step-item, .rail-dot { transition: none; }
-}
-
-/* ==========================================================================
-   Slider berita dan panggung "Cara kerja" yang mengikuti gulir (--p 0..1).
-   ========================================================================== */
 .news-track { --pv: 1; display: flex; transition: transform 0.65s cubic-bezier(0.2, 0.7, 0.2, 1); transform: translateX(calc(var(--idx, 0) * -100% / var(--pv))); will-change: transform; }
 .news-track.no-anim { transition: none; }
 @media (min-width: 640px) { .news-track { --pv: 2; } }
 @media (min-width: 1024px) { .news-track { --pv: 3; } }
 .news-card { flex: 0 0 calc(100% / var(--pv)); }
 
-/* Panggung: --p (0 awal langkah, 1 akhir) diatur JS pada .p-host saat menggulir;
-   tanpa JS atau reduced motion, nilai bawaan menampilkan keadaan hampir selesai. */
-.p-host { --p: 0.75; }
-.stage-swap { animation: stage-swap 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
-@keyframes stage-swap { from { opacity: 0; transform: scale(1.06); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
-.layer { will-change: transform; }
+@media (prefers-reduced-motion: reduce) {
+  .fade-in { animation: none !important; opacity: 1; }
+  .news-track { transition: none; }
+}
+
+/* ==========================================================================
+   Cara kerja: lima adegan scroll-driven, masing-masing dengan teknik berbeda.
+   .scene tingginya beberapa layar; .scene-pin menempel di bawah header selama
+   adegan digulir. components/scroll-scenes.tsx hanya mengisi --p (0..1) per
+   adegan; seluruh gerak dihitung CSS dari --p (calc, clamp, @property,
+   clip-path, 3D preserve-3d, mix-blend-mode, conic-gradient, counter).
+   ========================================================================== */
+@property --score { syntax: "<integer>"; inherits: false; initial-value: 0; }
+
+:root { --hdr: 56px; }
+body { overflow-x: clip; }
+.bleed { width: 100vw; margin-left: calc(50% - 50vw); }
+.scene { --p: 1; position: relative; }
+.scene-pin { position: sticky; top: var(--hdr); height: calc(100vh - var(--hdr)); height: calc(100svh - var(--hdr)); overflow: hidden; isolation: isolate; }
+.scene-1 { height: 230vh; }
+.scene-2 { height: 320vh; }
+.scene-3 { height: 270vh; }
+.scene-4 { height: 240vh; }
+.scene-5 { height: 270vh; }
+
+/* 01 Konvergensi 3D: kartu tersebar dalam ruang, menyatu jadi satu incident. */
+.s1 {
+  --k: 1;
+  --q: clamp(0, var(--p) / 0.55, 1);
+  --e: calc(1 - (1 - var(--q)) * (1 - var(--q)));
+  --inv: calc(1 - var(--e));
+  --ring: clamp(0, (var(--p) - 0.5) / 0.18, 1);
+  --out: clamp(0, (var(--p) - 0.64) / 0.22, 1);
+  background: radial-gradient(80% 70% at 72% 42%, rgba(47, 183, 201, 0.16), transparent 62%), var(--bg);
+}
+@media (max-width: 767px) { .s1 { --k: 0.55; } }
+.s1-floor {
+  position: absolute; left: -40%; right: -40%; bottom: -6%; height: 60%; pointer-events: none;
+  transform-origin: 50% 0; transform: perspective(520px) rotateX(74deg);
+  background-image: linear-gradient(rgba(47, 183, 201, 0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(47, 183, 201, 0.3) 1px, transparent 1px);
+  background-size: 56px 56px; background-position: 0 calc(var(--p) * 560px);
+  -webkit-mask-image: linear-gradient(to top, #000 10%, transparent 85%); mask-image: linear-gradient(to top, #000 10%, transparent 85%);
+}
+.s1-word { opacity: clamp(0.14, calc((var(--p) - var(--t)) * 9 + 0.14), 1); }
+.s1-stage { position: relative; perspective: 1000px; transform-style: preserve-3d; }
+.s1-card {
+  position: absolute; left: 50%; top: 50%; width: min(260px, 70vw);
+  box-shadow: 0 18px 40px -22px rgba(0, 0, 0, 0.9);
+  transform: translate(-50%, -50%)
+    translate3d(calc(var(--x) * var(--k) * var(--inv)), calc(var(--y) * var(--k) * var(--inv) + (var(--i) - 3.5) * 5px * var(--e)), calc(var(--z) * var(--inv)))
+    rotateX(calc(var(--rx) * var(--inv))) rotateY(calc(var(--ry) * var(--inv)))
+    rotateZ(calc(var(--rz) * var(--inv) + (var(--i) - 3.5) * 1.4deg * var(--e)));
+  filter: blur(calc(var(--b) * var(--inv)));
+  opacity: calc(1 - var(--inv) * var(--f));
+}
+.s1-ring {
+  position: absolute; left: 50%; top: 50%; width: min(440px, 88vw); aspect-ratio: 1; border-radius: 999px;
+  border: 1px solid rgba(47, 183, 201, 0.65);
+  box-shadow: 0 0 70px -14px rgba(47, 183, 201, 0.55), inset 0 0 70px -24px rgba(47, 183, 201, 0.55);
+  transform: translate(-50%, -50%) scale(calc(0.5 + var(--ring) * 0.5)); opacity: var(--ring);
+}
+.s1-ring::before { content: ""; position: absolute; inset: 16px; border-radius: 999px; border: 1px dashed rgba(47, 183, 201, 0.45); animation: spin 32s linear infinite; }
+.s1-tag {
+  position: absolute; left: 50%; top: 50%; background: var(--bg);
+  transform: translate(-50%, -50%) translate(calc(var(--tx) * var(--k) * var(--out)), calc(var(--ty) * var(--k) * var(--out))) scale(calc(0.6 + var(--out) * 0.4));
+  opacity: var(--out);
+}
+
+/* 02 Rel horizontal: gulir vertikal menggeser rel; hash berputar seperti mesin slot. */
+.s2 { background: #05080c; }
+.s2 .scene-pin::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.028) 0 1px, transparent 1px 3px),
+    radial-gradient(70% 60% at 82% 28%, rgba(167, 139, 250, 0.16), transparent 60%),
+    radial-gradient(60% 60% at 8% 92%, rgba(47, 183, 201, 0.12), transparent 60%);
+}
+.s2-title { clip-path: inset(0 calc((1 - clamp(0, var(--p) * 10, 1)) * 100%) 0 0); }
+.s2-track {
+  display: flex; align-items: stretch; gap: 20px; width: max-content;
+  padding-inline: max(16px, calc((100vw - 80rem) / 2 + 24px));
+  transform: translate3d(calc((100vw - 100%) * var(--p)), 0, 0); will-change: transform;
+}
+.s2-panel { --lp: clamp(0, (var(--p) - var(--s)) / var(--d), 1); flex: none; width: min(80vw, 400px); display: flex; flex-direction: column; gap: 12px; }
+.s2-rise { transform: translateY(calc((1 - var(--lp)) * 36px)); opacity: calc(0.2 + var(--lp) * 0.8); }
+.s2-strip { display: block; width: 1ch; height: 1.3em; overflow: hidden; }
+.s2-strip > span {
+  --h: clamp(0, var(--lp) * 1.6 - var(--k) / 64 * 0.6, 1);
+  display: block; width: 1ch; line-height: 1.3em; word-break: break-all; overflow-wrap: anywhere;
+  transform: translateY(calc(-1.3em * (var(--g) + (16 + var(--r)) * (1 - var(--h)) * (1 - var(--h)))));
+}
+.s2-bgword {
+  position: absolute; left: 0; top: 50%; white-space: nowrap; pointer-events: none; z-index: -1;
+  font: 700 clamp(90px, 17vw, 260px) / 1 var(--font-jet), monospace; letter-spacing: -0.04em; text-transform: uppercase;
+  color: transparent; -webkit-text-stroke: 1px rgba(167, 139, 250, 0.2);
+  transform: translate3d(calc(var(--p) * -55vw), -50%, 0);
+}
+.s2-leaf { width: 26px; height: 26px; border-radius: 5px; background: var(--line-2); transform: scale(clamp(0, var(--lp) * 1.6 - var(--i) * 0.06, 1)); }
+.s2-leaf.is-hl { background: var(--accent); box-shadow: 0 0 0 3px rgba(47, 183, 201, 0.25), 0 0 24px rgba(47, 183, 201, 0.6); }
+.s2-edge { stroke-dasharray: 1; stroke-dashoffset: calc(1 - clamp(0, (var(--lp) - var(--o)) * 3.2, 1)); }
+.s2-node { opacity: clamp(0.15, (var(--lp) - var(--o)) * 4, 1); }
+.s2-root { box-shadow: 0 0 calc(var(--lp) * 60px) calc(var(--lp) * -6px) rgba(167, 139, 250, 0.7); border-color: color-mix(in srgb, var(--chain) calc(var(--lp) * 100%), var(--line)); }
+.s2-newblock { transform: translateX(calc((1 - var(--lp)) * 160px)) rotate(calc((1 - var(--lp)) * 8deg)); opacity: var(--lp); }
+.s2-rail { position: relative; height: 2px; background: var(--line); border-radius: 2px; overflow: hidden; }
+.s2-rail-fill { position: absolute; inset: 0; background: linear-gradient(90deg, var(--accent), var(--chain)); transform-origin: left; transform: scaleX(var(--p)); }
+.s2-tick { opacity: clamp(0.35, (var(--p) - var(--s)) * 20 + 0.35, 1); }
+
+/* 03 Dek sinyal: kartu bertumpuk, skor dihitung CSS (@property + counter). */
+.s3 {
+  background: radial-gradient(70% 70% at 26% 62%, rgba(76, 195, 138, 0.16), transparent 62%), var(--surface);
+  --sum: calc(var(--w0) * var(--v0) * var(--c0) + var(--w1) * var(--v1) * var(--c1) + var(--w2) * var(--v2) * var(--c2) + var(--w3) * var(--v3) * var(--c3) + var(--w4) * var(--v4) * var(--c4));
+}
+.s3-ring {
+  border-radius: 999px;
+  background: conic-gradient(from 0deg, var(--good) calc(var(--sum) * 360deg), rgba(255, 255, 255, 0.07) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 16px), #000 calc(100% - 15px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 16px), #000 calc(100% - 15px));
+}
+.s3-ticks {
+  border-radius: 999px;
+  background: repeating-conic-gradient(rgba(255, 255, 255, 0.22) 0 1deg, transparent 1deg 18deg);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 30px), #000 calc(100% - 29px), #000 calc(100% - 22px), transparent calc(100% - 21px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 30px), #000 calc(100% - 29px), #000 calc(100% - 22px), transparent calc(100% - 21px));
+  animation: spin 60s linear infinite;
+}
+.s3-num { --score: calc(var(--sum) * 100); counter-reset: score var(--score); }
+.s3-num::after { content: counter(score); }
+.s3-level { opacity: var(--c4); }
+.s3-card {
+  position: absolute; left: 0; right: 0; bottom: 0; transform-origin: 50% 0;
+  transform: translateY(calc((1 - var(--c)) * 160% - var(--bur) * 18px)) scale(calc(1 - var(--bur) * 0.05));
+  opacity: clamp(0, var(--c) * 3, 1);
+  filter: brightness(calc(1 - var(--bur) * 0.14));
+  box-shadow: 0 -14px 30px -18px rgba(0, 0, 0, 0.9);
+}
+.s3-bar { transform-origin: left; transform: scaleX(var(--c)); }
+
+/* 04 Radar: lingkaran clip-path membuka peta panas; judul raksasa dengan blend. */
+.s4 {
+  background: #0e0a0d;
+  --r: clamp(0, var(--p) / 0.58, 1);
+  --re: calc(1 - (1 - var(--r)) * (1 - var(--r)));
+  --rank: clamp(0, (var(--p) - 0.6) / 0.24, 1);
+}
+.s4-reveal { position: absolute; inset: 0; clip-path: circle(calc(var(--re) * 130%) at 74% 60%); background: radial-gradient(55% 60% at 74% 60%, #4a121c, #1c0b11 70%); }
+.s4-sweep {
+  position: absolute; left: 74%; top: 60%; width: 160vmax; aspect-ratio: 1; translate: -50% -50%; border-radius: 999px; pointer-events: none;
+  background: conic-gradient(from 0deg, transparent 0 78%, rgba(242, 85, 90, 0.05) 86%, rgba(242, 85, 90, 0.42) 100%);
+  animation: spin 7s linear infinite;
+}
+.s4-rings { position: absolute; left: 74%; top: 60%; width: 110vmin; aspect-ratio: 1; translate: -50% -50%; border-radius: 999px; pointer-events: none; background: repeating-radial-gradient(circle, transparent 0 58px, rgba(242, 85, 90, 0.22) 58px 59px); }
+.s4-title { mix-blend-mode: difference; color: #fff; font-size: clamp(40px, 7.4vw, 116px); line-height: 0.92; letter-spacing: -0.035em; font-weight: 700; }
+.s4-cell {
+  --lc: clamp(0, (var(--re) * 1.35 - var(--dist)) * 3.5, 1);
+  opacity: var(--lc); transform: scale(calc(0.3 + var(--lc) * 0.7));
+  background: rgba(242, 85, 90, calc(0.1 + var(--h) * 0.8));
+}
+.s4-fade { opacity: var(--re); }
+.s4-rank { transform: translateX(calc((1 - var(--rank)) * -48px)); opacity: var(--rank); }
+.s4-rank-row { --rr: clamp(0, var(--rank) * 1.6 - var(--i) * 0.18, 1); opacity: var(--rr); transform: translateX(calc((1 - var(--rr)) * -20px)); }
+
+/* 05 Rakitan isometrik: lapisan 3D terurai, merakit diri, lalu berbalik. */
+.s5 {
+  background: radial-gradient(80% 80% at 24% 40%, rgba(167, 139, 250, 0.22), transparent 62%), linear-gradient(180deg, #141124, #0f1720);
+  --asm: clamp(0, var(--p) / 0.4, 1);
+  --ae: calc(1 - (1 - var(--asm)) * (1 - var(--asm)));
+  --flat: clamp(0, (var(--p) - 0.42) / 0.2, 1);
+  --flip: clamp(0, (var(--p) - 0.68) / 0.22, 1);
+}
+.s5-scene { perspective: 1400px; perspective-origin: 50% 40%; }
+.s5-obj {
+  position: relative; width: min(300px, 58vw); aspect-ratio: 3 / 4; transform-style: preserve-3d;
+  transform: rotateX(calc(58deg * (1 - var(--flat)))) rotateZ(calc(-40deg * (1 - var(--flat)))) rotateY(calc(180deg * var(--flip))) scale(calc(0.84 + var(--flat) * 0.16));
+}
+.s5-layer {
+  position: absolute; inset: 0; border-radius: 12px; backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  transform: translateZ(calc(var(--z) * (1 - var(--ae)) + var(--i) * 2px));
+}
+.s5-ghost { border: 1px dashed rgba(167, 139, 250, calc(0.75 * (1 - var(--ae)))); }
+.s5-callout { position: absolute; right: calc(100% + 14px); top: 10px; white-space: nowrap; opacity: calc(1 - var(--ae)); }
+.s5-back { position: absolute; inset: 0; border-radius: 12px; backface-visibility: hidden; -webkit-backface-visibility: hidden; transform: rotateY(180deg) translateZ(1px); }
+.s5-sign { stroke-dasharray: 1; stroke-dashoffset: calc(1 - var(--ae)); }
+.s5-seal { transform: scale(calc(0.4 + var(--ae) * 0.6)) rotate(calc((1 - var(--ae)) * -120deg)); }
+.s5-char {
+  display: inline-block; transform-origin: 50% 90%;
+  --cc: clamp(0, (var(--p) - var(--t)) * 10, 1);
+  transform: perspective(400px) rotateX(calc((1 - var(--cc)) * -95deg)); opacity: var(--cc);
+}
+.s5-glow { opacity: var(--flip); }
 
 @media (prefers-reduced-motion: reduce) {
-  .news-track { transition: none; }
-  .stage-swap { animation: none !important; opacity: 1; transform: none; filter: none; }
+  .scene { height: auto !important; --p: 1 !important; }
+  .scene-pin { position: relative; top: 0; height: auto; min-height: 640px; }
+  .s2-track { transform: none; flex-wrap: wrap; width: auto; }
+  .s1-ring::before, .s3-ticks, .s4-sweep { animation: none; }
 }

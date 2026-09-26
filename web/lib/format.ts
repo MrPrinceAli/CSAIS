@@ -70,6 +70,12 @@ export function incidentTitle(title: string | null | undefined, fallback = "Inci
   return title.replace(/\s+[-–|]\s+[^-–|]{2,60}$/, "").trim() || fallback;
 }
 
+/** Nama penerbit dari akhiran judul Google News (" - Help Net Security"); kosong bila tidak ada. */
+export function publisherOf(title: string | null | undefined): string {
+  const match = /\s[-–|]\s([^-–|]{2,60})$/.exec(title ?? "");
+  return match ? match[1].trim() : "";
+}
+
 export function attackCode(value: string | null | undefined): string {
   if (!value) return "UNKNOWN";
   return value.toUpperCase().split(",")[0].trim();
