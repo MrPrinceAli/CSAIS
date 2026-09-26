@@ -366,7 +366,16 @@ export async function getDashboard(f: DashboardFilters) {
       args,
     ),
     query<CountryCount>(`SELECT LOWER(i.location) AS location, COUNT(*) AS n ${base} AND i.location != '' GROUP BY LOWER(i.location) ORDER BY n DESC`, args),
-    query<{ location: string }>(`SELECT LOWER(i.location) AS location ${base} AND i.location LIKE '%,%' LIMIT 3000`, args),
+    // Busur globe: v05 hanya menyimpan satu negara per incident, jadi pasangan
+    // negara diambil dari lokasi V0.3 tiap artikel dalam incident yang cocok filter.
+    query<{ location: string }>(
+      `SELECT LOWER(x.location) AS location
+       FROM v05_incident_documents d
+       JOIN v03_information_extraction x ON x.article_id = d.article_id
+       WHERE d.incident_id IN (SELECT i.incident_id ${base}) AND x.location LIKE '%,%'
+       LIMIT 3000`,
+      args,
+    ),
   ]);
   const total = Number(totalRow?.n ?? 0);
   return {
