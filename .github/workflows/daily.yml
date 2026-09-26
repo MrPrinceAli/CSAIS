@@ -2,9 +2,9 @@
 #
 # Alur: pulihkan database SQLite dari cache (atau dari rilis "bootstrap" pada
 # run pertama), crawl tanpa prompt, olah artikel baru, ambil isi artikel dengan
-# anggaran, terbitkan hasil ke Turso, simpan database ke cache lagi. Setiap
-# Minggu (UTC) database juga diunggah ulang ke rilis "bootstrap" sebagai
-# cadangan, supaya cache Actions yang hilang tidak menghapus data setelah
+# anggaran, cari gambar incident terbaru, terbitkan hasil ke Turso, simpan
+# database ke cache lagi. Setiap Minggu (UTC) database juga diunggah ulang ke
+# rilis "bootstrap" sebagai cadangan, supaya cache Actions yang hilang tidak menghapus data setelah
 # bootstrap pertama.
 #
 # Rahasia yang harus diisi di Settings > Secrets and variables > Actions:
@@ -14,6 +14,7 @@
 #
 # Pemicu manual (tab Actions > Run workflow) menerima:
 #   fetch_budget      anggaran isi artikel
+#   image_budget      anggaran incident yang dicarikan gambar
 #   reset_from        kosong = tidak reset; 2-7 = hapus hasil V0.N sampai V0.7
 #                     lalu proses ulang (setelah logika tahap itu berubah)
 #   refresh_bootstrap true = unggah database ke rilis bootstrap pada run ini
@@ -28,6 +29,9 @@ on:
       fetch_budget:
         description: "Maksimal artikel yang diambil isinya"
         default: "300"
+      image_budget:
+        description: "Maksimal incident yang dicarikan gambar"
+        default: "120"
       reset_from:
         description: "Proses ulang mulai tahap V0.N (2-7); kosongkan bila tidak"
         default: ""
@@ -101,6 +105,7 @@ jobs:
           fi
           python main.py --crawl \
             --fetch-budget "${{ github.event.inputs.fetch_budget || '300' }}" \
+            --image-budget "${{ github.event.inputs.image_budget || '120' }}" \
             $RESET $PUBLISH
 
       - name: Simpan database ke cache

@@ -25,6 +25,7 @@ from csais import (
     content_fetcher,
     crawler,
     export,
+    image_resolver,
     language,
     ledger,
     publish,
@@ -48,6 +49,7 @@ PIPELINE_STEPS = [
     ("V0.3 - Information Extraction", v03_information_extraction.run),
     ("V0.4 - Entity Resolution", v04_entity_resolution.run),
     ("V0.5 - Incident Clustering", v05_incident_clustering.run),
+    ("Image - Gambar Incident", image_resolver.run),
     ("V0.6 - Evidence Correlation", v06_evidence_correlation.run),
     ("V0.7 - Trust Score", v07_trust_score.run),
     ("Ledger - Batch Merkle Bukti", ledger.run),
@@ -119,6 +121,16 @@ def parse_args():
     )
     parser.add_argument(
         "--no-fetch", action="store_true", help="lewati pengambilan isi artikel"
+    )
+    parser.add_argument(
+        "--image-budget",
+        type=int,
+        default=image_resolver.DEFAULT_BUDGET,
+        metavar="N",
+        help=f"maksimal incident yang dicarikan gambar per run (default {image_resolver.DEFAULT_BUDGET})",
+    )
+    parser.add_argument(
+        "--no-images", action="store_true", help="lewati pencarian gambar incident"
     )
     parser.add_argument(
         "--export", metavar="FILE", help="ekspor incident ke berkas JSON Lines, lalu keluar"
@@ -199,6 +211,10 @@ def main():
             if args.no_fetch:
                 continue
             step = lambda: content_fetcher.run(budget=args.fetch_budget)  # noqa: E731
+        elif step is image_resolver.run:
+            if args.no_images:
+                continue
+            step = lambda: image_resolver.run(budget=args.image_budget)  # noqa: E731
         steps.append((name, step))
     if not args.no_crawl:
         steps.insert(0, ("CSAIS Crawler", lambda: crawler.run(ask=not args.crawl)))
