@@ -154,7 +154,7 @@ export function IntelScanner({ items, labels, stamp, reduceMotion = false }: { i
       </div>
 
       {/* kartu aktif */}
-      <div key={`${item.incident_id}-${index}`} className={`relative rounded-md border border-line-2 bg-bg p-3.5 ${animate ? "fade-up" : ""}`}>
+      <div key={`${item.incident_id}-${index}`} className={`relative rounded-md border border-line-2 bg-bg p-3.5 ${animate ? "fade-in" : ""}`}>
         <div className="beam" aria-hidden="true" />
         <div className="mb-1.5 flex items-center justify-between gap-2 font-mono text-[10.5px] text-muted">
           <span className="truncate">{item.domain}</span>
@@ -163,17 +163,17 @@ export function IntelScanner({ items, labels, stamp, reduceMotion = false }: { i
         <p className="line-clamp-2 min-h-[2.7em] text-[14.5px] font-semibold leading-snug">
           <Highlighted item={item} />
         </p>
-        <div className={`mt-3 flex min-h-[26px] flex-wrap gap-1.5 overflow-hidden ${stage >= 2 ? "" : "invisible"}`}>
+        <div className={`mt-3 flex h-[26px] flex-nowrap gap-1.5 overflow-hidden ${stage >= 2 ? "" : "invisible"}`}>
           {[
             { k: "type", label: labels.type, value: item.attackLabel, cls: "" },
             { k: "target", label: labels.target, value: item.target ?? "—", cls: "chip-accent" },
           ].map((c, i) => (
-            <span key={c.k} className={`chip ${c.cls} ${stage >= 2 && animate ? "fade-up" : ""}`} style={{ "--i": i } as React.CSSProperties}>
+            <span key={c.k} className={`chip ${c.cls} ${stage >= 2 && animate ? "fade-in" : ""}`} style={{ "--i": i } as React.CSSProperties}>
               <span className="text-muted">{c.label}</span> {c.value}
             </span>
           ))}
         </div>
-        <div className={`mt-3 flex items-center justify-between gap-3 border-t border-line pt-2.5 ${stage >= 3 ? (animate ? "fade-up" : "") : "invisible"}`}>
+        <div className={`mt-3 flex h-[34px] items-center justify-between gap-3 border-t border-line pt-2.5 ${stage >= 3 ? (animate ? "fade-in" : "") : "invisible"}`}>
           <span className="flex items-center gap-2 font-mono text-[11.5px] text-chain">
             <span className="led" aria-hidden="true" />
             {item.incident_id.replace("INCIDENT_", "#")} · {item.docs} {labels.sources}
@@ -189,9 +189,9 @@ export function IntelScanner({ items, labels, stamp, reduceMotion = false }: { i
       </div>
 
       {/* log terminal: tinggi tetap empat baris agar panel tidak berubah ukuran */}
-      <div className="flex min-h-[4.6em] flex-col gap-0.5 font-mono text-[11px] leading-[1.15]">
+      <div className="flex h-[4.8em] flex-col gap-0.5 overflow-hidden font-mono text-[11px] leading-[1.15]">
         {logs.map((l, i) => (
-          <span key={l.k} className={`${l.tone} ${animate ? "fade-up" : ""} truncate`} style={{ "--i": 0 } as React.CSSProperties}>
+          <span key={l.k} className={`${l.tone} ${animate ? "fade-in" : ""} truncate`} style={{ "--i": 0 } as React.CSSProperties}>
             <span className="text-line-2">{String(i + 1).padStart(2, "0")}</span> {l.text}
             {i === logs.length - 1 ? <span className="caret" /> : null}
           </span>

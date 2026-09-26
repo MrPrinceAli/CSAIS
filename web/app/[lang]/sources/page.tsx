@@ -56,9 +56,7 @@ export default async function SourcesPage({ params: p, searchParams }: { params:
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-1">
-        <h1 className="text-[24px] font-semibold">
-          <span className="mark mark-good on">{t.sources.title}</span>
-        </h1>
+        <h1 className="text-[24px] font-semibold">{t.sources.title}</h1>
         <p className="max-w-[84ch] text-[13.5px] text-muted">{t.sources.lead}</p>
       </div>
 

@@ -150,6 +150,31 @@ export const getScannerFeed = cache(async (limit = 8): Promise<ScanRow[]> => {
   );
 });
 
+export type NewsRow = {
+  article_id: number;
+  title: string | null;
+  published_date: string | null;
+  language: string | null;
+  source_domain: string;
+  attack_type: string | null;
+  incident_id: string;
+};
+
+/** Artikel terbaru dengan domain media asli, untuk dinding berita di beranda. */
+export const getNewsFeed = cache(async (limit = 36): Promise<NewsRow[]> => {
+  return query<NewsRow>(
+    `SELECT a.article_id, a.title, a.published_date, a.language, e.source_domain, x.attack_type, e.incident_id
+     FROM v06_evidence e
+     JOIN articles a ON a.article_id = e.article_id
+     LEFT JOIN v03_information_extraction x ON x.article_id = a.article_id
+     WHERE e.source_domain != '' AND e.source_domain NOT LIKE '%google.%'
+       AND a.published_date <= date('now', '+1 day')
+     ORDER BY a.published_date DESC
+     LIMIT ?`,
+    [limit],
+  );
+});
+
 /** Domain sumber dengan artikel terbanyak (marquee logo). */
 export const getTopSourceDomains = cache(async (limit = 28): Promise<string[]> => {
   const rows = await query<{ domain: string }>(`SELECT domain FROM sources WHERE source_type != 'BLOG' ORDER BY article_count DESC LIMIT ?`, [limit]);

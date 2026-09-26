@@ -318,3 +318,58 @@ button:focus-visible {
   .flow-dot { display: none; }
   .lift, .scan-row::before, .nav-link::after, .heat-cell { transition: none; }
 }
+
+/* ==========================================================================
+   Panel pemindai tanpa gerak vertikal, dinding berita, dan panggung
+   "Cara kerja" scroll-driven (satu gaya per langkah).
+   ========================================================================== */
+.fade-in { animation: fade-in 0.5s ease-out both; animation-delay: calc(var(--i, 0) * 70ms); }
+.card-swap { animation: card-swap 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+@keyframes card-swap { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: none; } }
+
+/* Panggung: masuk dengan pudar dan sedikit membesar. */
+.stage-enter { animation: stage-enter 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+@keyframes stage-enter { from { opacity: 0; transform: scale(0.985); } to { opacity: 1; transform: none; } }
+.stage-1 { background: radial-gradient(120% 90% at 20% 10%, rgba(47, 183, 201, 0.14), transparent 60%), var(--surface); }
+.stage-2 { background: radial-gradient(90% 90% at 80% 90%, rgba(167, 139, 250, 0.16), transparent 60%), #05080c; }
+.stage-3 { background: radial-gradient(100% 80% at 50% 100%, rgba(76, 195, 138, 0.16), transparent 60%), var(--surface); }
+.stage-4 { background: radial-gradient(90% 90% at 20% 80%, rgba(242, 85, 90, 0.18), transparent 60%), #140f14; }
+.stage-5 { background: radial-gradient(100% 90% at 80% 10%, rgba(167, 139, 250, 0.2), transparent 60%), linear-gradient(180deg, #151223, #0f1720); }
+
+/* Langkah 1: stabilo menyapu di kertas dan garis pindai turun. */
+.sweep { transform-box: fill-box; transform-origin: left center; animation: fill-x 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: calc(var(--i, 0) * 260ms + 500ms); }
+.scan-y { animation: scan-y 2.6s cubic-bezier(0.4, 0, 0.2, 1) both; }
+@keyframes scan-y { from { transform: translateY(0); opacity: 0.9; } 85% { opacity: 0.9; } to { transform: translateY(210px); opacity: 0; } }
+.slide-r { animation: slide-r 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: calc(var(--i, 0) * 260ms + 900ms); }
+@keyframes slide-r { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+
+/* Langkah 2: baris terminal muncul berurutan dengan kursor. */
+.type-line { animation: fade-in 0.25s steps(1) both; animation-delay: calc(var(--i, 0) * 420ms + 200ms); }
+.pulse-node { animation: pulse-node 1.6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes pulse-node { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
+
+/* Langkah 3: jarum instrumen berayun ke skor. */
+.needle { transform-box: fill-box; transform-origin: 50% 100%; animation: needle 1.6s cubic-bezier(0.3, 1.3, 0.4, 1) both; animation-delay: 300ms; }
+@keyframes needle { from { transform: rotate(-90deg); } to { transform: rotate(var(--deg, 40deg)); } }
+
+/* Langkah 4: sapuan radar dan titik merah berdenyut. */
+.sweep-arm { transform-box: view-box; transform-origin: 120px 150px; animation: spin 5s linear infinite; }
+.blip { transform-box: fill-box; transform-origin: center; animation: blip 2s ease-out infinite; animation-delay: calc(var(--i, 0) * 500ms); }
+@keyframes blip { 0% { transform: scale(0.6); opacity: 1; } 100% { transform: scale(2.4); opacity: 0; } }
+
+/* Langkah 5: cap turun ke dokumen. */
+.stamp { transform-box: fill-box; transform-origin: center; animation: stamp 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; animation-delay: 1400ms; }
+@keyframes stamp { from { opacity: 0; transform: scale(2.2) rotate(-18deg); } to { opacity: 1; transform: scale(1) rotate(-10deg); } }
+
+/* Teks langkah: yang aktif terang, lainnya redup. */
+.step-item { transition: opacity 0.35s ease, transform 0.35s ease; opacity: 0.4; }
+.step-item[data-active="true"] { opacity: 1; }
+.rail-dot { transition: background-color 0.3s ease, box-shadow 0.3s ease; }
+.rail-dot[data-active="true"] { box-shadow: 0 0 0 4px rgba(47, 183, 201, 0.2); }
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-in, .card-swap, .stage-enter, .sweep, .scan-y, .slide-r, .type-line, .pulse-node, .needle, .sweep-arm, .blip, .stamp { animation: none !important; opacity: 1; transform: none; }
+  .needle { transform: rotate(var(--deg, 40deg)); }
+  .stamp { transform: rotate(-10deg); }
+  .step-item, .rail-dot { transition: none; }
+}

@@ -54,9 +54,7 @@ export default async function FindingsPage({ params }: { params: Promise<{ lang:
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h1 className="text-[24px] font-semibold">
-          <span className="mark on" style={{ "--mark-color": "rgba(242, 85, 90, 0.3)" } as React.CSSProperties}>{t.findings.title}</span>
-        </h1>
+        <h1 className="text-[24px] font-semibold">{t.findings.title}</h1>
         <p className="max-w-[90ch] text-[13.5px] text-muted">{t.findings.subtitle(f.num(totalNow), f.num(rising), f.num(groups.length))}</p>
       </div>
 

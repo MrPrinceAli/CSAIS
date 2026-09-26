@@ -77,9 +77,7 @@ export default async function IncidentsPage({ params: p, searchParams }: { param
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-col gap-1">
-          <h1 className="text-[24px] font-semibold">
-            <span className="mark mark-accent on">{t.incidents.title}</span>
-          </h1>
+          <h1 className="text-[24px] font-semibold">{t.incidents.title}</h1>
           <span className="text-[13px] text-muted">{t.incidents.subtitle(f.num(data.total), days, active)}</span>
         </div>
         <div className="flex gap-1.5">

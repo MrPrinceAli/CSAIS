@@ -1,14 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getCountryCounts, getDailyArticles, getLanguageCounts, getLastRun, getLatestIncidents, getOverview, getScannerFeed } from "@/lib/queries";
+import { getCountryCounts, getLanguageCounts, getLastRun, getLatestIncidents, getNewsFeed, getOverview, getScannerFeed } from "@/lib/queries";
 import { countryOf } from "@/lib/geo";
 import { formatters, incidentTitle } from "@/lib/format";
 import { attackLabel, getDict, isLang, L, languageLabel } from "@/lib/i18n";
 import { CountUp, Reveal } from "@/components/reveal";
 import { IntelScanner, type ScanItem } from "@/components/intel-scanner";
-import { PipelineFlow } from "@/components/pipeline-flow";
+import { NewsWall, type NewsItem } from "@/components/news-wall";
 import { OrgLogo, ORGS } from "@/components/org-logo";
-import { DailyBars, IncidentCard, LabelBars, SectionTitle, Stat } from "@/components/ui";
+import { ProcessScroll } from "@/components/process-scroll";
+import { IncidentCard, LabelBars, SectionTitle, Stat } from "@/components/ui";
 
 export const revalidate = 3600;
 
@@ -19,15 +20,24 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
   const f = formatters(lang);
   const locale = lang === "en" ? "en-GB" : "id-ID";
 
-  const [overview, latest, countries, daily, languages, feed, lastRun] = await Promise.all([
+  const [overview, latest, countries, news, languages, feed, lastRun] = await Promise.all([
     getOverview(),
     getLatestIncidents(5),
     getCountryCounts(90),
-    getDailyArticles(60),
+    getNewsFeed(36),
     getLanguageCounts(),
     getScannerFeed(8),
     getLastRun(),
   ]);
+  const newsItems: NewsItem[] = news.map((r) => ({
+    id: Number(r.article_id),
+    title: incidentTitle(r.title),
+    domain: r.source_domain,
+    date: f.date(r.published_date),
+    type: attackLabel((r.attack_type ?? "").split(",")[0].trim(), lang),
+    language: languageLabel(r.language, lang),
+    href: L(lang, `/incidents/${r.incident_id}`),
+  }));
   const totalLang = languages.reduce((acc, l) => acc + Number(l.n), 0) || 1;
   const scanItems: ScanItem[] = feed.map((r) => {
     const type = (r.attack_type ?? "").split(",")[0].trim();
@@ -93,9 +103,9 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
             <Stat label={t.home.metrics.corroborated} value={<CountUp value={Number(overview.multi_all)} locale={locale} />} note={t.home.metricNotes.corroborated} tone="good" />
             <Stat label={t.home.metrics.evidence} value={<CountUp value={Number(overview.bukti)} locale={locale} />} note={t.home.metricNotes.evidence} tone="chain" />
           </div>
-          <div className="card p-4 sm:p-5">
-            <SectionTitle aside={t.home.volumeNote}>{t.home.volumeTitle}</SectionTitle>
-            <DailyBars data={daily} lang={lang} height={110} />
+          <div className="flex flex-col gap-3 pt-2">
+            <SectionTitle aside={t.home.newsNote}>{t.home.newsTitle}</SectionTitle>
+            <NewsWall items={newsItems} />
           </div>
         </section>
       </Reveal>
@@ -142,12 +152,10 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
       <Reveal>
         <section id="process" className="flex flex-col gap-4 scroll-mt-20">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="text-[22px] font-semibold">
-              <span className="mark mark-accent">{t.home.processTitle}</span>
-            </h2>
+            <h2 className="text-[22px] font-semibold">{t.home.processTitle}</h2>
             <span className="text-[13px] text-muted">{t.home.processNote}</span>
           </div>
-          <PipelineFlow steps={t.home.steps} aiTag="AI" />
+          <ProcessScroll steps={t.home.steps} aiTag="AI" hint={t.home.processHint} />
         </section>
       </Reveal>
 
@@ -171,9 +179,7 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
             </Link>
           </div>
           <div className="card lift flex flex-col gap-3 p-5" style={{ borderTopColor: "var(--good)", borderTopWidth: 2 }}>
-            <h2 className="text-[18px] font-semibold">
-              <span className="mark mark-good">{t.home.publicTitle}</span>
-            </h2>
+            <h2 className="text-[18px] font-semibold">{t.home.publicTitle}</h2>
             <p className="text-[14px] leading-relaxed text-soft">{t.home.publicText}</p>
             <Link href={L(lang, "/findings")} className="btn btn-primary self-start">
               {t.home.publicCta}

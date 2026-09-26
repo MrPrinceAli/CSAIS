@@ -72,9 +72,7 @@ export default async function VerifyPage({ params, searchParams }: { params: Pro
     <div className="flex flex-col gap-6">
       <section className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
         <div className="flex flex-col gap-3">
-          <h1 className="text-balance text-[26px] font-semibold leading-tight">
-            <span className="mark mark-chain on">{t.verify.title}</span>
-          </h1>
+          <h1 className="text-balance text-[26px] font-semibold leading-tight">{t.verify.title}</h1>
           <p className="max-w-[70ch] text-[14.5px] leading-relaxed text-soft">{t.verify.lead}</p>
           <form method="get" action={base} className="flex w-full flex-col gap-2 sm:flex-row">
             <label htmlFor="q" className="sr-only">

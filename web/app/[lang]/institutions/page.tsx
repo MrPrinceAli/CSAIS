@@ -19,9 +19,7 @@ export default async function InstitutionsPage({ params }: { params: Promise<{ l
     <div className="flex flex-col gap-6">
       <Reveal className="flex flex-col gap-2">
         <span className="label text-chain">{t.institutions.eyebrow}</span>
-        <h1 className="text-balance text-[26px] font-semibold leading-tight">
-          <span className="mark mark-chain">{t.institutions.title}</span>
-        </h1>
+        <h1 className="text-balance text-[26px] font-semibold leading-tight">{t.institutions.title}</h1>
         <p className="max-w-[78ch] text-[14.5px] leading-relaxed text-soft">{t.institutions.lead}</p>
         <div className="flex flex-wrap gap-1.5 pt-1">
           {t.institutions.decisions.map((d, i) => (

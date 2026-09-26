@@ -92,9 +92,7 @@ export default async function IncidentDetail({ params }: { params: Promise<Param
               {incident.language ? ` · ${t.detail.anchorLanguage}: ${languageLabel(incident.language, lang)}` : ""}
             </span>
           </div>
-          <h1 className="text-balance text-[26px] font-semibold leading-tight">
-            <span className="mark on">{incidentTitle(incident.title)}</span>
-          </h1>
+          <h1 className="text-balance text-[26px] font-semibold leading-tight">{incidentTitle(incident.title)}</h1>
           <div className="flex flex-wrap gap-x-5 gap-y-1 text-[13px] text-soft">
             <span>
               {t.detail.firstSeen} <b className="font-medium text-fg">{f.dateTime(incident.anchor_published_date)}</b>
