@@ -54,8 +54,8 @@ def _setup(conn):
 
 def test_pending_incidents_skips_old_and_already_illustrated(temp_conn):
     _setup(temp_conn)
-    assert ir.pending_incidents(temp_conn, 10) == ["INC_B", "INC_A"]
-    assert ir.pending_incidents(temp_conn, 1) == ["INC_B"]
+    assert ir.pending_incidents(temp_conn, 10) == ["INC_A", "INC_B"]
+    assert ir.pending_incidents(temp_conn, 1) == ["INC_A"]
 
 
 def test_articles_to_try_prefers_resolved_urls(temp_conn):
@@ -78,7 +78,7 @@ def test_resolve_images_stops_at_first_image_and_records_status(temp_conn):
 
     found, statuses, total = ir.resolve_images(temp_conn, 10, resolve, fetch, log=lambda *_: None)
     assert (found, total) == (1, 2)
-    assert statuses == {"unresolved": 1, "ok": 1}
+    assert statuses == {"ok": 1, "unresolved": 1}
     assert fetched == ["https://media.id/a3"]  # URL media yang sudah ada tidak di-resolve ulang
     rows = dict(temp_conn.execute("SELECT article_id, image_status FROM articles WHERE image_status IS NOT NULL"))
     assert rows == {3: "ok", 4: "unresolved"}

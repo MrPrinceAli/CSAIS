@@ -2,9 +2,10 @@
 
 Hampir semua artikel masih berupa tautan Google News tanpa URL media asli,
 sehingga web tidak punya gambar untuk daftar incident. Tahap ini memilih
-incident terbaru yang belum punya gambar (terbaru dulu, lalu liputan terluas), lalu mencoba
-artikelnya satu per satu: buka tautan Google News menjadi URL media, baca
-bagian awal halaman, dan ambil og:image. Berhenti pada artikel pertama yang
+incident terbaru yang belum punya gambar (liputan terluas dulu, sama dengan
+urutan daftar incident di web), lalu mencoba artikelnya satu per satu: buka
+tautan Google News menjadi URL media, baca bagian awal halaman, dan ambil
+og:image. Berhenti pada artikel pertama yang
 gambarnya berhasil ditarik. URL media yang ditemukan ikut disimpan, sehingga
 registri sumber dan domain bukti juga bertambah.
 
@@ -69,7 +70,7 @@ def pending_incidents(conn, budget):
                 AND (a.image_status IS NULL
                      OR (a.image_status IN (?, ?) AND a.image_checked_at < ?))
           )
-        ORDER BY i.last_published_date DESC, i.document_count DESC
+        ORDER BY i.document_count DESC, i.last_published_date DESC
         LIMIT ?
         """,
         (f"-{LOOKBACK_DAYS} days", *RETRY_STATUSES, cutoff, budget),

@@ -4,8 +4,8 @@
 # run pertama), crawl tanpa prompt, olah artikel baru, ambil isi artikel dengan
 # anggaran, cari gambar incident terbaru, terbitkan hasil ke Turso, simpan
 # database ke cache lagi. Setiap Minggu (UTC) database juga diunggah ulang ke
-# rilis "bootstrap" sebagai cadangan, supaya cache Actions yang hilang tidak menghapus data setelah
-# bootstrap pertama.
+# rilis "bootstrap" sebagai cadangan, supaya cache Actions yang hilang tidak
+# menghapus data setelah bootstrap pertama.
 #
 # Rahasia yang harus diisi di Settings > Secrets and variables > Actions:
 #   TURSO_DATABASE_URL, TURSO_AUTH_TOKEN
