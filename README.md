@@ -3,13 +3,15 @@
 Pipeline pengumpulan dan pengolahan berita serangan siber (khususnya
 rekayasa sosial) dari Google News, ditambah halaman lembaga resmi (BSSN,
 Komdigi, OJK, Polri) yang terindeks Google News lewat operator `site:`.
-Seluruh hasil disimpan di database SQLite `database/csais.db`. Program
-berjalan di terminal, tidak ada antarmuka web.
+Seluruh hasil disimpan di database SQLite `database/csais.db`. Pipeline
+berjalan di terminal (dan setiap hari di GitHub Actions); hasilnya
+diterbitkan ke Turso dan ditampilkan oleh aplikasi web di folder `web/`
+(https://csais.vercel.app).
 
 ## Struktur proyek
 
 ```
-main.py                 titik masuk: crawler lalu V0.1 - V0.6 berurutan
+main.py                 titik masuk: crawler lalu V0.1 - V0.7 dan ledger berurutan
 requirements.txt        dependensi Python
 .env.example            contoh kredensial Turso; salin menjadi .env (tidak ikut di git)
 scripts/
@@ -19,7 +21,7 @@ csais/
   config.py             lokasi database (bisa dioverride lewat CSAIS_DB_PATH)
   db.py                 koneksi SQLite dan timestamp bersama
   text.py               normalisasi teks, pencocokan kata utuh, Jaccard bersama
-  reset.py              penghapusan hasil olahan V0.2 - V0.6 (dipakai --reset)
+  reset.py              penghapusan hasil olahan V0.2 - V0.7 (dipakai --reset)
   language.py           deteksi bahasa artikel (langdetect)
   crawler.py            crawler Google News RSS (historical + incremental)
   content_fetcher.py    buka tautan Google News ke URL media, ambil isi artikel penuh
@@ -27,19 +29,23 @@ csais/
   provenance.py         versi pipeline + sidik jari kode
   schema.py             migrasi kolom ringan, ID deterministik, catatan run
   export.py             ekspor incident ke JSON Lines (kontrak keluaran)
+  publish.py            terbitkan tabel hasil ke Turso (dipakai --publish)
+  ledger.py             batch Merkle bukti V0.6 (ledger sisi off-chain)
   v01_data_collector.py          V0.1 ringkasan data
   v02_relevance_detection.py     V0.2 deteksi relevansi artikel
   v03_information_extraction.py  V0.3 ekstraksi jenis serangan, target, dll.
   v04_entity_resolution.py       V0.4 penyatuan nama entitas
   v05_incident_clustering.py     V0.5 pengelompokan artikel menjadi incident
   v06_evidence_correlation.py    V0.6 korelasi bukti antar sumber
+  v07_trust_score.py             V0.7 indeks kepercayaan awal per incident
 database/
   csais.db              database SQLite (tidak ikut di git)
 ```
 
-Urutan tahap: crawler, V0.1, V0.2, content fetch, V0.3, V0.4, V0.5, V0.6.
-Setiap tahap bersifat inkremental: hanya artikel yang belum diproses yang
-diolah pada run berikutnya. Content fetch mengambil isi artikel penuh untuk
+Urutan tahap: crawler, V0.1, V0.2, content fetch, V0.3, V0.4, V0.5, V0.6,
+V0.7, ledger. Setiap tahap bersifat inkremental: hanya artikel yang belum
+diproses yang diolah pada run berikutnya (V0.7 menghitung ulang semua
+incident karena masukannya berubah setiap run). Content fetch mengambil isi artikel penuh untuk
 kandidat V0.2 dengan anggaran per run (`--fetch-budget`, default 300);
 artikel yang isinya baru terambil otomatis diekstrak ulang oleh V0.3 dan
 V0.4. V0.5 membandingkan jenis serangan per keluarga (ransomware dan data
@@ -55,13 +61,14 @@ python3 -m venv .venv
 ## Menjalankan
 
 ```bash
-./.venv/bin/python main.py              # crawler (dengan konfirmasi) lalu V0.1 - V0.6
+./.venv/bin/python main.py              # crawler (dengan konfirmasi) lalu V0.1 - V0.7 dan ledger
 ./.venv/bin/python main.py --no-crawl   # lewati crawler
-./.venv/bin/python main.py --reset      # hapus hasil V0.2 - V0.6, proses ulang dari awal
-./.venv/bin/python main.py --reset-from 5   # hapus hasil V0.5 - V0.6 saja, lalu proses ulang
+./.venv/bin/python main.py --reset      # hapus hasil V0.2 - V0.7, proses ulang dari awal
+./.venv/bin/python main.py --reset-from 5   # hapus hasil V0.5 - V0.7 saja, lalu proses ulang
 ./.venv/bin/python main.py --redetect-language  # deteksi ulang bahasa semua artikel (langdetect)
 ./.venv/bin/python main.py --crawl              # crawl tanpa prompt, untuk penjadwalan (scripts/run_daily.sh)
 ./.venv/bin/python main.py --export exports/incidents.jsonl --min-docs 2   # ekspor incident ke JSON Lines
+./.venv/bin/python main.py --proof <evidence_uid>   # bukti Merkle satu evidence (JSON)
 ```
 
 Setiap run menyalin keluaran layar ke `logs/csais_<waktu>.log` dan mencatat
@@ -78,6 +85,19 @@ V0.2 sampai V0.6 juga menyimpan versi itu di kolom `pipeline_version`.
 - `--export` menulis JSON Lines: baris pertama metadata, lalu satu incident per
   baris berisi klaim tiap artikel (hasil V0.3), bukti (V0.6), dan relasi antar
   sumber. Skemanya didokumentasikan di `csais/export.py`.
+- `v07_trust`: indeks kepercayaan awal per incident (skor 0..1, tingkat
+  tinggi/sedang/rendah, dan lima sinyalnya) beserta versi pipeline. Rumusnya di
+  `csais/v07_trust_score.py`; web membaca tabel ini dan hanya menghitung sendiri
+  bila tabel belum diterbitkan.
+- Ledger bukti (`csais/ledger.py`): setiap run, bukti V0.6 yang belum masuk
+  batch dikelompokkan (maksimal 1.024 per batch) ke `evidence_batches` (akar
+  Merkle, akar batch sebelumnya, status penjangkaran) dan `evidence_leaves`
+  (hash daun dan salinan payload yang di-hash). Konstruksi pohon: daun =
+  SHA-256(0x00 || payload JSON kanonis), simpul = SHA-256(0x01 || min || max),
+  simpul ganjil naik apa adanya; sama di `web/lib/merkle.ts` dan nanti di
+  kontrak (precompile sha256). Tabel ini tambah-saja dan tidak ikut `--reset`;
+  yang akan dicatat di rantai hanya akar batch. `--proof` mencetak bukti Merkle
+  satu evidence untuk diverifikasi di luar.
 
 ## Evaluasi
 
@@ -115,7 +135,10 @@ Turso (SQLite hosted), aplikasi web di Vercel yang hanya membaca Turso.
 4. Workflow `.github/workflows/daily.yml` berjalan tiap hari pukul 04:00 WIB:
    memulihkan database dari cache, crawl tanpa prompt, mengolah artikel baru,
    mengambil isi artikel (anggaran 300), menerbitkan ke Turso, menyimpan
-   database ke cache lagi. Bisa dipicu manual dari tab Actions.
+   database ke cache lagi. Setiap Minggu (UTC) database juga diunggah ulang ke
+   rilis `bootstrap` sebagai cadangan. Pemicu manual dari tab Actions menerima
+   `reset_from` (2-7, proses ulang mulai tahap itu setelah logikanya berubah)
+   dan `refresh_bootstrap` (unggah cadangan sekarang).
 
 Batasan paket gratis: 2.000 menit Actions per bulan untuk repo privat (satu run
 sekitar 30 sampai 45 menit), cache 10 GB, Turso 9 GB dan 25 juta baris tulis
@@ -136,14 +159,19 @@ npm run dev                            # http://localhost:3000
 ```
 
 Token baca-saja dibuat dengan `turso db tokens create csais --read-only`; token
-tulis hanya dipakai pekerja Actions. Situs dwibahasa: setiap path berprefiks
+tulis hanya dipakai pekerja Actions. Untuk mencoba tampilan dengan database
+lokal tanpa Turso, isi `TURSO_DATABASE_URL=file:/path/ke/csais.db` (token
+boleh kosong). Situs dwibahasa: setiap path berprefiks
 `/id` atau `/en` (dipilih dari cookie atau Accept-Language, diatur di
 `web/proxy.ts`; kamus teks di `web/lib/i18n.ts`). Halaman: beranda,
 `/incidents` (globe sebaran negara, filter, indeks kepercayaan awal, paginasi
-bernomor), `/incidents/[id]` (klaim, kronologi sumber, bukti), `/findings`
-(peringkat kelompok berisiko dan peta panas jenis serangan), `/verify`
-(tautan, hash, atau ID bukti), `/sources` (registri domain dengan logo), dan
-`/institutions`. Commit harus memakai email yang terverifikasi di GitHub agar
+bernomor), `/incidents/[id]` (klaim, kronologi sumber, bukti, indeks kepercayaan V0.7),
+`/findings` (peringkat kelompok berisiko dan peta panas jenis serangan),
+`/verify` (tautan, hash, atau ID bukti; menampilkan batch Merkle, akar, dan
+bukti Merkle yang dihitung ulang dari daun batch), `/sources` (registri domain
+dengan logo), dan `/institutions`. Tabel baru (`v07_trust`, `evidence_*`)
+dicek keberadaannya dulu sehingga halaman tetap jalan sebelum pipeline versi
+baru menerbitkannya. Commit harus memakai email yang terverifikasi di GitHub agar
 Vercel mau membangunnya (`git config user.email` di repo ini sudah diatur).
 
 ## Pengembangan
@@ -165,7 +193,9 @@ tanpa mengulang kata kunci yang sudah selesai.
 
 `--reset` diperlukan setelah logika ekstraksi atau clustering berubah,
 karena setiap modul hanya memproses artikel yang belum pernah diolah.
-Tabel `articles` dan `crawl_state` tidak ikut dihapus.
+Tabel `articles`, `crawl_state`, dan tabel ledger (`evidence_batches`,
+`evidence_leaves`) tidak ikut dihapus. Di cloud, pakai input `reset_from`
+pada pemicu manual workflow.
 
 ## Melihat hasil
 

@@ -2,12 +2,21 @@
 #
 # Alur: pulihkan database SQLite dari cache (atau dari rilis "bootstrap" pada
 # run pertama), crawl tanpa prompt, olah artikel baru, ambil isi artikel dengan
-# anggaran, terbitkan hasil ke Turso, simpan database ke cache lagi.
+# anggaran, terbitkan hasil ke Turso, simpan database ke cache lagi. Setiap
+# Minggu (UTC) database juga diunggah ulang ke rilis "bootstrap" sebagai
+# cadangan, supaya cache Actions yang hilang tidak menghapus data setelah
+# bootstrap pertama.
 #
 # Rahasia yang harus diisi di Settings > Secrets and variables > Actions:
 #   TURSO_DATABASE_URL, TURSO_AUTH_TOKEN
 # Bootstrap sekali (dari komputer lokal, database saat ini):
 #   gh release create bootstrap database/csais.db --title "Database bootstrap"
+#
+# Pemicu manual (tab Actions > Run workflow) menerima:
+#   fetch_budget      anggaran isi artikel
+#   reset_from        kosong = tidak reset; 2-7 = hapus hasil V0.N sampai V0.7
+#                     lalu proses ulang (setelah logika tahap itu berubah)
+#   refresh_bootstrap true = unggah database ke rilis bootstrap pada run ini
 
 name: CSAIS daily pipeline
 
@@ -19,10 +28,20 @@ on:
       fetch_budget:
         description: "Maksimal artikel yang diambil isinya"
         default: "300"
+      reset_from:
+        description: "Proses ulang mulai tahap V0.N (2-7); kosongkan bila tidak"
+        default: ""
+      refresh_bootstrap:
+        description: "Unggah database ke rilis bootstrap pada run ini"
+        type: boolean
+        default: false
 
 concurrency:
   group: csais-pipeline
   cancel-in-progress: false
+
+permissions:
+  contents: write # unduh dan unggah aset rilis bootstrap
 
 jobs:
   pipeline:
@@ -74,9 +93,15 @@ jobs:
           else
             echo "::warning::Rahasia Turso belum diisi; tahap terbit dilewati."
           fi
+          RESET=""
+          RESET_FROM="${{ github.event.inputs.reset_from }}"
+          if [ -n "$RESET_FROM" ]; then
+            RESET="--reset-from $RESET_FROM --yes"
+            echo "::notice::Proses ulang mulai tahap V0.$RESET_FROM"
+          fi
           python main.py --crawl \
             --fetch-budget "${{ github.event.inputs.fetch_budget || '300' }}" \
-            $PUBLISH
+            $RESET $PUBLISH
 
       - name: Simpan database ke cache
         if: always()
@@ -84,6 +109,20 @@ jobs:
         with:
           path: database/csais.db
           key: csais-db-${{ github.run_id }}
+
+      - name: Perbarui rilis bootstrap (cadangan mingguan)
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCE: ${{ github.event.inputs.refresh_bootstrap }}
+        run: |
+          # Setiap Minggu UTC, atau bila diminta lewat input refresh_bootstrap.
+          if [ "$(date -u +%u)" = "7" ] || [ "$FORCE" = "true" ]; then
+            gh release upload bootstrap database/csais.db --clobber
+            echo "Rilis bootstrap diperbarui ($(du -h database/csais.db | cut -f1))."
+          else
+            echo "Bukan hari cadangan; rilis bootstrap tidak disentuh."
+          fi
 
       - name: Unggah log
         if: always()
