@@ -101,8 +101,11 @@ export default async function VerifyPage({ params, searchParams }: { params: Pro
               ))}
             </div>
           ) : null}
-          <p className="text-[12.5px] text-muted">
-            {ledgerStats ? t.verify.ledger.stats(f.num(ledgerStats.batches), f.num(ledgerStats.leaves), f.num(ledgerStats.pending)) : t.verify.ledger.statsEmpty}
+          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-muted">
+            <span>{ledgerStats ? t.verify.ledger.stats(f.num(ledgerStats.batches), f.num(ledgerStats.leaves), f.num(ledgerStats.pending)) : t.verify.ledger.statsEmpty}</span>
+            <Link href={`${L(lang, "/")}#process`} className="no-underline">
+              {t.verify.howLink} →
+            </Link>
           </p>
         </div>
         <div className="card corners grid grid-cols-[auto_minmax(0,1fr)] items-center gap-4 p-4 grid-bg">
@@ -181,17 +184,6 @@ export default async function VerifyPage({ params, searchParams }: { params: Pro
         )
       ) : null}
 
-      <section className="grid gap-3 sm:grid-cols-3">
-        {t.verify.steps.map((s, i) => (
-          <div key={s.title} className="card lift fade-up flex flex-col gap-1.5 p-4" style={{ "--i": i * 2, borderTopColor: i === 2 ? "var(--chain)" : "var(--accent)", borderTopWidth: 2 } as React.CSSProperties}>
-            <span className={`label ${i === 2 ? "text-chain" : "text-accent"}`}>
-              {t.verify.step} {i + 1}
-            </span>
-            <span className="text-[14px] font-semibold">{s.title}</span>
-            <span className="text-[12.5px] leading-relaxed text-soft">{s.text}</span>
-          </div>
-        ))}
-      </section>
     </div>
   );
 }

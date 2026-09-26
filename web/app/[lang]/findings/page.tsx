@@ -63,15 +63,14 @@ export default async function FindingsPage({ params }: { params: Promise<{ lang:
         {groups.length ? (
           <div className="card overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[860px] border-collapse text-[13px]">
+              <table className="w-full min-w-[640px] border-collapse text-[13px]">
                 <thead>
                   <tr className="label border-b border-line text-left">
                     <th className="px-4 py-2.5 font-medium">{t.findings.columns.group}</th>
                     <th className="px-2 py-2.5 font-medium">{t.findings.columns.level}</th>
                     <th className="px-2 py-2.5 font-medium">{t.findings.columns.count}</th>
                     <th className="px-2 py-2.5 font-medium">{t.findings.columns.change}</th>
-                    <th className="px-2 py-2.5 font-medium">{t.findings.columns.trend}</th>
-                    <th className="px-4 py-2.5 font-medium">{t.findings.columns.types}</th>
+                    <th className="px-4 py-2.5 font-medium">{t.findings.columns.trend}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -105,17 +104,8 @@ export default async function FindingsPage({ params }: { params: Promise<{ lang:
                         <td className="px-2 py-3 font-mono text-[12.5px]" style={{ color: change.color }}>
                           {change.text}
                         </td>
-                        <td className="px-2 py-3">
-                          <Sparkline values={g.weeks} width={110} height={30} color={LEVEL_COLOR[level]} />
-                        </td>
                         <td className="px-4 py-3">
-                          <div className="flex flex-wrap gap-1.5">
-                            {g.types.map((x) => (
-                              <Link key={x.t} href={`${L(lang, "/incidents")}?jenis=${encodeURIComponent(x.t)}`} className="chip no-underline">
-                                {attackLabel(x.t, lang)} <span className="font-mono text-muted">{f.num(x.n)}</span>
-                              </Link>
-                            ))}
-                          </div>
+                          <Sparkline values={g.weeks} width={110} height={30} color={LEVEL_COLOR[level]} />
                         </td>
                       </tr>
                     );
@@ -166,18 +156,6 @@ export default async function FindingsPage({ params }: { params: Promise<{ lang:
         </section>
       ) : null}
 
-      <section className="grid gap-3 lg:grid-cols-2">
-        <div className="card lift flex flex-col gap-2 p-4">
-          <span className="label">{t.findings.nextTitle}</span>
-          <span className="text-[15px] font-semibold">{t.findings.next4.title}</span>
-          <p className="text-[13.5px] leading-relaxed text-soft">{t.findings.next4.text}</p>
-        </div>
-        <div className="card lift flex flex-col gap-2 p-4" style={{ borderColor: "color-mix(in srgb, var(--chain) 60%, transparent)" }}>
-          <span className="label text-chain">{t.findings.nextTitle}</span>
-          <span className="text-[15px] font-semibold">{t.findings.next5.title}</span>
-          <p className="text-[13.5px] leading-relaxed text-soft">{t.findings.next5.text}</p>
-        </div>
-      </section>
     </div>
   );
 }

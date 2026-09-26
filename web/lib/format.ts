@@ -15,7 +15,7 @@ function numFmt(lang: Lang): Intl.NumberFormat {
   return f;
 }
 
-function dateFmt(lang: Lang, kind: "short" | "long" | "time"): Intl.DateTimeFormat {
+function dateFmt(lang: Lang, kind: "short" | "long" | "time" | "clock"): Intl.DateTimeFormat {
   const key = `d:${lang}:${kind}`;
   let f = cache.get(key) as Intl.DateTimeFormat | undefined;
   if (!f) {
@@ -24,7 +24,9 @@ function dateFmt(lang: Lang, kind: "short" | "long" | "time"): Intl.DateTimeForm
         ? { day: "numeric", month: "short", timeZone: TZ }
         : kind === "long"
           ? { day: "numeric", month: "long", year: "numeric", timeZone: TZ }
-          : { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: TZ };
+          : kind === "clock"
+            ? { hour: "2-digit", minute: "2-digit", timeZone: TZ }
+            : { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: TZ };
     f = new Intl.DateTimeFormat(LOCALE[lang], opts);
     cache.set(key, f);
   }
@@ -52,6 +54,18 @@ export function formatters(lang: Lang) {
       if (!value) return unknown;
       const d = new Date(value);
       return Number.isNaN(d.getTime()) ? value : `${dateFmt(lang, "time").format(d)} WIB`;
+    },
+    /** Jam saja ("03.24 WIB"), untuk baris di dalam kelompok per hari. */
+    clock(value: string | null | undefined): string {
+      if (!value) return unknown;
+      const d = new Date(value);
+      return Number.isNaN(d.getTime()) ? value : `${dateFmt(lang, "clock").format(d)} WIB`;
+    },
+    /** Kunci hari (YYYY-MM-DD) menurut WIB, untuk mengelompokkan artikel per hari. */
+    dayKey(value: string | null | undefined): string {
+      if (!value) return "";
+      const d = new Date(value);
+      return Number.isNaN(d.getTime()) ? "" : new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(d);
     },
     score(value: number | null | undefined): string {
       if (value === null || value === undefined) return "-";

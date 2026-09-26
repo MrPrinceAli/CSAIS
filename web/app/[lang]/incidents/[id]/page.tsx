@@ -1,13 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getIncident, type DocumentRow } from "@/lib/queries";
-import { domainOf, formatters, incidentTitle, severity } from "@/lib/format";
+import { getIncident, getPublisherDomains, type DocumentRow } from "@/lib/queries";
+import { domainOf, formatters, incidentTitle, publisherOf, severity } from "@/lib/format";
 import { attackLabel, evidenceRole, getDict, isLang, L, languageLabel } from "@/lib/i18n";
 import { trustFromStored, trustScore, TRUST_COLOR } from "@/lib/trust";
 import { HashGrid, IncidentCard, SectionTitle, SeverityText, SourceLogo, TrustRing } from "@/components/ui";
 
 type Params = { lang: string; id: string };
+
+/** Jumlah artikel kronologi yang langsung terlihat; sisanya di balik "Lihat semua". */
+const VISIBLE = 10;
 
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { lang, id } = await params;
@@ -43,17 +46,42 @@ function bestClaims(docs: DocumentRow[]) {
   });
 }
 
+/** Sumber sebuah artikel: domain media asli bila ada, selain itu penerbit dari akhiran judul Google News. */
+function sourceOf(d: DocumentRow, publisherDomains: Record<string, string>): { label: string; domain: string | null } {
+  for (const domain of [domainOf(d.resolved_url), d.source_domain ?? ""]) {
+    if (domain && !domain.includes("google.")) return { label: domain, domain };
+  }
+  const publisher = publisherOf(d.title);
+  if (publisher) return { label: publisher, domain: publisherDomains[publisher.toLowerCase()] ?? null };
+  return { label: d.source_name ?? "—", domain: null };
+}
+
+type Row = { d: DocumentRow; i: number };
+type Day = { key: string; rows: Row[] };
+
+function groupByDay(docs: DocumentRow[], dayKey: (v: string | null) => string): Day[] {
+  const days: Day[] = [];
+  docs.forEach((d, i) => {
+    const key = dayKey(d.published_date);
+    const last = days[days.length - 1];
+    if (last && last.key === key) last.rows.push({ d, i });
+    else days.push({ key, rows: [{ d, i }] });
+  });
+  return days;
+}
+
 export default async function IncidentDetail({ params }: { params: Promise<Params> }) {
   const { lang, id } = await params;
   if (!isLang(lang)) notFound();
   const t = getDict(lang);
   const f = formatters(lang);
-  const data = await getIncident(id);
+  const [data, publisherDomains] = await Promise.all([getIncident(id), getPublisherDomains()]);
   if (!data) notFound();
   const { incident, docs, relations, related, ledgerCount } = data;
   const level = severity(incident);
   const claims = bestClaims(docs);
   const domains = new Set(docs.map((d) => d.source_domain || domainOf(d.resolved_url) || d.source_name || "").filter(Boolean));
+  const publishers = new Set(docs.map((d) => sourceOf(d, publisherDomains).label.toLowerCase()));
   const syndicated = docs.filter((d) => d.syndicated_of).length;
   const withContent = docs.filter((d) => d.content_status === "ok").length;
   const targetClaim = claims.find((c) => c.key === "target");
@@ -71,6 +99,67 @@ export default async function IncidentDetail({ params }: { params: Promise<Param
   const firstHash = docs.find((d) => d.content_sha256)?.content_sha256 ?? docs.find((d) => d.content_fingerprint)?.content_fingerprint ?? null;
   const firstUid = docs.find((d) => d.evidence_uid)?.evidence_uid ?? "";
   const firstTs = docs[0]?.published_date ? new Date(docs[0].published_date).getTime() : 0;
+  const days = groupByDay(docs, (v) => f.dayKey(v));
+
+  /** Satu artikel dalam kronologi; peran hanya ditulis bila bukan "independen". */
+  const renderRow = ({ d, i }: Row) => {
+    const src = sourceOf(d, publisherDomains);
+    const href = d.resolved_url || d.article_url || "#";
+    const role = i === 0 ? t.roles.first : d.syndicated_of ? t.roles.syndicated : evidenceRole(d.evidence_type, lang);
+    const quiet = i > 0 && (role === t.roles.independent || role === t.roles.single);
+    const dot = i === 0 ? "bg-accent" : quiet ? "bg-good" : role === t.roles.syndicated || role === t.roles.duplicate ? "bg-line-2" : "bg-med";
+    const hours = d.published_date && firstTs ? Math.round((new Date(d.published_date).getTime() - firstTs) / 3600000) : null;
+    return (
+      <li key={d.article_id} className="grid grid-cols-[18px_minmax(0,1fr)] gap-3 py-2.5">
+        <span className="relative flex justify-center">
+          <span className={`relative mt-1.5 h-2.5 w-2.5 rounded-full ${dot}`} aria-hidden="true" />
+        </span>
+        <div className="flex min-w-0 flex-col gap-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-muted">
+            <span>{f.clock(d.published_date)}</span>
+            {hours !== null && i > 0 ? <span>{t.detail.hoursAfter(hours)}</span> : null}
+            {!quiet ? <span className={i === 0 ? "text-accent" : "text-soft"}>{role}</span> : null}
+            {d.content_status === "ok" ? <span className="text-chain">{t.detail.fullText}</span> : null}
+          </div>
+          <a href={href} target="_blank" rel="noreferrer" className="text-[14px] font-semibold leading-snug text-fg no-underline hover:text-accent">
+            {incidentTitle(d.title)}
+          </a>
+          <span className="flex min-w-0 flex-wrap items-center gap-2 text-[12px] text-soft">
+            {src.domain ? (
+              <SourceLogo domain={src.domain} size={12} />
+            ) : (
+              <span className="cov-mono" style={{ width: 20, height: 20 }} aria-hidden="true">
+                {src.label.replace(/[^\p{L}\p{N}]/gu, "").slice(0, 2)}
+              </span>
+            )}
+            <span className="truncate">{src.label}</span>
+            {d.target && d.target !== "UNKNOWN" ? <span className="chip">{d.target}</span> : null}
+            {d.threat_actor && d.threat_actor !== "UNKNOWN" ? <span className="chip chip-accent">{d.threat_actor}</span> : null}
+          </span>
+        </div>
+      </li>
+    );
+  };
+
+  /** Kelompok per hari; bila satu hari terpotong batas VISIBLE, lanjutannya diberi tanda. */
+  const renderDays = (visible: boolean) =>
+    days.map((day) => {
+      const rows = day.rows.filter((r) => (visible ? r.i < VISIBLE : r.i >= VISIBLE));
+      if (!rows.length) return null;
+      const continued = !visible && day.rows[0].i < VISIBLE;
+      return (
+        <section key={`${day.key}-${visible}`} className="flex flex-col">
+          <h3 className="flex items-baseline justify-between gap-3 border-b border-line pb-2 pt-3">
+            <span className="text-[13px] font-semibold">
+              {f.dateLong(day.rows[0].d.published_date)}
+              {continued ? <span className="font-normal text-muted"> · {t.detail.continued}</span> : null}
+            </span>
+            <span className="font-mono text-[11px] text-muted">{t.detail.dayCount(f.num(day.rows.length))}</span>
+          </h3>
+          <ol className="flex flex-col">{rows.map(renderRow)}</ol>
+        </section>
+      );
+    });
 
   return (
     <div className="flex flex-col gap-5">
@@ -89,7 +178,7 @@ export default async function IncidentDetail({ params }: { params: Promise<Param
             <span className="text-[12.5px] text-muted">
               {attackLabel(incident.attack_type, lang)}
               {incident.location ? ` · ${countryLabel(incident.location)}` : ""}
-              {incident.language ? ` · ${t.detail.anchorLanguage}: ${languageLabel(incident.language, lang)}` : ""}
+              {incident.language ? ` · ${languageLabel(incident.language, lang)}` : ""}
             </span>
           </div>
           <h1 className="text-balance text-[26px] font-semibold leading-tight">{incidentTitle(incident.title)}</h1>
@@ -101,8 +190,13 @@ export default async function IncidentDetail({ params }: { params: Promise<Param
               {t.detail.latest} <b className="font-medium text-fg">{f.date(incident.last_published_date)}</b>
             </span>
             <span>
-              <b className="font-medium text-fg">{f.num(docs.length)}</b> {t.common.articles} · <b className="font-medium text-fg">{f.num(domains.size)}</b> {t.common.domains} ·{" "}
-              <b className="font-medium text-fg">{f.num(syndicated)}</b> {t.roles.syndicated.toLowerCase()}
+              <b className="font-medium text-fg">{f.num(docs.length)}</b> {t.common.articles} · <b className="font-medium text-fg">{f.num(publishers.size)}</b> {t.detail.publishers}
+              {syndicated ? (
+                <>
+                  {" · "}
+                  <b className="font-medium text-fg">{f.num(syndicated)}</b> {t.roles.syndicated.toLowerCase()}
+                </>
+              ) : null}
             </span>
           </div>
           <div className="flex flex-wrap gap-2 pt-1">
@@ -143,7 +237,7 @@ export default async function IncidentDetail({ params }: { params: Promise<Param
         </div>
       </header>
 
-      <div className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)_300px]">
+      <div className="grid items-start gap-4 lg:grid-cols-[280px_minmax(0,1fr)_280px]">
         <section className="flex flex-col gap-4">
           <div>
             <SectionTitle>{t.detail.claimsTitle}</SectionTitle>
@@ -168,61 +262,33 @@ export default async function IncidentDetail({ params }: { params: Promise<Param
               ))}
             </div>
           </div>
-          <div>
-            <SectionTitle>{t.detail.relatedTitle}</SectionTitle>
-            {related.length ? (
+          {related.length ? (
+            <div>
+              <SectionTitle>{t.detail.relatedTitle}</SectionTitle>
               <div className="flex flex-col gap-2">
                 {related.map((row) => (
                   <IncidentCard key={row.incident_id} row={row} lang={lang} />
                 ))}
               </div>
-            ) : (
-              <div className="card p-3.5 text-[13px] text-muted">{t.detail.relatedEmpty}</div>
-            )}
-          </div>
+            </div>
+          ) : null}
         </section>
 
         <section className="flex min-w-0 flex-col gap-4">
           <div>
             <SectionTitle aside={t.detail.chronologyNote(f.num(docs.length))}>{t.detail.chronologyTitle}</SectionTitle>
-            <ol className="card flex flex-col p-3.5">
-              {docs.map((d, i) => {
-                const href = d.resolved_url || d.article_url || "#";
-                const domain = d.source_domain || domainOf(d.resolved_url) || d.source_name || "";
-                const role = i === 0 ? t.roles.first : d.syndicated_of ? t.roles.syndicated : evidenceRole(d.evidence_type, lang);
-                const dot = i === 0 ? "bg-accent" : role === t.roles.independent ? "bg-good" : role === t.roles.syndicated || role === t.roles.duplicate ? "bg-line-2" : "bg-med";
-                const hours = d.published_date && firstTs ? Math.round((new Date(d.published_date).getTime() - firstTs) / 3600000) : null;
-                return (
-                  <li key={d.article_id} className="fade-up grid grid-cols-[18px_minmax(0,1fr)] gap-3 border-b border-line py-3 last:border-b-0" style={{ "--i": Math.min(i, 24) } as React.CSSProperties}>
-                    <span className="relative flex justify-center">
-                      <span className="tl-line absolute top-3 bottom-[-14px] w-px bg-line-2" aria-hidden="true" style={{ "--i": Math.min(i, 24) } as React.CSSProperties} />
-                      <span className={`tl-dot relative mt-1.5 h-2.5 w-2.5 rounded-full ${dot}`} aria-hidden="true" style={{ "--i": Math.min(i, 24) } as React.CSSProperties} />
-                    </span>
-                    <div className="flex min-w-0 flex-col gap-1">
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-muted">
-                        <span>{f.dateTime(d.published_date)}</span>
-                        {hours !== null && i > 0 ? <span>{t.detail.hoursAfter(hours)}</span> : null}
-                        <span className={i === 0 ? "text-accent" : role === t.roles.independent ? "text-good" : ""}>{role}</span>
-                        {d.content_status === "ok" ? <span className="text-chain">{t.detail.fullText}</span> : null}
-                      </div>
-                      <a href={href} target="_blank" rel="noreferrer" className="flex items-start gap-2 text-[13.5px] font-semibold text-fg no-underline hover:text-accent">
-                        {domain ? <SourceLogo domain={domain} size={16} /> : null}
-                        <span className="min-w-0">
-                          {d.title ?? "—"}
-                          <span className="block font-mono text-[11px] font-normal text-muted">{domain || "—"}</span>
-                        </span>
-                      </a>
-                      {(d.target && d.target !== "UNKNOWN") || (d.threat_actor && d.threat_actor !== "UNKNOWN") ? (
-                        <div className="flex flex-wrap gap-1.5">
-                          {d.target && d.target !== "UNKNOWN" ? <span className="chip">{d.target}</span> : null}
-                          {d.threat_actor && d.threat_actor !== "UNKNOWN" ? <span className="chip chip-accent">{d.threat_actor}</span> : null}
-                        </div>
-                      ) : null}
-                    </div>
-                  </li>
-                );
-              })}
-            </ol>
+            <div className="card flex flex-col px-3.5 pb-2">
+              {renderDays(true)}
+              {docs.length > VISIBLE ? (
+                <details className="chrono-more">
+                  <summary className="btn btn-ghost my-3 flex w-full justify-center text-[13px]">
+                    <span className="when-closed">{t.detail.showAll(f.num(docs.length))}</span>
+                    <span className="when-open">{t.detail.showLess}</span>
+                  </summary>
+                  {renderDays(false)}
+                </details>
+              ) : null}
+            </div>
           </div>
           <div className="card flex flex-col gap-1.5 p-3.5">
             <span className="label">{t.detail.relationsTitle}</span>
@@ -240,7 +306,7 @@ export default async function IncidentDetail({ params }: { params: Promise<Param
           </div>
         </section>
 
-        <section className="flex flex-col gap-4">
+        <section className="flex flex-col gap-4 lg:sticky lg:top-20">
           <div>
             <SectionTitle>{t.detail.evidenceTitle}</SectionTitle>
             <div className="card corners flex flex-col gap-3 p-3.5 text-[12.5px]" style={{ borderTopColor: "var(--chain)", borderTopWidth: 2 }}>
@@ -259,12 +325,7 @@ export default async function IncidentDetail({ params }: { params: Promise<Param
                 </div>
               ) : null}
               <span className="text-muted">{ledgerCount > 0 ? t.detail.ledgerCount(f.num(ledgerCount), f.num(docs.filter((d) => d.evidence_uid).length)) : t.detail.ledgerNone}</span>
-              <span className="chip chip-chain self-start">{t.detail.anchoring}</span>
             </div>
-          </div>
-          <div>
-            <SectionTitle>{t.detail.attestTitle}</SectionTitle>
-            <div className="card p-3.5 text-[13px] text-soft">{t.detail.attestEmpty}</div>
           </div>
         </section>
       </div>
