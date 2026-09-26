@@ -304,6 +304,7 @@ export type DashboardFilters = {
 };
 
 const PAGE_SIZE = 40;
+const TOP_SIZE = 12; // peringkat liputan terluas di panel dasbor
 
 function buildWhere(f: DashboardFilters): { where: string; args: InValue[] } {
   const clauses: string[] = [];
@@ -384,8 +385,14 @@ export async function getDashboard(f: DashboardFilters) {
     ),
   ]);
   const total = Number(totalRow?.n ?? 0);
+  // Peringkat liputan terluas selalu dari halaman pertama, apa pun halaman daftar yang dibuka
+  const top =
+    page === 1
+      ? rows.slice(0, TOP_SIZE)
+      : await query<IncidentRow>(`${select} ${where} ORDER BY i.document_count DESC, i.anchor_published_date DESC LIMIT ?`, [...args, TOP_SIZE]);
   return {
     rows,
+    top,
     total,
     page,
     pageSize: PAGE_SIZE,

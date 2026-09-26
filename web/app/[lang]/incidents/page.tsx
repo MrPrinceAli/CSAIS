@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getAttackTypeOptions, getDashboard, type DashboardFilters } from "@/lib/queries";
+import { getAttackTypeOptions, getCoverageDocs, getDashboard, getPublisherDomains, type DashboardFilters } from "@/lib/queries";
+import { publishersOf } from "@/lib/publishers";
 import { COUNTRY, countryOf } from "@/lib/geo";
 import { formatters, incidentTitle } from "@/lib/format";
 import { attackLabel, getDict, isLang, L, languageLabel } from "@/lib/i18n";
@@ -10,7 +11,7 @@ import { CommandGlobe, type GlobeArc, type GlobePoint } from "@/components/comma
 import { EscapeClose } from "@/components/escape-close";
 import { Pagination } from "@/components/pagination";
 import { SearchField } from "@/components/search-field";
-import { IncidentThumb } from "@/components/incident-thumb";
+import { CoverageRank, type RankItem } from "@/components/coverage-rank";
 import { DailyBars, IncidentCard, TrustLegend } from "@/components/ui";
 
 type Search = Record<string, string | string[] | undefined>;
@@ -69,7 +70,20 @@ export default async function IncidentsPage({ params: p, searchParams }: { param
     return s ? `${base}?${s}` : base;
   };
 
-  const [data, typeOptions] = await Promise.all([getDashboard(filters), getAttackTypeOptions()]);
+  const [data, typeOptions, publisherDomains] = await Promise.all([getDashboard(filters), getAttackTypeOptions(), getPublisherDomains()]);
+  const coverageDocs = await getCoverageDocs(data.top.map((r) => r.incident_id));
+  const rankItems: RankItem[] = data.top.map((row) => ({
+    id: row.incident_id,
+    href: L(lang, `/incidents/${row.incident_id}`),
+    title: incidentTitle(row.title),
+    type: attackLabel(row.attack_type, lang),
+    attackType: row.attack_type,
+    articles: Number(row.document_count),
+    publishers: publishersOf(
+      coverageDocs.filter((d) => d.incident_id === row.incident_id),
+      publisherDomains,
+    ),
+  }));
   const days = filters.hari ?? 30;
   const active = [filters.q, filters.jenis, filters.bahasa, filters.negara, filters.min].filter(Boolean).length;
   const total = Number(data.kpi.total);
@@ -106,8 +120,7 @@ export default async function IncidentsPage({ params: p, searchParams }: { param
   const primary = (x: string) => x.split(",")[0].trim();
   const typeList = [...new Set([...data.types.map((x) => primary(x.t)), ...typeOptions.map((x) => primary(x.t))])].filter((x) => x && x !== "unknown").slice(0, 14);
   const maxCountry = Math.max(1, ...ranked.map(([, n]) => n));
-  const feed = data.rows.slice(0, 12);
-
+  
   const chips: { label: string; href: string }[] = [];
   if (filters.q) chips.push({ label: `“${filters.q}”`, href: hrefWith({ q: undefined, page: undefined }) });
   if (filters.jenis) chips.push({ label: attackLabel(filters.jenis, lang), href: hrefWith({ jenis: undefined, page: undefined }) });
@@ -296,25 +309,11 @@ export default async function IncidentsPage({ params: p, searchParams }: { param
             </div>
 
             <div className="cc-fill cc-grow border-t border-line pt-3">
-              <span className="cc-h">{c.feed}</span>
-              <div className="cc-list cc-feed cc-scroll">
-                {feed.map((row) => (
-                  <Link
-                    key={row.incident_id}
-                    href={L(lang, `/incidents/${row.incident_id}`)}
-                    scroll={false}
-                    className="row-link grid grid-cols-[52px_minmax(0,1fr)] items-start gap-2.5 rounded-md border border-line bg-[rgba(7,12,18,0.6)] p-2 hover:border-accent"
-                  >
-                    <IncidentThumb id={row.incident_id} attackType={row.attack_type} className="aspect-square w-full" />
-                    <span className="flex min-w-0 flex-col gap-1">
-                      <span className="line-clamp-2 text-[13px] font-semibold leading-snug">{incidentTitle(row.title)}</span>
-                      <span className="truncate text-[12px] text-muted">
-                        {attackLabel(row.attack_type, lang)} · {f.num(row.document_count)} {t.common.articles}
-                      </span>
-                    </span>
-                  </Link>
-                ))}
-              </div>
+              <span className="flex flex-col gap-1">
+                <span className="cc-h">{c.feed}</span>
+                <span className="cc-note">{c.feedNote}</span>
+              </span>
+              <CoverageRank items={rankItems} labels={{ articles: t.common.articles, publishers: t.detail.publishers, note: c.feed }} num={f.num} />
             </div>
           </aside>
         </div>

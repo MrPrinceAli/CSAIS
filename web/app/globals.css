@@ -717,6 +717,25 @@ a:hover .cov-rank, .row-link:hover .cov-rank { -webkit-text-stroke-color: var(--
 .cc-tip img { width: 18px; height: 12px; }
 .cc-hint { position: absolute; left: 2%; bottom: 3%; z-index: 3; font-size: 11px; color: var(--muted); }
 
+/* Peringkat liputan terluas: warna kotak dari sian (liputan lebih sempit) ke merah (terluas), relatif ke peringkat 1 */
+.cc-rank { position: relative; display: grid; grid-template-columns: 20px 50px minmax(0, 1fr); align-items: start; gap: 8px;
+  padding: 8px 9px 9px 8px; border-radius: 8px; text-decoration: none; color: var(--fg);
+  border: 1px solid color-mix(in srgb, var(--c) 38%, var(--line)); box-shadow: inset 3px 0 0 var(--c);
+  background: linear-gradient(100deg, color-mix(in srgb, var(--c) calc(6% + var(--heat) * 14%), transparent), rgba(7, 12, 18, 0.6) 70%);
+  transition: border-color 0.15s ease, transform 0.15s ease; }
+.cc-rank:hover { border-color: var(--c); transform: translateX(2px); }
+.cc-rank-n { padding-top: 2px; font: 700 13px/1 var(--font-jet), monospace; color: var(--c); letter-spacing: -0.02em; text-align: center; }
+.cc-rank.is-top .cc-rank-n { padding: 4px 0; border-radius: 5px; background: color-mix(in srgb, var(--c) 22%, transparent); }
+.cc-rank-more { margin-left: 5px; padding: 2px 5px; border-radius: 999px; border: 1px solid var(--line-2); font: 600 10.5px/1.2 var(--font-jet), monospace; color: var(--soft); }
+.cc-rank-bar { display: block; height: 3px; margin-top: 2px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.cc-rank-bar > i { display: block; height: 100%; border-radius: 2px; background: linear-gradient(90deg, #2fb7c9, var(--c)); transform-origin: left; animation: fill-x 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+/* Label jenis serangan berwarna (nada sama dengan ikon jenis serangan) */
+.type-chip { display: inline-flex; align-items: center; gap: 5px; align-self: flex-start; max-width: 100%; padding: 2px 7px 2px 6px; border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--tone) 50%, transparent); background: color-mix(in srgb, var(--tone) 15%, transparent);
+  color: color-mix(in srgb, var(--tone) 70%, #fff); font-size: 11px; font-weight: 500; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.type-chip::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 999px; background: var(--tone); box-shadow: 0 0 6px var(--tone); }
+.cc-note { font-size: 11.5px; line-height: 1.4; color: var(--muted); letter-spacing: 0; text-transform: none; font-weight: 400; }
+
 /* Gambar incident di kartu daftar: foto artikel di atas ubin bernada jenis serangan */
 .inc-thumb { position: relative; display: grid; place-items: center; overflow: hidden; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--tone) 35%, var(--line));
   color: var(--tone); isolation: isolate;
