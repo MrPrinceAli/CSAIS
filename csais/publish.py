@@ -60,6 +60,9 @@ PUBLISH_TABLES = {
     ),
     "v06_evidence": ("SELECT * FROM v06_evidence", ["incident_id", "article_id"]),
     "v06_source_relations": ("SELECT * FROM v06_source_relations", ["incident_id"]),
+    "v07_trust": ("SELECT * FROM v07_trust", ["incident_id", "level"]),
+    "evidence_batches": ("SELECT * FROM evidence_batches", ["anchor_status"]),
+    "evidence_leaves": ("SELECT * FROM evidence_leaves", ["batch_id", "evidence_uid"]),
 }
 
 

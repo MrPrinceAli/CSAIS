@@ -2,7 +2,9 @@
 
 Tabel hasil crawl (``articles`` dan ``crawl_state``) tidak disentuh. Karena
 setiap tahap dibangun dari tahap sebelumnya, menghapus tahap N berarti
-menghapus tahap N sampai V0.6.
+menghapus tahap N sampai V0.7. Tabel ledger (``evidence_batches`` dan
+``evidence_leaves``) juga tidak pernah dihapus: batch Merkle bersifat
+tambah-saja dan akar yang sudah dijangkarkan tidak boleh hilang.
 """
 
 from csais.db import get_connection
@@ -13,13 +15,15 @@ STAGE_TABLES = {
     4: ["v04_entities", "v04_entity_mentions", "v04_processed_articles"],
     5: ["v05_incidents", "v05_incident_documents", "v05_processed_articles"],
     6: ["v06_evidence", "v06_source_relations", "v06_processed_incidents"],
+    7: ["v07_trust"],
 }
+LAST_STAGE = max(STAGE_TABLES)
 
 
 def tables_from_stage(stage):
-    """Daftar tabel hasil olahan dari tahap ``stage`` sampai V0.6."""
+    """Daftar tabel hasil olahan dari tahap ``stage`` sampai tahap terakhir."""
     if stage not in STAGE_TABLES:
-        raise ValueError(f"Tahap tidak dikenal: {stage} (pilih 2 sampai 6)")
+        raise ValueError(f"Tahap tidak dikenal: {stage} (pilih 2 sampai {LAST_STAGE})")
     return [table for s in sorted(STAGE_TABLES) if s >= stage for table in STAGE_TABLES[s]]
 
 
@@ -40,7 +44,7 @@ def table_counts(conn, tables):
 
 
 def reset_derived_tables(confirm=True, from_stage=2):
-    """Hapus tabel hasil tahap ``from_stage`` sampai V0.6, dengan konfirmasi."""
+    """Hapus tabel hasil tahap ``from_stage`` sampai tahap terakhir, dengan konfirmasi."""
     conn = get_connection()
     counts = table_counts(conn, tables_from_stage(from_stage))
     if not counts:
@@ -49,8 +53,8 @@ def reset_derived_tables(confirm=True, from_stage=2):
         return False
 
     print(
-        f"\nTabel hasil V0.{from_stage} - V0.6 yang akan dihapus "
-        "(articles dan crawl_state aman):"
+        f"\nTabel hasil V0.{from_stage} - V0.{LAST_STAGE} yang akan dihapus "
+        "(articles, crawl_state, dan ledger aman):"
     )
     for table, count in counts.items():
         print(f"   {table:32s} {count} baris")

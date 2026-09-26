@@ -1,13 +1,14 @@
-"""Titik masuk CSAIS: menjalankan crawler lalu pipeline V0.1 sampai V0.6.
+"""Titik masuk CSAIS: menjalankan crawler lalu pipeline V0.1 sampai V0.7 dan ledger.
 
 Cara pakai (dari direktori mana pun):
 
-    python main.py                    # crawler (dengan konfirmasi) lalu V0.1 - V0.6
-    python main.py --no-crawl         # lewati crawler, langsung V0.1 - V0.6
+    python main.py                    # crawler (dengan konfirmasi) lalu V0.1 - V0.7
+    python main.py --no-crawl         # lewati crawler, langsung V0.1 - V0.7
     python main.py --crawl            # crawl tanpa prompt (untuk penjadwalan)
-    python main.py --reset            # hapus hasil V0.2 - V0.6 lalu proses ulang
-    python main.py --reset-from 5     # hapus hasil V0.5 - V0.6 saja lalu proses ulang
+    python main.py --reset            # hapus hasil V0.2 - V0.7 lalu proses ulang
+    python main.py --reset-from 5     # hapus hasil V0.5 - V0.7 saja lalu proses ulang
     python main.py --export FILE      # ekspor incident ke JSON Lines lalu keluar
+    python main.py --proof UID        # cetak bukti Merkle satu evidence_uid (JSON)
     python main.py --redetect-language
 
 Seluruh keluaran layar juga disalin ke berkas di folder logs/.
@@ -15,6 +16,7 @@ Lokasi database diatur di ``csais/config.py``.
 """
 
 import argparse
+import json
 import os
 import sys
 from datetime import datetime
@@ -24,6 +26,7 @@ from csais import (
     crawler,
     export,
     language,
+    ledger,
     publish,
     reset,
     v01_data_collector,
@@ -32,8 +35,10 @@ from csais import (
     v04_entity_resolution,
     v05_incident_clustering,
     v06_evidence_correlation,
+    v07_trust_score,
 )
 from csais.config import PROJECT_ROOT
+from csais.db import get_connection
 from csais.provenance import pipeline_stamp
 
 PIPELINE_STEPS = [
@@ -44,6 +49,8 @@ PIPELINE_STEPS = [
     ("V0.4 - Entity Resolution", v04_entity_resolution.run),
     ("V0.5 - Incident Clustering", v05_incident_clustering.run),
     ("V0.6 - Evidence Correlation", v06_evidence_correlation.run),
+    ("V0.7 - Trust Score", v07_trust_score.run),
+    ("Ledger - Batch Merkle Bukti", ledger.run),
 ]
 
 LOG_DIR = os.path.join(PROJECT_ROOT, "logs")
@@ -85,14 +92,15 @@ def parse_args():
     parser.add_argument(
         "--reset",
         action="store_true",
-        help="hapus hasil olahan V0.2 - V0.6 sebelum memproses (dengan konfirmasi)",
+        help="hapus hasil olahan V0.2 - V0.7 sebelum memproses (dengan konfirmasi)",
     )
     parser.add_argument(
         "--reset-from",
         type=int,
-        choices=range(2, 7),
+        choices=range(2, 8),
         metavar="N",
-        help="hapus hasil olahan mulai tahap V0.N sampai V0.6 saja (2-6)",
+        help="hapus hasil olahan mulai tahap V0.N sampai V0.7 saja (2-7); "
+        "tabel ledger (batch Merkle) tidak pernah dihapus",
     )
     parser.add_argument(
         "--yes", action="store_true", help="jangan minta konfirmasi untuk reset"
@@ -121,6 +129,11 @@ def parse_args():
         default=1,
         metavar="N",
         help="hanya ekspor incident dengan minimal N artikel (default 1)",
+    )
+    parser.add_argument(
+        "--proof",
+        metavar="EVIDENCE_UID",
+        help="cetak bukti Merkle (JSON) satu evidence_uid dari ledger, lalu keluar",
     )
     parser.add_argument(
         "--publish",
@@ -158,6 +171,18 @@ def main():
         print(f"\n📦 Mengekspor incident (min {args.min_docs} artikel) ke {args.export}")
         total = export.export_incidents(args.export, min_docs=args.min_docs)
         print(f"Selesai: {total} incident ditulis.")
+        return
+
+    if args.proof:
+        conn = get_connection()
+        try:
+            proof = ledger.proof_for(conn, args.proof.strip().lower())
+        finally:
+            conn.close()
+        if proof is None:
+            print(f"\nevidence_uid {args.proof} belum ada di batch mana pun.")
+            sys.exit(1)
+        print(json.dumps(proof, indent=2, ensure_ascii=False))
         return
 
     if args.publish_only:
