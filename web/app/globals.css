@@ -543,3 +543,44 @@ body { overflow-x: clip; }
   .s2-track { transform: none; flex-wrap: wrap; width: auto; }
   .s1-ring::before, .s3-ticks, .s4-sweep { animation: none; }
 }
+
+/* ==========================================================================
+   Beranda: incident dengan liputan terluas. Kartu sorotan (#1) dengan latar
+   gambar atau latar grafis, histogram titik per hari; baris peringkat dengan
+   centang per artikel. Warna titik/centang bergradasi menurut hari terbit
+   (--t 0 hari pertama, 1 hari terakhir). Gerak jeda sampai .reveal terlihat.
+   ========================================================================== */
+.cov-feature { position: relative; overflow: hidden; isolation: isolate; }
+.cov-img { animation: kenburns 20s ease-in-out infinite alternate; transform-origin: 60% 40%; }
+@keyframes kenburns { from { transform: scale(1.02); } to { transform: scale(1.12) translate(-1.5%, -1%); } }
+.cov-shade { background: linear-gradient(180deg, rgba(11, 18, 25, 0.25) 0%, rgba(11, 18, 25, 0.8) 42%, rgba(11, 18, 25, 0.97) 100%), linear-gradient(90deg, rgba(11, 18, 25, 0.8), transparent 75%); }
+.cov-fallback {
+  background:
+    radial-gradient(55% 70% at 85% 12%, rgba(47, 183, 201, 0.22), transparent 62%),
+    radial-gradient(50% 60% at 8% 95%, rgba(167, 139, 250, 0.18), transparent 60%),
+    linear-gradient(rgba(47, 183, 201, 0.06) 1px, transparent 1px) 0 0 / 28px 28px,
+    linear-gradient(90deg, rgba(47, 183, 201, 0.06) 1px, transparent 1px) 0 0 / 28px 28px,
+    var(--surface);
+}
+.cov-bgword {
+  position: absolute; right: -2%; top: 4%; max-width: 110%; white-space: nowrap; pointer-events: none;
+  font: 700 clamp(64px, 9vw, 150px) / 0.9 var(--font-jet), monospace; letter-spacing: -0.05em; text-transform: uppercase;
+  color: transparent; -webkit-text-stroke: 1px rgba(47, 183, 201, 0.22);
+  animation: drift 24s ease-in-out infinite alternate;
+}
+@keyframes drift { from { transform: translateX(0); } to { transform: translateX(-6%); } }
+.cov-rank { font-family: var(--font-jet), monospace; font-weight: 700; line-height: 0.9; letter-spacing: -0.04em; color: transparent; -webkit-text-stroke: 1px rgba(230, 237, 243, 0.4); }
+a:hover .cov-rank, .row-link:hover .cov-rank { -webkit-text-stroke-color: var(--accent); }
+.cov-tone { background: color-mix(in oklab, var(--accent) calc((1 - var(--t, 0)) * 100%), var(--chain)); }
+.cov-dot { width: var(--dot, 8px); height: var(--dot, 8px); border-radius: 2px; animation: cov-pop 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.3) both; animation-delay: calc(var(--i, 0) * 9ms + 150ms); }
+.cov-dot.is-first { background: #fff; box-shadow: 0 0 0 2px var(--accent), 0 0 14px rgba(47, 183, 201, 0.8); }
+@keyframes cov-pop { from { opacity: 0; transform: scale(0.2); } }
+.cov-tick { display: block; width: 4px; height: 16px; border-radius: 1px; transform-origin: bottom; animation: cov-tick 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: calc(var(--row, 0) * 120ms + var(--i, 0) * 12ms + 200ms); }
+@keyframes cov-tick { from { opacity: 0; transform: scaleY(0.15); } }
+.cov-legend { background: linear-gradient(90deg, var(--accent), var(--chain)); }
+.cov-mono { display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; border: 1px solid var(--line); background: var(--nav); font: 600 10px/1 var(--font-jet), monospace; color: var(--soft); text-transform: uppercase; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cov-img, .cov-bgword, .cov-dot, .cov-tick { animation: none !important; }
+}
+

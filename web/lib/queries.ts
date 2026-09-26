@@ -235,6 +235,43 @@ export const getShowcaseIncidentId = cache(async (): Promise<string | null> => {
   return best;
 });
 
+export type CoverageDoc = {
+  incident_id: string;
+  article_id: number;
+  title: string | null;
+  published_date: string | null;
+  resolved_url: string | null;
+  image_url: string | null;
+};
+
+/** Artikel beberapa incident sekaligus (urut tanggal terbit), untuk bagian liputan terluas. */
+export const getCoverageDocs = cache(async (ids: string[]): Promise<CoverageDoc[]> => {
+  if (!ids.length) return [];
+  const withImage = await hasColumn("articles", "image_url");
+  return query<CoverageDoc>(
+    `SELECT d.incident_id, a.article_id, a.title, a.published_date, a.resolved_url,
+            ${withImage ? "a.image_url" : "NULL AS image_url"}
+     FROM v05_incident_documents d
+     JOIN articles a ON a.article_id = d.article_id
+     WHERE d.incident_id IN (${ids.map(() => "?").join(", ")})
+     ORDER BY a.published_date ASC, a.article_id ASC`,
+    ids,
+  );
+});
+
+/** Nama penerbit (huruf kecil) ke domain, dari registri sumber; untuk logo penerbit. */
+export const getPublisherDomains = cache(async (): Promise<Record<string, string>> => {
+  const rows = await query<{ domain: string; publisher_name: string }>(
+    `SELECT domain, publisher_name FROM sources WHERE publisher_name IS NOT NULL AND publisher_name != '' ORDER BY article_count DESC`,
+  );
+  const map: Record<string, string> = {};
+  for (const r of rows) {
+    const key = r.publisher_name.toLowerCase();
+    if (!(key in map)) map[key] = r.domain;
+  }
+  return map;
+});
+
 export type CountryCount = { location: string; n: number };
 
 export const getCountryCounts = cache(async (days = 90): Promise<CountryCount[]> => {

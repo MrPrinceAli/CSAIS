@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
+  getCoverageDocs,
+  getPublisherDomains,
   getCountryCounts,
   getEvidenceLeaf,
   getFeaturedIncidentId,
@@ -15,13 +17,15 @@ import {
   getRiskGroups,
   getScannerFeed,
   getShowcaseIncidentId,
+  type CoverageDoc,
   type DocumentRow,
   type GroupStat,
+  type IncidentRow,
 } from "@/lib/queries";
 import { countryOf } from "@/lib/geo";
-import { domainOf, formatters, incidentTitle, publisherOf } from "@/lib/format";
+import { domainOf, formatters, incidentTitle, publisherOf, severity } from "@/lib/format";
 import { attackLabel, getDict, groupLabel, isLang, L, languageLabel, type Lang } from "@/lib/i18n";
-import { trustFromStored, trustScore } from "@/lib/trust";
+import { trustFromRow, trustFromStored, trustScore } from "@/lib/trust";
 import { CountUp, Reveal } from "@/components/reveal";
 import { IntelScanner, type ScanItem } from "@/components/intel-scanner";
 import { NewsSlider, type NewsItem } from "@/components/news-slider";
@@ -39,7 +43,8 @@ import {
   type RiskData,
   type TrustData,
 } from "@/components/process-scenes";
-import { IncidentCard, LabelBars, SectionTitle, Stat } from "@/components/ui";
+import { CoverageFeature, CoverageRow, type CoverageItem } from "@/components/coverage";
+import { LabelBars, SectionTitle, Stat } from "@/components/ui";
 
 export const revalidate = 3600;
 
@@ -72,6 +77,67 @@ function riskLevel(g: GroupStat): "high" | "medium" | "low" {
 }
 
 const LEVEL_COLOR = { high: "var(--crit)", medium: "var(--high)", low: "var(--med)" } as const;
+
+/** "Korban" dari v05 tersimpan huruf kecil; tampilkan dengan huruf besar di awal kata. */
+function titleCase(value: string | null): string | null {
+  return value ? value.replace(/(^|[\s./-])(\p{L})/gu, (_, sep: string, ch: string) => sep + ch.toUpperCase()) : null;
+}
+
+/** Data bagian liputan terluas: artikel per hari, penerbit dari akhiran judul, gambar bila ada. */
+function coverageItems(lang: Lang, rows: IncidentRow[], docs: CoverageDoc[], publisherDomains: Record<string, string>): CoverageItem[] {
+  const f = formatters(lang);
+  const DAY = 86400000;
+  return rows.map((row, idx) => {
+    const list = docs.filter((d) => d.incident_id === row.incident_id);
+    const keys = list.map((d) => (d.published_date ?? "").slice(0, 10)).filter(Boolean);
+    const first = keys[0] ?? "";
+    const last = keys[keys.length - 1] ?? first;
+    const start = Date.parse(`${first}T00:00:00Z`);
+    const spanDays = first ? Math.round((Date.parse(`${last}T00:00:00Z`) - start) / DAY) + 1 : 1;
+    const bucket = Math.max(1, Math.ceil(spanDays / 24));
+    const buckets = Math.max(1, Math.ceil(spanDays / bucket));
+    const days = Array.from({ length: buckets }, () => 0);
+    const ticks: number[] = [];
+    for (const key of keys) {
+      const b = Math.min(buckets - 1, Math.floor(Math.round((Date.parse(`${key}T00:00:00Z`) - start) / DAY) / bucket));
+      days[b] += 1;
+      ticks.push(buckets > 1 ? b / (buckets - 1) : 0);
+    }
+    const publishers = new Map<string, { name: string; domain: string | null }>();
+    for (const d of list) {
+      const name = publisherOf(d.title);
+      if (!name) continue;
+      const key = name.toLowerCase();
+      const own = domainOf(d.resolved_url);
+      const domain = own && !own.includes("google.") ? own : (publisherDomains[key] ?? null);
+      const known = publishers.get(key);
+      if (!known) publishers.set(key, { name, domain });
+      else if (!known.domain && domain) known.domain = domain;
+    }
+    const all = [...publishers.values()].sort((a, b) => Number(Boolean(b.domain)) - Number(Boolean(a.domain)));
+    const withImage = list.find((d) => d.image_url);
+    const resolved = list.find((d) => d.resolved_url && !d.resolved_url.includes("google."));
+    return {
+      id: row.incident_id,
+      href: `/${lang}/incidents/${row.incident_id}`,
+      rank: idx + 1,
+      title: incidentTitle(row.title),
+      target: titleCase(row.target),
+      type: attackLabel(row.attack_type, lang),
+      severity: severity(row),
+      articles: Number(row.document_count),
+      publishers: Math.max(publishers.size, 1),
+      trust: trustFromRow(row),
+      image: withImage?.image_url ?? (resolved ? `/api/og/${resolved.article_id}` : null),
+      days,
+      ticks,
+      firstDate: f.date(first || null),
+      lastDate: f.date(last || null),
+      logos: all.slice(0, 8),
+      morePublishers: Math.max(0, all.length - 8),
+    };
+  });
+}
 
 /** Panjang gulir relatif tiap adegan "Cara kerja" (rel bukti paling panjang). */
 const SCENE_WEIGHTS = [1, 1.4, 1.2, 1, 1.2];
@@ -208,6 +274,8 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
     getRiskGroups(),
     getLedgerStats(),
   ]);
+  const [coverageDocs, publisherDomains] = await Promise.all([getCoverageDocs(latest.map((r) => r.incident_id)), getPublisherDomains()]);
+  const coverage = coverageItems(lang, latest, coverageDocs, publisherDomains);
   const scenes = await processData(lang, featuredId ?? (await getFeaturedIncidentId()) ?? latest[0]?.incident_id ?? null, riskGroups, ledgerStats?.batches ?? 0);
   const steps = t.home.steps;
   const common = { total: steps.length, aiTag: "AI", labels: t.home.scenes };
@@ -293,40 +361,52 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
         </section>
       </Reveal>
 
-      {/* Liputan terluas: kartu dengan tumpukan logo sumber */}
+      {/* Liputan terluas: kartu sorotan (#1) dan baris peringkat */}
       <Reveal>
-        <section className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-          <div className="card flex flex-col gap-2.5 p-4 sm:p-5">
-            <SectionTitle aside={t.home.coverageNote}>{t.home.coverageTitle}</SectionTitle>
-            {latest.map((row, i) => (
-              <IncidentCard key={row.incident_id} row={row} lang={lang} index={i} />
-            ))}
-            <Link href={L(lang, "/incidents")} className="self-end text-[13px] no-underline">
-              {t.nav.incidents} →
-            </Link>
+        <section className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-[22px] font-semibold">{t.home.coverageTitle}</h2>
+            <span className="text-[13px] text-muted">{t.home.coverageNote}</span>
           </div>
-          <div className="flex flex-col gap-4">
-            <div className="card p-4 sm:p-5">
-              <SectionTitle>{t.home.languagesTitle}</SectionTitle>
-              <LabelBars
-                data={languages.map((l) => ({
-                  label: languageLabel(l.language, lang),
-                  n: Number(l.n),
-                  text: `${Math.round((100 * Number(l.n)) / totalLang)}%`,
-                }))}
-              />
+          {coverage.length ? (
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+              <CoverageFeature item={coverage[0]} labels={t.home.coverage} lang={lang} locale={locale} />
+              <div className="flex flex-col gap-3">
+                {coverage.slice(1).map((item, i) => (
+                  <CoverageRow key={item.id} item={item} labels={t.home.coverage} lang={lang} index={i} />
+                ))}
+                <Link href={L(lang, "/incidents")} className="self-end pt-1 text-[13px] no-underline">
+                  {t.home.coverage.all} →
+                </Link>
+              </div>
             </div>
-            <div className="card p-4 sm:p-5">
-              <SectionTitle aside={t.home.countriesNote}>{t.home.countriesTitle}</SectionTitle>
-              <LabelBars
-                data={countries.slice(0, 6).map((c) => ({
-                  label: countryOf(c.location)?.label ?? c.location,
-                  n: Number(c.n),
-                  text: f.num(Number(c.n)),
-                  href: `${L(lang, "/incidents")}?negara=${encodeURIComponent(c.location)}&hari=90`,
-                }))}
-              />
-            </div>
+          ) : null}
+        </section>
+      </Reveal>
+
+      {/* Sebaran bahasa dan negara */}
+      <Reveal>
+        <section className="grid gap-4 lg:grid-cols-2">
+          <div className="card p-4 sm:p-5">
+            <SectionTitle>{t.home.languagesTitle}</SectionTitle>
+            <LabelBars
+              data={languages.map((l) => ({
+                label: languageLabel(l.language, lang),
+                n: Number(l.n),
+                text: `${Math.round((100 * Number(l.n)) / totalLang)}%`,
+              }))}
+            />
+          </div>
+          <div className="card p-4 sm:p-5">
+            <SectionTitle aside={t.home.countriesNote}>{t.home.countriesTitle}</SectionTitle>
+            <LabelBars
+              data={countries.slice(0, 6).map((c) => ({
+                label: countryOf(c.location)?.label ?? c.location,
+                n: Number(c.n),
+                text: f.num(Number(c.n)),
+                href: `${L(lang, "/incidents")}?negara=${encodeURIComponent(c.location)}&hari=90`,
+              }))}
+            />
           </div>
         </section>
       </Reveal>
