@@ -592,3 +592,23 @@ a:hover .cov-rank, .row-link:hover .cov-rank { -webkit-text-stroke-color: var(--
 .chrono-more[open] .when-open { display: inline; }
 .chrono-more[open] .when-closed { display: none; }
 
+/* Pemuat "pipeline berjalan" di panel pemindai: paket melintasi tiga simpul. */
+.pl { overflow: visible; }
+.pl-packet { animation: pl-move 1.8s cubic-bezier(0.45, 0, 0.55, 1) infinite; }
+.pl-packet circle { filter: drop-shadow(0 0 3px rgba(47, 183, 201, 0.9)); }
+@keyframes pl-move {
+  0% { transform: translateX(0); opacity: 0; }
+  8% { opacity: 1; }
+  92% { opacity: 1; }
+  100% { transform: translateX(32px); opacity: 0; }
+}
+.pl-node { fill: var(--bg); transform-box: fill-box; transform-origin: center; animation: pl-node 1.8s ease-out infinite; }
+@keyframes pl-node {
+  0% { fill: currentColor; transform: scale(1.5); filter: drop-shadow(0 0 4px currentColor); }
+  28%, 100% { fill: var(--bg); transform: scale(1); filter: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pl-packet { display: none; }
+  .pl-node { animation: none; fill: currentColor; }
+}
+

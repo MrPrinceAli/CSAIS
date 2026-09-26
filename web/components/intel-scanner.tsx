@@ -77,6 +77,37 @@ function Highlighted({ item }: { item: ScanItem }) {
   );
 }
 
+/**
+ * Pemuat "pipeline berjalan": tiga simpul (crawl, AI, rantai) di satu jalur;
+ * satu paket data berekor melintas, dan setiap simpul menyala saat dilewati.
+ * Waktu nyala disinkronkan dengan delay negatif (lihat .pl-* di globals.css).
+ */
+function PipelineLoader() {
+  const nodes = [
+    { x: 5, color: "var(--accent)", delay: "-1.71s" },
+    { x: 21, color: "var(--accent)", delay: "-0.9s" },
+    { x: 37, color: "var(--chain)", delay: "-0.05s" },
+  ];
+  return (
+    <svg className="pl" width="52" height="17" viewBox="0 0 42 14" aria-hidden="true">
+      <defs>
+        <linearGradient id="pl-trail" x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0" stopColor="#2fb7c9" stopOpacity="0" />
+          <stop offset="1" stopColor="#2fb7c9" stopOpacity="0.9" />
+        </linearGradient>
+      </defs>
+      <line x1="5" x2="37" y1="7" y2="7" stroke="var(--line-2)" strokeWidth="1.5" strokeLinecap="round" />
+      <g className="pl-packet">
+        <rect x="-5" y="6" width="10" height="2" rx="1" fill="url(#pl-trail)" />
+        <circle cx="5" cy="7" r="2.1" fill="#fff" />
+      </g>
+      {nodes.map((n) => (
+        <circle key={n.x} className="pl-node" cx={n.x} cy="7" r="3" stroke={n.color} strokeWidth="1.5" style={{ color: n.color, animationDelay: n.delay }} />
+      ))}
+    </svg>
+  );
+}
+
 function pct(v: number): number {
   return Math.round(Math.min(1, Math.max(0, v)) * 100);
 }
@@ -137,8 +168,8 @@ export function IntelScanner({ items, labels, stamp, reduceMotion = false }: { i
   return (
     <div className={`card corners relative flex flex-col gap-3 overflow-hidden p-4 grid-bg phase-${phase}`} aria-live="off">
       <div className="flex items-center justify-between gap-3 font-mono text-[11px] text-muted">
-        <span className="inline-flex items-center gap-2">
-          <span className="led led-accent" aria-hidden="true" />
+        <span className="inline-flex items-center gap-2.5">
+          <PipelineLoader />
           {labels.live}
         </span>
         <span>{stamp}</span>
