@@ -70,3 +70,12 @@ def test_chain_respects_gap_and_family_when_sequential(conn):
     conn.commit()
     assert v05.chain_incidents(conn) == 0
     assert conn.execute("SELECT COUNT(*) FROM v05_incidents").fetchone()[0] == 3
+
+
+def test_generic_attack_type_behaves_as_unknown():
+    assert v05.attack_type_set("cyber_attack") == set()
+    assert v05.attack_type_set("cyber_attack, ransomware") == {"ransomware"}
+    assert v05.families_compatible("cyber_attack", "phishing")
+    assert v05.prefer_specific_attack_type("cyber_attack", "ransomware") == "ransomware"
+    assert v05.prefer_specific_attack_type("ransomware", "phishing") == "ransomware"
+    assert v05.prefer_specific_attack_type(None, "cyber_attack") == "cyber_attack"

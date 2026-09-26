@@ -34,7 +34,12 @@
       "brute force attack",
       "password attack",
       "credential stealing",
-      "credential theft"
+      "credential theft",
+      "stolen credentials",
+      "stolen passwords",
+      "passwords exposed",
+      "password leak",
+      "kredensial dicuri"
     ],
     "PHISHING": [
       "phishing",
@@ -67,7 +72,18 @@
       "penipuan siber",
       "pusat penipuan online",
       "sindikat penipuan",
-      "jaringan penipuan"
+      "jaringan penipuan",
+      "romance scam",
+      "crypto scam",
+      "cryptocurrency scam",
+      "pig butchering",
+      "scam call",
+      "scam calls",
+      "scam center",
+      "scam compound",
+      "fake check",
+      "penipuan kripto",
+      "sindikat scammer"
     ],
     "JOB_SCAM": [
       "job scam",
@@ -120,7 +136,14 @@
       "vulnerability exploited",
       "exploited in the wild",
       "vulnerability exploitation",
-      "exploit chain"
+      "exploit chain",
+      "authentication bypass",
+      "flaw exploited",
+      "exploited flaw",
+      "exploited vulnerability",
+      "actively exploited vulnerability",
+      "active exploitation",
+      "kerentanan dieksploitasi"
     ],
     "DDoS": [
       "ddos",
@@ -150,7 +173,10 @@
       "personal data breach",
       "customer data breach",
       "kebocoran data",
-      "pembobolan data"
+      "pembobolan data",
+      "security breach",
+      "cyber breach",
+      "data exposure"
     ],
     "DATA_LEAK": [
       "data leak",
@@ -159,7 +185,14 @@
       "data leaked",
       "data bocor",
       "bocornya data",
-      "data dijual"
+      "data dijual",
+      "leaked data",
+      "leaked database",
+      "leak site",
+      "data exposed",
+      "exposed data",
+      "records exposed",
+      "kebocoran dana"
     ],
     "DATA_THEFT": [
       "data theft",
@@ -177,7 +210,12 @@
       "supply chain compromise",
       "software supply chain attack",
       "third party compromise",
-      "third-party compromise"
+      "third-party compromise",
+      "malicious npm package",
+      "malicious npm packages",
+      "malicious pypi package",
+      "malicious packages",
+      "poisoned package"
     ],
     "CLOUD_ATTACK": [
       "cloud attack",
@@ -278,7 +316,63 @@
       "cyber extortion",
       "digital extortion",
       "double extortion",
-      "triple extortion"
+      "triple extortion",
+      "sextortion",
+      "pemerasan siber"
+    ]
+  },
+  "attack_type_fallback_keywords": {
+    "ONLINE_SCAM": [
+      "scam",
+      "scammer",
+      "scammers",
+      "fraudster",
+      "fraudsters",
+      "penipuan",
+      "penipu",
+      "modus penipuan"
+    ],
+    "DATA_BREACH": [
+      "breach",
+      "breached",
+      "data compromised"
+    ],
+    "DATA_LEAK": [
+      "leaked",
+      "bocor",
+      "kebocoran"
+    ],
+    "VULNERABILITY_EXPLOITATION": [
+      "vulnerability",
+      "vulnerabilities",
+      "exploited",
+      "security flaw",
+      "critical flaw",
+      "cve-",
+      "kerentanan",
+      "celah keamanan"
+    ],
+    "NETWORK_INTRUSION": [
+      "hacked",
+      "hackers",
+      "hacking",
+      "unauthorized access",
+      "unauthorised access",
+      "akses ilegal",
+      "peretas",
+      "hacker"
+    ],
+    "CYBER_ATTACK": [
+      "cyberattack",
+      "cyber attack",
+      "cyber-attack",
+      "cyber incident",
+      "cybersecurity incident",
+      "cyber security incident",
+      "security incident",
+      "serangan siber",
+      "insiden siber",
+      "gangguan siber"
     ]
   },
   "attack_method_keywords": {

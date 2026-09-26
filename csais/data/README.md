@@ -87,3 +87,19 @@ Kategori kelompok korban tambahan di `target_group_keywords` (taksonomi
 Indonesia): `BANK_CUSTOMERS` (nasabah), `SMES` (UMKM), `CIVIL_SERVANTS` (ASN,
 PNS, PPPK), `ELDERLY` (lansia). Kategori ini ditaruh di akhir agar urutan hasil
 kategori lama tidak berubah.
+
+## Kamus cadangan jenis serangan
+
+`attack_type_fallback_keywords` di `extraction_keywords.json` berisi kata umum
+("scam", "breach", "leaked", "vulnerability", "hacked", "cyberattack",
+"penipuan", "bocor", "serangan siber"). Kamus ini hanya dipakai bila tidak ada
+kata dari `attack_type_keywords` yang cocok, supaya artikel "job scam" tetap
+JOB_SCAM dan tidak berubah menjadi ONLINE_SCAM. Kategori `CYBER_ATTACK`
+("serangan siber umum") adalah pilihan terakhir dan dibuang bila ada kategori
+cadangan lain yang cocok. V0.5 memperlakukan `cyber_attack` seperti jenis yang
+tidak diketahui saat mencocokkan artikel dengan incident, dan incident yang
+hanya berlabel umum mengambil jenis spesifik dari artikel yang bergabung.
+Pada September 2026 kamus ini menurunkan artikel RELEVANT berjenis UNKNOWN dari
+27,1% menjadi 2,8%. Artikel lama baru ikut berubah setelah proses ulang mulai
+V0.3 (`reset_from` 3).
+

@@ -39,12 +39,22 @@ def domain_of(url):
     return host[4:] if host.startswith("www.") else host
 
 
+# TLD negara yang lazim dipakai sebagai domain generik (tempo.co, industrialcyber.co,
+# x.tv, y.me): hanya dianggap negara bila didahului sufiks registri resmi
+# negara itu (eltiempo.com.co, abc.gov.co).
+GENERIC_CCTLDS = {"co", "tv", "me", "cc", "fm", "ly", "io", "ai", "gg", "to", "ws"}
+REGISTRY_SECOND_LEVEL = {"com", "net", "org", "gov", "edu", "ac", "co", "mil", "or", "go", "web"}
+
+
 def country_of(domain):
-    """Kode negara dari TLD domain, 'unknown' bila tidak dikenali."""
-    parts = domain.rsplit(".", 2)
-    if len(parts) >= 2 and parts[-1] in TLD_COUNTRY:
-        return TLD_COUNTRY[parts[-1]]
-    return "unknown"
+    """Kode negara dari TLD domain, 'unknown' bila tidak dikenali atau TLD-nya generik."""
+    parts = domain.lower().rsplit(".", 2)
+    if len(parts) < 2:
+        return "unknown"
+    tld = parts[-1]
+    if tld in GENERIC_CCTLDS and not (len(parts) == 3 and parts[-2] in REGISTRY_SECOND_LEVEL):
+        return "unknown"
+    return TLD_COUNTRY.get(tld, "unknown")
 
 
 def create_tables(conn):

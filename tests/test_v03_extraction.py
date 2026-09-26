@@ -284,3 +284,24 @@ def test_extract_threat_actor_indonesian(sentence, expected):
 
 def test_extract_location_indonesian_country_names():
     assert v03.extract_location("serangan dari korea utara ke jepang") == "Japan, North Korea"
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("everett city hall closes over cybersecurity incident", "CYBER_ATTACK"),
+        ("russian regional airline disrupted by suspected cyberattack", "CYBER_ATTACK"),
+        ("sandy springs woman victim of romance scam", "ONLINE_SCAM"),
+        ("scammers target older adult victims", "ONLINE_SCAM"),
+        ("job scam targets graduates, scammers ask for fees", "JOB_SCAM"),
+        ("critical sap flaw exploited worldwide", "VULNERABILITY_EXPLOITATION"),
+        ("fortinet products affected by sso login authentication bypass", "VULNERABILITY_EXPLOITATION"),
+        ("data wp bocor, purbaya rekrut hacker", "DATA_LEAK"),
+        ("texas hospital hit by cyberattack that exposed data on 257k patients", "DATA_LEAK"),
+        ("ransomware cyberattack cripples hospital", "RANSOMWARE"),
+        ("sunny weather today", "UNKNOWN"),
+    ],
+)
+def test_extract_attack_type_fallback(text, expected):
+    # kategori pertama adalah jenis utama yang dipakai web dan V0.5
+    assert v03.extract_attack_type(text).split(", ")[0] == expected

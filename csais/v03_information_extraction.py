@@ -75,9 +75,21 @@ def find_keyword_matches(text, keyword_dictionary):
     return matches
 
 
+# Kata umum ("scam", "breach", "cyberattack") hanya dipakai bila tidak ada kata
+# spesifik yang cocok, agar "job scam" tetap JOB_SCAM dan bukan ONLINE_SCAM.
+# CYBER_ATTACK (serangan siber tanpa jenis) adalah pilihan paling akhir dan
+# dibuang bila ada kategori cadangan lain yang cocok.
+ATTACK_TYPE_FALLBACK_KEYWORDS = _EXTRACTION.get("attack_type_fallback_keywords", {})
+GENERIC_ATTACK_TYPE = "CYBER_ATTACK"
+
+
 def extract_attack_type(text):
-    """Ekstrak jenis serangan dari teks."""
+    """Ekstrak jenis serangan dari teks: kata spesifik dulu, lalu kamus cadangan."""
     matches = find_keyword_matches(text, ATTACK_TYPE_KEYWORDS)
+    if not matches:
+        matches = find_keyword_matches(text, ATTACK_TYPE_FALLBACK_KEYWORDS)
+        if len(matches) > 1 and GENERIC_ATTACK_TYPE in matches:
+            matches.remove(GENERIC_ATTACK_TYPE)
     if not matches:
         return "UNKNOWN"
     return ", ".join(matches)

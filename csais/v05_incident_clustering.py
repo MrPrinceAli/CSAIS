@@ -135,6 +135,11 @@ ATTACK_TYPE_FAMILIES = {
     ],
     "CRYPTO": ["crypto_attack"],
 }
+# Jenis serangan tanpa keterangan ("serangan siber" saja, dari kamus cadangan
+# V0.3) diperlakukan seperti tidak diketahui saat mencocokkan: tidak membatasi
+# kandidat dan tidak memisahkan artikel dari incident berjenis spesifik.
+GENERIC_ATTACK_TYPES = {"cyber_attack"}
+
 _FAMILY_OF = {
     category: family
     for family, categories in ATTACK_TYPE_FAMILIES.items()
@@ -198,10 +203,24 @@ def text_tokens(title, summary):
 
 
 def attack_type_set(value):
-    """Himpunan kategori dari string V0.3 seperti 'ransomware, data_breach'."""
+    """Himpunan kategori dari string V0.3 seperti 'ransomware, data_breach'.
+
+    Kategori umum (GENERIC_ATTACK_TYPES) tidak dihitung, jadi artikel atau
+    incident yang hanya berlabel umum diperlakukan seperti tidak diketahui.
+    """
     if not value:
         return set()
-    return {part.strip() for part in value.split(",") if part.strip()}
+    parts = {part.strip() for part in value.split(",") if part.strip()}
+    return {part for part in parts if part.lower() not in GENERIC_ATTACK_TYPES}
+
+
+def prefer_specific_attack_type(old, new):
+    """Jenis incident setelah artikel bergabung: yang lama, kecuali lama hanya umum dan baru spesifik."""
+    if not old:
+        return new
+    if not attack_type_set(old) and attack_type_set(new):
+        return new
+    return old
 
 
 def attack_family_set(value):
@@ -595,7 +614,9 @@ def get_existing_incidents(conn, article):
             for family in attack_family_set(article["attack_type"])
             for category in ATTACK_TYPE_FAMILIES.get(family, [family])
         )
-        type_clause = "attack_type IS NULL"
+        type_clause = "attack_type IS NULL" + "".join(
+            f" OR attack_type = '{generic}'" for generic in sorted(GENERIC_ATTACK_TYPES)
+        )
         params = [lower, upper]
         if related:
             type_clause += " OR " + " OR ".join("instr(attack_type, ?) > 0" for _ in related)
@@ -976,7 +997,7 @@ def update_incident(conn, incident_id, article, similarity_score):
         WHERE incident_id = ?
         """,
         (
-            old_attack_type or article["attack_type"],
+            prefer_specific_attack_type(old_attack_type, article["attack_type"]),
             old_target or article["target"],
             old_target_entity_id or article["target_entity_id"],
             old_actor or article["threat_actor"],
