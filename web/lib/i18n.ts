@@ -181,6 +181,11 @@ const id = {
       rotation: "rot",
       arcsNote: "busur ungu: negara yang disebut dalam incident yang sama",
       escHint: "Esc untuk menutup",
+      mapFilter: "Klik untuk memfilter",
+      mapClear: "Klik lagi untuk menghapus filter",
+      mapHint: "Klik negara untuk memfilter, klik lagi untuk menghapus",
+      zoom: "zoom",
+      openFull: "Halaman penuh",
     },
   },
   detail: {
@@ -489,6 +494,11 @@ const en: Dict = {
       rotation: "rot",
       arcsNote: "purple arcs: countries named in the same incident",
       escHint: "Esc to close",
+      mapFilter: "Click to filter",
+      mapClear: "Click again to clear the filter",
+      mapHint: "Click a country to filter, click again to clear",
+      zoom: "zoom",
+      openFull: "Full page",
     },
   },
   detail: {

@@ -22,6 +22,7 @@ export type IncidentRow = {
   domains: number | null;
   independence: number | null;
   domain_list: string | null; // domain sumber dipisah koma (untuk tumpukan logo)
+  image_url: string | null; // og:image salah satu artikel (artikel jangkar lebih dulu)
 } & StoredTrust;
 
 /* --- Keberadaan tabel ---
@@ -98,7 +99,13 @@ const NO_TRUST_COLUMNS = `NULL AS trust_score, NULL AS trust_level, NULL AS trus
 
 /** SELECT incident beserta skor V0.7 bila tabel v07_trust sudah diterbitkan. */
 async function incidentSelect(): Promise<string> {
-  const withTrust = await hasTable("v07_trust");
+  const [withTrust, withImage] = await Promise.all([hasTable("v07_trust"), hasColumn("articles", "image_url")]);
+  const image = withImage
+    ? `COALESCE(
+        (SELECT g.image_url FROM articles g WHERE g.article_id = i.anchor_article_id),
+        (SELECT g.image_url FROM v05_incident_documents gd JOIN articles g ON g.article_id = gd.article_id
+         WHERE gd.incident_id = i.incident_id AND g.image_url IS NOT NULL LIMIT 1))`
+    : "NULL";
   return `
   SELECT i.incident_id, i.attack_type, i.target, i.threat_actor, i.location, i.attack_date,
          i.document_count, i.incident_confidence, i.anchor_article_id, i.anchor_published_date,
@@ -106,6 +113,7 @@ async function incidentSelect(): Promise<string> {
          (SELECT COUNT(DISTINCT e.source_domain) FROM v06_evidence e WHERE e.incident_id = i.incident_id) AS domains,
          (SELECT AVG(e.evidence_independence_score) FROM v06_evidence e WHERE e.incident_id = i.incident_id) AS independence,
          (SELECT GROUP_CONCAT(DISTINCT e.source_domain) FROM v06_evidence e WHERE e.incident_id = i.incident_id AND e.source_domain != '' AND e.source_domain NOT LIKE '%google.%') AS domain_list,
+         ${image} AS image_url,
          ${withTrust ? TRUST_COLUMNS : NO_TRUST_COLUMNS}
   FROM v05_incidents i
   LEFT JOIN articles a ON a.article_id = i.anchor_article_id
@@ -337,10 +345,14 @@ function buildWhere(f: DashboardFilters): { where: string; args: InValue[] } {
 
 export async function getDashboard(f: DashboardFilters) {
   const { where, args } = buildWhere(f);
+  // Sebaran negara memakai semua filter kecuali negara: peta dan daftar negara
+  // tetap utuh saat satu negara dipilih, sehingga bisa langsung pindah negara.
+  const spread = buildWhere({ ...f, negara: undefined });
   const page = f.page && f.page > 0 ? f.page : 1;
   const base = `FROM v05_incidents i LEFT JOIN articles a ON a.article_id = i.anchor_article_id ${where}`;
+  const spreadBase = `FROM v05_incidents i LEFT JOIN articles a ON a.article_id = i.anchor_article_id ${spread.where}`;
   const select = await incidentSelect();
-  const [rows, totalRow, daily, types, countries, kpi, allCountries, multi] = await Promise.all([
+  const [rows, totalRow, daily, types, kpi, allCountries, multi] = await Promise.all([
     query<IncidentRow>(
       `${select} ${where}
        ORDER BY i.document_count DESC, i.anchor_published_date DESC
@@ -356,7 +368,6 @@ export async function getDashboard(f: DashboardFilters) {
        GROUP BY t ORDER BY n DESC LIMIT 16`,
       args,
     ),
-    query<CountryCount>(`SELECT LOWER(i.location) AS location, COUNT(*) AS n ${base} AND i.location != '' GROUP BY location ORDER BY n DESC LIMIT 8`, args),
     queryOne<{ total: number; multi: number; target_known: number; indonesia: number }>(
       `SELECT COUNT(*) AS total,
               SUM(CASE WHEN i.document_count >= 2 THEN 1 ELSE 0 END) AS multi,
@@ -365,7 +376,10 @@ export async function getDashboard(f: DashboardFilters) {
        ${base}`,
       args,
     ),
-    query<CountryCount>(`SELECT LOWER(i.location) AS location, COUNT(*) AS n ${base} AND i.location != '' GROUP BY LOWER(i.location) ORDER BY n DESC`, args),
+    query<CountryCount>(
+      `SELECT LOWER(i.location) AS location, COUNT(*) AS n ${spreadBase} AND i.location != '' GROUP BY LOWER(i.location) ORDER BY n DESC`,
+      spread.args,
+    ),
     // Busur globe: v05 hanya menyimpan satu negara per incident, jadi pasangan
     // negara diambil dari lokasi V0.3 tiap artikel dalam incident yang cocok filter.
     query<{ location: string }>(
@@ -386,7 +400,6 @@ export async function getDashboard(f: DashboardFilters) {
     pages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
     daily,
     types,
-    countries,
     kpi: kpi ?? { total: 0, multi: 0, target_known: 0, indonesia: 0 },
     allCountries,
     pairs: countryPairs(multi.map((m) => m.location)),

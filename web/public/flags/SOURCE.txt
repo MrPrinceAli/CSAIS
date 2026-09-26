@@ -1,0 +1,2 @@
+Bendera negara dari country-flag-icons (MIT, (c) 2020 @catamphetamine), format 3x2.
+https://gitlab.com/catamphetamine/country-flag-icons

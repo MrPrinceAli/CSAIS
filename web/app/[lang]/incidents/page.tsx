@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getAttackTypeOptions, getDashboard, type DashboardFilters } from "@/lib/queries";
@@ -9,6 +10,7 @@ import { CommandGlobe, type GlobeArc, type GlobePoint } from "@/components/comma
 import { EscapeClose } from "@/components/escape-close";
 import { Pagination } from "@/components/pagination";
 import { SearchField } from "@/components/search-field";
+import { IncidentThumb } from "@/components/incident-thumb";
 import { DailyBars, IncidentCard, TrustLegend } from "@/components/ui";
 
 type Search = Record<string, string | string[] | undefined>;
@@ -86,7 +88,11 @@ export default async function IncidentsPage({ params: p, searchParams }: { param
     lng: COUNTRY[name].lng,
     n,
     label: COUNTRY[name].label,
-    href: hrefWith({ negara: name, page: undefined }),
+    num: COUNTRY[name].num,
+    iso: COUNTRY[name].iso.toLowerCase(),
+    active: filters.negara === name,
+    // klik negara yang sedang difilter menghapus filternya
+    href: hrefWith({ negara: filters.negara === name ? undefined : name, page: undefined }),
   }));
   const arcs: GlobeArc[] = data.pairs
     .filter((x) => COUNTRY[x.a] && COUNTRY[x.b])
@@ -99,8 +105,8 @@ export default async function IncidentsPage({ params: p, searchParams }: { param
   const typeCount = new Map(data.types.map((x) => [x.t, Number(x.n)]));
   const primary = (x: string) => x.split(",")[0].trim();
   const typeList = [...new Set([...data.types.map((x) => primary(x.t)), ...typeOptions.map((x) => primary(x.t))])].filter((x) => x && x !== "unknown").slice(0, 14);
-  const maxCountry = Math.max(1, ...ranked.slice(0, 8).map(([, n]) => n));
-  const feed = data.rows.slice(0, 4);
+  const maxCountry = Math.max(1, ...ranked.map(([, n]) => n));
+  const feed = data.rows.slice(0, 12);
 
   const chips: { label: string; href: string }[] = [];
   if (filters.q) chips.push({ label: `“${filters.q}”`, href: hrefWith({ q: undefined, page: undefined }) });
@@ -135,18 +141,62 @@ export default async function IncidentsPage({ params: p, searchParams }: { param
               </nav>
             </div>
 
-            <div className="flex flex-col gap-1">
+            <div className="cc-fill">
               <span className="cc-h">{t.incidents.filters.type}</span>
+              <div className="cc-list cc-scroll">
               <Link href={hrefWith({ jenis: undefined, page: undefined })} className="cc-opt" aria-current={!filters.jenis ? "true" : undefined}>
                 <span>{c.all}</span>
                 <span className="n">{f.num(total)}</span>
               </Link>
-              {typeList.map((type) => (
-                <Link key={type} href={hrefWith({ jenis: type, page: undefined })} className="cc-opt" aria-current={filters.jenis?.toLowerCase() === type ? "true" : undefined}>
-                  <span className="truncate">{attackLabel(type, lang)}</span>
+              {typeList.map((type) => {
+                const on = filters.jenis?.toLowerCase() === type;
+                return (
+                <Link key={type} href={hrefWith({ jenis: on ? undefined : type, page: undefined })} scroll={false} className="cc-opt" aria-current={on ? "true" : undefined}>
+                  <span className="truncate">
+                    {attackLabel(type, lang)}
+                    {on ? <span className="ml-1.5 text-accent">×</span> : null}
+                  </span>
                   <span className="n">{typeCount.has(type) ? f.num(typeCount.get(type)) : "·"}</span>
                 </Link>
-              ))}
+                );
+              })}
+              </div>
+            </div>
+
+            <div className="cc-fill">
+              <span className="cc-h">
+                {c.countries}
+                <span className="font-mono font-normal tracking-normal">{ranked.length}</span>
+              </span>
+              <div className="cc-list cc-scroll">
+                {ranked.map(([name, n]) => {
+                  const on = filters.negara === name;
+                  return (
+                    <Link
+                      key={name}
+                      href={hrefWith({ negara: on ? undefined : name, page: undefined })}
+                      scroll={false}
+                      className="cc-opt"
+                      aria-current={on ? "true" : undefined}
+                      title={on ? c.mapClear : c.mapFilter}
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <Image src={`/flags/${COUNTRY[name].iso.toLowerCase()}.svg`} alt="" width={18} height={12} unoptimized className="cc-flag" />
+                        <span className="flex min-w-0 flex-1 flex-col gap-1">
+                          <span className="truncate">
+                            {COUNTRY[name].label}
+                            {on ? <span className="ml-1.5 text-accent">×</span> : null}
+                          </span>
+                          <span className="block h-[3px] overflow-hidden rounded-sm bg-line">
+                            <span className="bar-fill block h-full bg-accent" style={{ width: `${(100 * n) / maxCountry}%` }} />
+                          </span>
+                        </span>
+                      </span>
+                      <span className="n">{f.num(n)}</span>
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="flex flex-col gap-1.5">
@@ -206,10 +256,12 @@ export default async function IncidentsPage({ params: p, searchParams }: { param
               <CommandGlobe
                 points={points}
                 arcs={arcs}
-                focus={focusCountry ? { lat: focusCountry.lat, lng: focusCountry.lng } : null}
+                focus={focusCountry ? { lat: focusCountry.lat, lng: focusCountry.lng, num: focusCountry.num } : null}
                 labels={10}
                 ariaLabel={t.incidents.located(f.num(located), ranked.length)}
                 readoutLabel={c.rotation}
+                zoomLabel={c.zoom}
+                hint={{ filter: c.mapFilter, clear: c.mapClear, help: c.mapHint }}
               />
             </div>
             <div className="cc-panel gap-2 py-3">
@@ -243,31 +295,26 @@ export default async function IncidentsPage({ params: p, searchParams }: { param
               </span>
             </div>
 
-            <div className="flex flex-col gap-1 border-t border-line pt-3">
-              <span className="cc-h">{c.countries}</span>
-              {ranked.slice(0, 8).map(([name, n]) => (
-                <Link key={name} href={hrefWith({ negara: name, page: undefined })} className="cc-opt" aria-current={filters.negara === name ? "true" : undefined}>
-                  <span className="flex min-w-0 flex-col gap-1">
-                    <span className="truncate">{COUNTRY[name].label}</span>
-                    <span className="block h-[3px] overflow-hidden rounded-sm bg-line">
-                      <span className="bar-fill block h-full bg-accent" style={{ width: `${(100 * n) / maxCountry}%` }} />
-                    </span>
-                  </span>
-                  <span className="n">{f.num(n)}</span>
-                </Link>
-              ))}
-            </div>
-
-            <div className="flex flex-col gap-2 border-t border-line pt-3">
+            <div className="cc-fill cc-grow border-t border-line pt-3">
               <span className="cc-h">{c.feed}</span>
-              {feed.map((row) => (
-                <Link key={row.incident_id} href={L(lang, `/incidents/${row.incident_id}`)} className="row-link flex flex-col gap-1 rounded-md border border-line bg-[rgba(7,12,18,0.6)] p-2.5 hover:border-accent">
-                  <span className="line-clamp-2 text-[13px] font-semibold leading-snug">{incidentTitle(row.title)}</span>
-                  <span className="text-[12px] text-muted">
-                    {attackLabel(row.attack_type, lang)} · {f.num(row.document_count)} {t.common.articles}
-                  </span>
-                </Link>
-              ))}
+              <div className="cc-list cc-feed cc-scroll">
+                {feed.map((row) => (
+                  <Link
+                    key={row.incident_id}
+                    href={L(lang, `/incidents/${row.incident_id}`)}
+                    scroll={false}
+                    className="row-link grid grid-cols-[52px_minmax(0,1fr)] items-start gap-2.5 rounded-md border border-line bg-[rgba(7,12,18,0.6)] p-2 hover:border-accent"
+                  >
+                    <IncidentThumb src={row.image_url} attackType={row.attack_type} className="aspect-square w-full" />
+                    <span className="flex min-w-0 flex-col gap-1">
+                      <span className="line-clamp-2 text-[13px] font-semibold leading-snug">{incidentTitle(row.title)}</span>
+                      <span className="truncate text-[12px] text-muted">
+                        {attackLabel(row.attack_type, lang)} · {f.num(row.document_count)} {t.common.articles}
+                      </span>
+                    </span>
+                  </Link>
+                ))}
+              </div>
             </div>
           </aside>
         </div>
@@ -292,7 +339,7 @@ export default async function IncidentsPage({ params: p, searchParams }: { param
             </header>
             <div className="cc-scroll flex flex-1 flex-col gap-2 px-5 py-4">
               {data.rows.length ? (
-                data.rows.map((row, i) => <IncidentCard key={row.incident_id} row={row} lang={lang} index={Math.min(i, 12)} />)
+                data.rows.map((row, i) => <IncidentCard key={row.incident_id} row={row} lang={lang} index={Math.min(i, 12)} thumb />)
               ) : (
                 <p className="py-10 text-center text-[13.5px] text-muted">{t.incidents.empty}</p>
               )}

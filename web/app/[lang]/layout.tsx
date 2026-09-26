@@ -35,7 +35,7 @@ const NAV: { key: keyof ReturnType<typeof getDict>["nav"]; path: string }[] = [
   { key: "sources", path: "/sources" },
 ];
 
-export default async function RootLayout({ children, params }: { children: ReactNode; params: Promise<{ lang: string }> }) {
+export default async function RootLayout({ children, modal, params }: { children: ReactNode; modal: ReactNode; params: Promise<{ lang: string }> }) {
   const { lang: raw } = await params;
   if (!isLang(raw)) notFound();
   const lang: Lang = raw;
@@ -99,6 +99,7 @@ export default async function RootLayout({ children, params }: { children: React
             </div>
           </div>
         </footer>
+        {modal}
       </body>
     </html>
   );

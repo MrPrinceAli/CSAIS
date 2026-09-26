@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { IncidentRow } from "@/lib/queries";
+import { IncidentThumb } from "@/components/incident-thumb";
 import { attackCode, formatters, incidentTitle, severity, type Severity } from "@/lib/format";
 import { attackLabel, getDict, L, type Lang } from "@/lib/i18n";
 import { trustFromRow, TRUST_COLOR, type Trust } from "@/lib/trust";
@@ -95,7 +96,7 @@ export function LogoStack({ domains, max = 4, size = 16 }: { domains: string[]; 
   );
 }
 
-export function IncidentCard({ row, lang, index = 0 }: { row: IncidentRow; lang: Lang; index?: number }) {
+export function IncidentCard({ row, lang, index = 0, thumb = false }: { row: IncidentRow; lang: Lang; index?: number; thumb?: boolean }) {
   const f = formatters(lang);
   const t = getDict(lang);
   const level = severity(row);
@@ -104,12 +105,16 @@ export function IncidentCard({ row, lang, index = 0 }: { row: IncidentRow; lang:
   return (
     <Link
       href={L(lang, `/incidents/${row.incident_id}`)}
-      className="row-link lift fade-up grid grid-cols-[4px_minmax(0,1fr)_auto] items-center gap-3 rounded-md border border-line bg-bg px-3.5 py-3"
+      scroll={thumb ? false : undefined}
+      className={`row-link lift fade-up grid items-center gap-3 rounded-md border border-line bg-bg px-3.5 py-3 ${
+        thumb ? "grid-cols-[4px_76px_minmax(0,1fr)_auto] sm:grid-cols-[4px_104px_minmax(0,1fr)_auto]" : "grid-cols-[4px_minmax(0,1fr)_auto]"
+      }`}
       style={{ "--i": index } as React.CSSProperties}
     >
-      <SeverityBar level={level} lang={lang} className="h-11" />
+      <SeverityBar level={level} lang={lang} className={thumb ? "h-14" : "h-11"} />
+      {thumb ? <IncidentThumb src={row.image_url} attackType={row.attack_type} className="aspect-[4/3] w-full" /> : null}
       <span className="flex min-w-0 flex-col gap-1.5">
-        <span className="truncate text-[14px] font-semibold">{incidentTitle(row.title)}</span>
+        <span className={`text-[14px] font-semibold ${thumb ? "line-clamp-2 leading-snug" : "truncate"}`}>{incidentTitle(row.title)}</span>
         <span className="flex min-w-0 items-center gap-2">
           <LogoStack domains={domains} />
           <span className="truncate text-[12.5px] text-muted">
