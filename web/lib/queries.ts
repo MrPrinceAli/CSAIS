@@ -300,11 +300,12 @@ export type DashboardFilters = {
   min?: number;
   hari?: number;
   negara?: string;
+  tanggal?: string; // satu hari (YYYY-MM-DD), dipilih dari batang harian
   page?: number;
 };
 
 const PAGE_SIZE = 40;
-const TOP_SIZE = 12; // peringkat liputan terluas di panel dasbor
+const TOP_POOL = 60; // kandidat peringkat liputan terluas; diurutkan ulang menurut jumlah penerbit di halaman
 
 function buildWhere(f: DashboardFilters): { where: string; args: InValue[] } {
   const clauses: string[] = [];
@@ -329,6 +330,10 @@ function buildWhere(f: DashboardFilters): { where: string; args: InValue[] } {
     clauses.push(`LOWER(i.location) = ?`);
     args.push(f.negara.toLowerCase());
   }
+  if (f.tanggal) {
+    clauses.push(`substr(i.anchor_published_date, 1, 10) = ?`);
+    args.push(f.tanggal);
+  }
   if (f.min && f.min > 1) {
     clauses.push(`i.document_count >= ?`);
     args.push(f.min);
@@ -341,9 +346,12 @@ export async function getDashboard(f: DashboardFilters) {
   // Sebaran negara memakai semua filter kecuali negara: peta dan daftar negara
   // tetap utuh saat satu negara dipilih, sehingga bisa langsung pindah negara.
   const spread = buildWhere({ ...f, negara: undefined });
+  // Batang harian memakai semua filter kecuali tanggal, supaya hari lain tetap bisa dipilih.
+  const perDay = buildWhere({ ...f, tanggal: undefined });
   const page = f.page && f.page > 0 ? f.page : 1;
   const base = `FROM v05_incidents i LEFT JOIN articles a ON a.article_id = i.anchor_article_id ${where}`;
   const spreadBase = `FROM v05_incidents i LEFT JOIN articles a ON a.article_id = i.anchor_article_id ${spread.where}`;
+  const dayBase = `FROM v05_incidents i LEFT JOIN articles a ON a.article_id = i.anchor_article_id ${perDay.where}`;
   const select = await incidentSelect();
   const [rows, totalRow, daily, types, kpi, allCountries, multi] = await Promise.all([
     query<IncidentRow>(
@@ -353,7 +361,7 @@ export async function getDashboard(f: DashboardFilters) {
       [...args, PAGE_SIZE, (page - 1) * PAGE_SIZE],
     ),
     queryOne<{ n: number }>(`SELECT COUNT(*) AS n ${base}`, args),
-    query<{ d: string; n: number }>(`SELECT substr(i.anchor_published_date, 1, 10) AS d, COUNT(*) AS n ${base} GROUP BY d ORDER BY d`, args),
+    query<{ d: string; n: number }>(`SELECT substr(i.anchor_published_date, 1, 10) AS d, COUNT(*) AS n ${dayBase} GROUP BY d ORDER BY d`, perDay.args),
     query<{ t: string; n: number }>(
       // jenis utama = kategori pertama ("ransomware, malware" dihitung sebagai ransomware)
       `SELECT CASE WHEN instr(x, ',') > 0 THEN trim(substr(x, 1, instr(x, ',') - 1)) ELSE x END AS t, COUNT(*) AS n
@@ -385,11 +393,8 @@ export async function getDashboard(f: DashboardFilters) {
     ),
   ]);
   const total = Number(totalRow?.n ?? 0);
-  // Peringkat liputan terluas selalu dari halaman pertama, apa pun halaman daftar yang dibuka
-  const top =
-    page === 1
-      ? rows.slice(0, TOP_SIZE)
-      : await query<IncidentRow>(`${select} ${where} ORDER BY i.document_count DESC, i.anchor_published_date DESC LIMIT ?`, [...args, TOP_SIZE]);
+  // Kandidat liputan terluas, apa pun halaman daftar yang dibuka; urutan akhirnya menurut jumlah penerbit
+  const top = await query<IncidentRow>(`${select} ${where} ORDER BY i.document_count DESC, i.anchor_published_date DESC LIMIT ?`, [...args, TOP_POOL]);
   return {
     rows,
     top,

@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { IncidentRow } from "@/lib/queries";
-import { IncidentThumb } from "@/components/incident-thumb";
+import { glyphFor, IncidentThumb } from "@/components/incident-thumb";
 import { attackCode, formatters, incidentTitle, severity, type Severity } from "@/lib/format";
 import { attackLabel, getDict, L, type Lang } from "@/lib/i18n";
 import { trustFromRow, TRUST_COLOR, type Trust } from "@/lib/trust";
@@ -117,8 +117,9 @@ export function IncidentCard({ row, lang, index = 0, thumb = false }: { row: Inc
         <span className={`text-[14px] font-semibold ${thumb ? "line-clamp-2 leading-snug" : "truncate"}`}>{incidentTitle(row.title)}</span>
         <span className="flex min-w-0 items-center gap-2">
           <LogoStack domains={domains} />
+          <TypeChip attackType={row.attack_type} lang={lang} />
           <span className="truncate text-[12.5px] text-muted">
-            {attackLabel(row.attack_type, lang)} · {f.num(row.document_count)} {t.common.articles} · {f.num(Number(row.domains ?? 0))} {t.common.domains}
+            {f.num(row.document_count)} {t.common.articles} · {f.num(Number(row.domains ?? 0))} {t.common.domains}
             {row.target ? ` · ${row.target}` : ""}
           </span>
         </span>
@@ -128,8 +129,34 @@ export function IncidentCard({ row, lang, index = 0, thumb = false }: { row: Inc
   );
 }
 
-/** Grafik batang harian sebagai SVG berskala. */
-export function DailyBars({ data, lang, height = 120, accent = "var(--accent)" }: { data: { d: string; n: number }[]; lang: Lang; height?: number; accent?: string }) {
+/**
+ * Grafik batang harian sebagai SVG berskala. Dengan `hrefFor`, tiap batang
+ * menjadi tautan filter per tanggal; `selected` menandai tanggal yang aktif.
+ */
+/** Label jenis serangan berwarna; nada sama dengan ikon jenis serangan. */
+export function TypeChip({ attackType, lang, className = "" }: { attackType: string | null; lang: Lang; className?: string }) {
+  return (
+    <span className={`type-chip ${className}`} style={{ "--tone": glyphFor(attackType).tone } as React.CSSProperties}>
+      {attackLabel(attackType, lang)}
+    </span>
+  );
+}
+
+export function DailyBars({
+  data,
+  lang,
+  height = 120,
+  accent = "var(--accent)",
+  selected,
+  hrefFor,
+}: {
+  data: { d: string; n: number }[];
+  lang: Lang;
+  height?: number;
+  accent?: string;
+  selected?: string;
+  hrefFor?: Record<string, string>;
+}) {
   const f = formatters(lang);
   if (!data.length) return <p className="text-[13px] text-muted">{getDict(lang).common.notAvailable}</p>;
   const max = Math.max(...data.map((x) => Number(x.n)), 1);
@@ -137,26 +164,34 @@ export function DailyBars({ data, lang, height = 120, accent = "var(--accent)" }
   const pad = 4;
   const bw = (w - pad * 2) / data.length;
   const last = data[data.length - 1];
+  const picked = selected ? data.find((x) => x.d === selected) : undefined;
   return (
     <div className="flex flex-col gap-2">
-      <svg viewBox={`0 0 ${w} ${height}`} className="w-full" style={{ height }} role="img" aria-label={`${f.num(max)} max`}>
+      <svg viewBox={`0 0 ${w} ${height}`} className={`w-full${hrefFor ? " day-bars" : ""}`} style={{ height }} role="img" aria-label={`${f.num(max)} max`}>
         <line x1={pad} x2={w - pad} y1={height - 1} y2={height - 1} stroke="var(--line)" />
         {data.map((x, i) => {
           const n = Number(x.n);
           const bh = Math.max(2, ((height - 8) * n) / max);
-          return (
-            <rect key={x.d} x={pad + i * bw + 1} y={height - 2 - bh} width={Math.max(2, bw - 2)} height={bh} rx={1} fill={accent} opacity={i === data.length - 1 ? 1 : 0.5} className="bar-rise" style={{ "--i": i } as React.CSSProperties}>
-              <title>{`${x.d}: ${n}`}</title>
+          const on = selected ? x.d === selected : i === data.length - 1;
+          const bar = (
+            <rect x={pad + i * bw + 1} y={height - 2 - bh} width={Math.max(2, bw - 2)} height={bh} rx={1} fill={accent} opacity={on ? 1 : selected ? 0.28 : 0.5} className="bar-rise" style={{ "--i": i } as React.CSSProperties}>
+              <title>{`${f.date(x.d)}: ${n}`}</title>
             </rect>
+          );
+          const href = hrefFor?.[x.d];
+          if (!href) return <g key={x.d}>{bar}</g>;
+          return (
+            <Link key={x.d} href={href} scroll={false} aria-label={`${f.date(x.d)}: ${n}`} aria-current={x.d === selected ? "true" : undefined}>
+              <rect x={pad + i * bw} y={0} width={bw} height={height} fill="transparent" className="day-hit" />
+              {bar}
+            </Link>
           );
         })}
       </svg>
       <div className="flex justify-between font-mono text-[11px] text-muted">
         <span>{f.date(data[0].d)}</span>
         <span>max {f.num(max)}</span>
-        <span>
-          {f.date(last.d)} · {f.num(Number(last.n))}
-        </span>
+        <span>{picked ? <b className="font-medium text-accent">{f.date(picked.d)} · {f.num(Number(picked.n))}</b> : `${f.date(last.d)} · ${f.num(Number(last.n))}`}</span>
       </div>
     </div>
   );

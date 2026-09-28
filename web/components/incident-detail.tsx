@@ -5,7 +5,7 @@ import { getIncident, getPublisherDomains, type DocumentRow } from "@/lib/querie
 import { domainOf, formatters, incidentTitle, publisherOf, severity } from "@/lib/format";
 import { attackLabel, evidenceRole, getDict, L, languageLabel, type Lang } from "@/lib/i18n";
 import { trustFromStored, trustScore, TRUST_COLOR } from "@/lib/trust";
-import { HashGrid, IncidentCard, SectionTitle, SeverityText, SourceLogo, TrustRing } from "@/components/ui";
+import { HashGrid, IncidentCard, SectionTitle, SeverityText, SourceLogo, TrustRing, TypeChip } from "@/components/ui";
 
 /** Jumlah artikel kronologi yang langsung terlihat; sisanya di balik "Lihat semua". */
 const VISIBLE = 10;
@@ -178,10 +178,9 @@ export async function IncidentDetailView({ lang, id, variant = "page" }: { lang:
         <div className="flex flex-col gap-2.5">
           <div className="flex flex-wrap items-center gap-3">
             <SeverityText level={level} lang={lang} />
+            <TypeChip attackType={incident.attack_type} lang={lang} />
             <span className="text-[12.5px] text-muted">
-              {attackLabel(incident.attack_type, lang)}
-              {incident.location ? ` · ${countryLabel(incident.location)}` : ""}
-              {incident.language ? ` · ${languageLabel(incident.language, lang)}` : ""}
+              {[incident.location ? countryLabel(incident.location) : "", incident.language ? languageLabel(incident.language, lang) : ""].filter(Boolean).join(" · ")}
             </span>
           </div>
           <h1 className="text-balance text-[26px] font-semibold leading-tight">{incidentTitle(incident.title)}</h1>

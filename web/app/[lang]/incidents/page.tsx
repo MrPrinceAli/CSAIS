@@ -35,6 +35,7 @@ function parseFilters(sp: Search): DashboardFilters & { daftar: boolean } {
     bahasa: ["id", "en"].includes(first(sp.bahasa)) ? first(sp.bahasa) : undefined,
     negara: first(sp.negara).trim().slice(0, 40) || undefined,
     min: Number.isFinite(min) && min > 1 ? min : undefined,
+    tanggal: /^\d{4}-\d{2}-\d{2}$/.test(first(sp.tanggal)) ? first(sp.tanggal) : undefined,
     hari: [7, 30, 90, 365].includes(hari) ? hari : 30,
     page: Number.isFinite(page) && page > 0 ? page : 1,
     daftar: first(sp.daftar) === "1",
@@ -48,6 +49,7 @@ function params(f: DashboardFilters): Record<string, string | undefined> {
     bahasa: f.bahasa,
     negara: f.negara,
     min: f.min ? String(f.min) : undefined,
+    tanggal: f.tanggal,
     hari: f.hari && f.hari !== 30 ? String(f.hari) : undefined,
   };
 }
@@ -72,7 +74,9 @@ export default async function IncidentsPage({ params: p, searchParams }: { param
 
   const [data, typeOptions, publisherDomains] = await Promise.all([getDashboard(filters), getAttackTypeOptions(), getPublisherDomains()]);
   const coverageDocs = await getCoverageDocs(data.top.map((r) => r.incident_id));
-  const rankItems: RankItem[] = data.top.map((row) => ({
+  // Liputan terluas = diberitakan paling banyak penerbit berbeda (artikel sindikasi tidak menaikkan peringkat)
+  const rankItems: RankItem[] = data.top
+    .map((row) => ({
     id: row.incident_id,
     href: L(lang, `/incidents/${row.incident_id}`),
     title: incidentTitle(row.title),
@@ -83,9 +87,11 @@ export default async function IncidentsPage({ params: p, searchParams }: { param
       coverageDocs.filter((d) => d.incident_id === row.incident_id),
       publisherDomains,
     ),
-  }));
+    }))
+    .sort((a, b) => b.publishers.length - a.publishers.length || b.articles - a.articles)
+    .slice(0, 12);
   const days = filters.hari ?? 30;
-  const active = [filters.q, filters.jenis, filters.bahasa, filters.negara, filters.min].filter(Boolean).length;
+  const active = [filters.q, filters.jenis, filters.bahasa, filters.negara, filters.min, filters.tanggal].filter(Boolean).length;
   const total = Number(data.kpi.total);
 
   // Penanda globe: jumlah incident per negara pada filter aktif (lokasi majemuk dihitung per negara)
@@ -126,6 +132,7 @@ export default async function IncidentsPage({ params: p, searchParams }: { param
   if (filters.jenis) chips.push({ label: attackLabel(filters.jenis, lang), href: hrefWith({ jenis: undefined, page: undefined }) });
   if (filters.negara) chips.push({ label: countryOf(filters.negara)?.label ?? filters.negara, href: hrefWith({ negara: undefined, page: undefined }) });
   if (filters.bahasa) chips.push({ label: languageLabel(filters.bahasa, lang), href: hrefWith({ bahasa: undefined, page: undefined }) });
+  if (filters.tanggal) chips.push({ label: f.date(filters.tanggal), href: hrefWith({ tanggal: undefined, page: undefined }) });
   if (filters.min) chips.push({ label: `≥ ${filters.min} ${t.common.sources}`, href: hrefWith({ min: undefined, page: undefined }) });
 
   const listHref = (page?: number) => hrefWith({ daftar: "1", page: page && page > 1 ? String(page) : undefined });
@@ -282,7 +289,13 @@ export default async function IncidentsPage({ params: p, searchParams }: { param
                 {t.incidents.dailyTitle}
                 <span className="font-normal normal-case tracking-normal">{t.incidents.located(f.num(located), ranked.length)} · {c.arcsNote}</span>
               </span>
-              <DailyBars data={data.daily} lang={lang} height={48} />
+              <DailyBars
+                data={data.daily}
+                lang={lang}
+                height={48}
+                selected={filters.tanggal}
+                hrefFor={Object.fromEntries(data.daily.map((x) => [x.d, hrefWith({ tanggal: filters.tanggal === x.d ? undefined : x.d, page: undefined })]))}
+              />
             </div>
           </section>
 
@@ -313,7 +326,7 @@ export default async function IncidentsPage({ params: p, searchParams }: { param
                 <span className="cc-h">{c.feed}</span>
                 <span className="cc-note">{c.feedNote}</span>
               </span>
-              <CoverageRank items={rankItems} labels={{ articles: t.common.articles, publishers: t.detail.publishers, note: c.feed }} num={f.num} />
+              <CoverageRank items={rankItems} labels={{ articles: t.common.articles, publishers: t.detail.publishers, note: c.feed, others: c.others }} num={f.num} />
             </div>
           </aside>
         </div>
