@@ -59,9 +59,10 @@ def make_incident(**overrides):
         "anchor_text": "engineering firm group hit smiths",
         "anchor_published_date": "2025-03-01T08:00:00+00:00",
         "last_published_date": "2025-03-01T08:00:00+00:00",
+        "anchor_article_id": None,
     }
     incident.update(overrides)
-    assert set(incident) == set(v05.INCIDENT_COLUMNS)
+    assert set(incident) == set(v05.INCIDENT_COLUMNS) | set(overrides)
     return incident
 
 
@@ -288,3 +289,16 @@ def test_find_best_incident_with_database(temp_conn, token_df):
         tokens={"unrelated", "story", "outage"}, published="2025-03-02T12:00:00+00:00",
     )
     assert v05.find_best_incident(temp_conn, same_type_only) == (None, 0.0)
+
+
+def test_rare_token_must_come_from_anchor_article(token_df):
+    """Token khas yang hanya dibawa anggota lain (bukan artikel jangkar) tidak cukup."""
+    article = make_article(target=None, target_entity_id=None, tokens={"rivers", "outage"})
+    union = "engineering firm group hit smiths rivers"
+    chained = make_incident(target=None, target_entity_id=None, anchor_text=union,
+                            origin_tokens={"engineering", "firm", "smiths"})
+    details = {"text": 0.1}
+    assert v05.has_identity_signal(article, chained, details) is False
+    direct = make_incident(target=None, target_entity_id=None, anchor_text=union,
+                           origin_tokens={"engineering", "rivers"})
+    assert v05.has_identity_signal(article, direct, details) is True

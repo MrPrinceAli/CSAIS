@@ -29,6 +29,7 @@ diproses. Karena itu digunakan tabel v05_processed_articles.
 """
 
 import hashlib
+import sqlite3
 from datetime import datetime, timedelta, timezone
 
 from csais.db import get_connection, get_timestamp
@@ -150,7 +151,7 @@ INCIDENT_COLUMNS = [
     "incident_id", "attack_type", "target", "target_entity_id", "threat_actor",
     "threat_actor_entity_id", "location", "attack_date", "attack_method",
     "document_count", "incident_confidence", "anchor_text", "anchor_published_date",
-    "last_published_date",
+    "last_published_date", "anchor_article_id",
 ]
 _INCIDENT_SELECT = "SELECT " + ", ".join(INCIDENT_COLUMNS) + " FROM v05_incidents"
 
@@ -268,6 +269,7 @@ def load_token_document_frequency(conn):
     """Hitung di berapa artikel setiap token muncul, beserta batas-batasnya."""
     global _RARE_DF_LIMIT, _TARGET_DF_LIMIT
     _TOKEN_DF.clear()
+    _ORIGIN_TOKENS.clear()
     cursor = conn.cursor()
     cursor.execute("SELECT title, summary FROM articles")
     total = 0
@@ -783,7 +785,12 @@ def has_identity_signal(article, incident, details):
     anchor_tokens = set((incident["anchor_text"] or "").split())
     if target_identity(article, incident, anchor_tokens):
         return True
-    if shared_rare_tokens(article["tokens"], anchor_tokens):
+    rare = shared_rare_tokens(article["tokens"], anchor_tokens)
+    # anchor_text memuat token semua anggota; token khas yang hanya dibawa
+    # anggota lain membuat incident melebar berantai (A mirip jangkar, B mirip
+    # A, C mirip B). Minimal satu token khas harus ada di artikel jangkarnya.
+    origin = incident.get("origin_tokens")
+    if rare and (origin is None or rare & origin):
         return True
 
     return bool(
@@ -791,6 +798,26 @@ def has_identity_signal(article, incident, details):
         and article["threat_actor_entity_id"] == incident["threat_actor_entity_id"]
         and details["text"] >= MIN_TEXT_SIMILARITY_WITH_ACTOR
     )
+
+
+_ORIGIN_TOKENS = {}
+
+
+def origin_tokens(conn, incident):
+    """Token judul+ringkasan artikel jangkar incident (di-cache per incident)."""
+    incident_id = incident["incident_id"]
+    if incident_id not in _ORIGIN_TOKENS:
+        row = None
+        if incident.get("anchor_article_id"):
+            try:
+                row = conn.execute(
+                    "SELECT title, summary FROM articles WHERE article_id = ?",
+                    (incident["anchor_article_id"],),
+                ).fetchone()
+            except sqlite3.OperationalError:
+                row = None
+        _ORIGIN_TOKENS[incident_id] = text_tokens(*row) if row else None
+    return _ORIGIN_TOKENS[incident_id]
 
 
 def find_best_incident(conn, article):
@@ -804,6 +831,7 @@ def find_best_incident(conn, article):
     for incident in get_existing_incidents(conn, article):
         if not passes_hard_constraints(article, incident):
             continue
+        incident["origin_tokens"] = origin_tokens(conn, incident)
         score, details = calculate_incident_similarity(article, incident)
         if has_identity_signal(article, incident, details):
             required = MIN_SCORE_WITH_IDENTITY
