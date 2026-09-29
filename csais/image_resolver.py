@@ -98,6 +98,18 @@ def articles_to_try(conn, incident_id, limit=MAX_TRIES):
     return cursor.fetchall()
 
 
+def decode_head(data, encoding):
+    """Dekode awal halaman; charset tidak dikenal dari server (misalnya "utf-8,gbk") jatuh ke UTF-8."""
+    for candidate in ((encoding or "").split(",")[0].strip(), "utf-8"):
+        if not candidate:
+            continue
+        try:
+            return data.decode(candidate, errors="replace")
+        except LookupError:
+            continue
+    return data.decode("utf-8", errors="replace")
+
+
 def fetch_image(url):
     """(status, url gambar) dari bagian awal halaman media."""
     if not robots_allows(url):
@@ -119,9 +131,9 @@ def fetch_image(url):
                 head += chunk
                 if len(head) >= HEAD_BYTES or b"</head>" in head:
                     break
-            html = head.decode(response.encoding or "utf-8", errors="replace")
+            html = decode_head(head, response.encoding)
             image = extract_image_url(html, response.url or url)
-    except requests.RequestException:
+    except (requests.RequestException, ValueError):
         return "error", None
     return ("ok", image) if image else ("none", None)
 
@@ -159,7 +171,11 @@ def resolve_images(conn, budget=DEFAULT_BUDGET, resolve=resolve_google_news_url,
     incidents = pending_incidents(conn, budget)
     for number, incident_id in enumerate(incidents, start=1):
         for article_id, article_url, resolved_url in articles_to_try(conn, incident_id):
-            status = try_article(conn, article_id, article_url, resolved_url, resolve, fetch)
+            try:
+                status = try_article(conn, article_id, article_url, resolved_url, resolve, fetch)
+            except Exception as error:  # satu halaman aneh tidak boleh menghentikan pipeline
+                log(f"   ⚠️ artikel {article_id}: {type(error).__name__}: {error}")
+                status = "error"
             statuses[status] = statuses.get(status, 0) + 1
             if status == "ok":
                 found += 1

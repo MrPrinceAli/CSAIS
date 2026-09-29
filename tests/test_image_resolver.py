@@ -96,3 +96,12 @@ def test_try_article_saves_resolved_url_without_overwriting(temp_conn):
     assert status == "blocked"
     row = temp_conn.execute("SELECT resolved_url, image_url, image_status FROM articles WHERE article_id = 1").fetchone()
     assert row == ("https://media.id/a1", None, "blocked")
+
+
+def test_decode_head_handles_odd_charsets():
+    from csais.image_resolver import decode_head
+
+    assert decode_head("é".encode("utf-8"), "utf-8,gbk") == "é"
+    assert decode_head(b"abc", "tidak-ada") == "abc"
+    assert decode_head("é".encode("latin-1"), "ISO-8859-1") == "é"
+    assert decode_head(b"abc", None) == "abc"
