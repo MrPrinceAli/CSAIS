@@ -30,6 +30,7 @@ export async function generateMetadata({ params }: { params: Promise<{ lang: str
 const NAV: { key: keyof ReturnType<typeof getDict>["nav"]; path: string }[] = [
   { key: "home", path: "/" },
   { key: "incidents", path: "/incidents" },
+  { key: "alerts", path: "/alerts" },
   { key: "findings", path: "/findings" },
   { key: "survey", path: "/survey" },
   { key: "verify", path: "/verify" },

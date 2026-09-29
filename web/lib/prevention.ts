@@ -17,6 +17,7 @@ export type Channel = { name: string; url: string };
 const BY_TYPE = data.by_type as Record<string, Text[]>;
 const ALIAS = data.alias as Record<string, string>;
 const BY_GROUP = data.by_group as Record<string, Text>;
+const HOAX = data.hoax as Text[];
 const CHANNELS = data.channels as Record<string, Channel>;
 const SCAM_TYPES = new Set(data.scam_types);
 const LINK_TYPES = new Set(data.link_types);
@@ -50,6 +51,7 @@ export function tipText(key: string, lang: Lang): string | null {
   const [kind, name, index] = key.split(":");
   if (kind === "group") return BY_GROUP[name]?.[lang] ?? null;
   if (kind === "type") return BY_TYPE[name]?.[Number(index)]?.[lang] ?? null;
+  if (kind === "hoax") return HOAX[Number(name)]?.[lang] ?? null;
   return null;
 }
 

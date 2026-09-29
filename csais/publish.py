@@ -64,6 +64,7 @@ PUBLISH_TABLES = {
     "flow_outputs": ("SELECT * FROM flow_outputs", ["incident_id", "flow"]),
     "official_statements": ("SELECT * FROM official_statements", ["incident_id"]),
     "flow_metrics": ("SELECT * FROM flow_metrics", []),
+    "incident_tiers": ("SELECT * FROM incident_tiers", ["tier", "target_group"]),
     "evidence_batches": ("SELECT * FROM evidence_batches", ["anchor_status"]),
     "evidence_leaves": ("SELECT * FROM evidence_leaves", ["batch_id", "evidence_uid"]),
 }

@@ -306,3 +306,127 @@ def run():
 
 if __name__ == "__main__":
     run()
+
+
+# --- Status peringatan terkini (keluaran preventif untuk publik) ---
+HOAX_STEPS = ["hoax:0", "hoax:1"]
+
+
+def create_tier_table(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS incident_tiers (
+            incident_id TEXT PRIMARY KEY,
+            tier TEXT NOT NULL,
+            source_flow TEXT NOT NULL,
+            institution TEXT,
+            reason TEXT,
+            prevention TEXT,
+            trust_level TEXT,
+            attack_type TEXT,
+            target_group TEXT,
+            review_note TEXT,
+            updated_at TEXT NOT NULL
+        )
+        """)
+    conn.commit()
+
+
+def _latest_full(conn, flow):
+    cursor = conn.execute(
+        """
+        SELECT o.* FROM flow_outputs o
+        JOIN (SELECT incident_id, MAX(output_id) AS last_id FROM flow_outputs WHERE flow = ? GROUP BY incident_id) m
+          ON m.last_id = o.output_id
+        """,
+        (flow,),
+    )
+    names = [d[0] for d in cursor.description]
+    return {row[1]: dict(zip(names, row)) for row in cursor.fetchall()}
+
+
+def _loads(value):
+    try:
+        parsed = json.loads(value) if value else {}
+    except ValueError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def tier_rows(d1, d2, d3, d4):
+    """Satu status terkini per incident: D4 resmi > D2 sesuai > D1 peringatan dini."""
+    rows = {}
+    for incident_id, machine in d1.items():
+        if machine["status"] == REMOVED:
+            continue
+        base = _loads(machine.get("prevention"))
+        row = {
+            "tier": "peringatan_dini", "source_flow": "D1", "institution": None, "reason": None,
+            "prevention": base, "trust_level": machine["status"],
+            "attack_type": machine.get("attack_type"), "target_group": machine.get("target_group"),
+            "review_note": None,
+        }
+        official = d4.get(incident_id)
+        public = d2.get(incident_id)
+        if official and official.get("tier") in ("rekomendasi_resmi", "peringatan_hoaks"):
+            basis = _loads(official.get("basis"))
+            plan = _loads(official.get("prevention"))
+            if official["tier"] == "peringatan_hoaks":
+                prevention = {"steps": HOAX_STEPS, "channels": ["konten"], "text": plan.get("text")}
+            else:
+                prevention = {
+                    "steps": plan.get("steps") or base.get("steps") or [],
+                    "channels": base.get("channels") or [],
+                    "text": plan.get("text"),
+                }
+            row.update(tier=official["tier"], source_flow="D4", institution=basis.get("institution"),
+                       reason=official.get("reason"), prevention=prevention)
+        elif public and public.get("status") == "sesuai":
+            row.update(tier="waspada", source_flow="D2")
+        review = d3.get(incident_id)
+        if review and review.get("status") == "sebagian":
+            row["review_note"] = _loads(review.get("basis")).get("institution") or "lembaga"
+        rows[incident_id] = row
+    return rows
+
+
+def record_tiers(conn, now=None):
+    """Hitung ulang incident_tiers dari snapshot terakhir tiap alur; kembalikan jumlah per tingkat."""
+    create_tables(conn)
+    create_tier_table(conn)
+    rows = tier_rows(*(_latest_full(conn, flow) for flow in FLOWS))
+    now = now or get_timestamp()
+    conn.execute("DELETE FROM incident_tiers")
+    conn.executemany(
+        """
+        INSERT INTO incident_tiers (incident_id, tier, source_flow, institution, reason, prevention,
+            trust_level, attack_type, target_group, review_note, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            (incident_id, r["tier"], r["source_flow"], r["institution"], r["reason"], _canonical(r["prevention"]),
+             r["trust_level"], r["attack_type"], r["target_group"], r["review_note"], now)
+            for incident_id, r in rows.items()
+        ],
+    )
+    conn.commit()
+    counts = {}
+    for r in rows.values():
+        counts[r["tier"]] = counts.get(r["tier"], 0) + 1
+    return counts
+
+
+def tiers_run():
+    """Tahap pipeline: status peringatan terkini per incident."""
+    print("\n==================================================")
+    print("   STATUS PERINGATAN PER INCIDENT")
+    print("==================================================")
+    started_at = get_timestamp()
+    conn = get_connection()
+    try:
+        counts = record_tiers(conn)
+        record_run(conn, "incident_tiers", started_at, sum(counts.values()))
+    finally:
+        conn.close()
+    for tier in TIERS:
+        print(f"   {tier:18s} {counts.get(tier, 0)}")
+    print("==================================================")

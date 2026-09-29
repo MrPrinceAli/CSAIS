@@ -183,3 +183,28 @@ def test_signature_travels_into_d4(temp_conn):
     official.record_official(temp_conn, official.review_rows([review]))
     basis = json.loads(_latest(temp_conn, "INC-A", "D4")["basis"])
     assert basis["signed"] == signed
+
+
+def test_tier_priority(temp_conn):
+    """D4 resmi mengalahkan D2, D2 sesuai mengalahkan D1; D3 sebagian menjadi catatan."""
+    from csais import survey
+
+    _pipeline_tables(temp_conn)
+    flows.record_d1(temp_conn)
+    counts = flows.record_tiers(temp_conn, now="t")
+    assert counts == {"peringatan_dini": 2}
+    survey.record_d2(temp_conn, [("INC-B", "threat_actor", "LockBit", "sesuai", f"r{i}") for i in range(3)])
+    official.record_official(temp_conn, [{**BASE, "status": "dibantah", "reason": "Hoaks menurut OJK."}])
+    counts = flows.record_tiers(temp_conn, now="t")
+    assert counts == {"peringatan_hoaks": 1, "waspada": 1}
+    tier, source, institution, prevention = temp_conn.execute(
+        "SELECT tier, source_flow, institution, prevention FROM incident_tiers WHERE incident_id = 'INC-A'"
+    ).fetchone()
+    assert (tier, source, institution) == ("peringatan_hoaks", "D4", "OJK")
+    assert json.loads(prevention)["steps"] == flows.HOAX_STEPS
+    official.record_official(temp_conn, [{**BASE, "status": "dibantah", "reason": "Hoaks menurut OJK."},
+                                         {**BASE, "statement_id": "BSSN-2", "incident_id": "INC-B", "institution": "BSSN",
+                                          "status": "sebagian", "reason": None}])
+    flows.record_tiers(temp_conn, now="t")
+    note = temp_conn.execute("SELECT tier, review_note FROM incident_tiers WHERE incident_id = 'INC-B'").fetchone()
+    assert note == ("waspada", "BSSN")

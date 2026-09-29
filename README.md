@@ -110,6 +110,13 @@ pipeline dan web. Perbandingan untuk laporan:
 ./.venv/bin/python eval/compare_flows.py --as-of 2026-12-31T00:00:00+00:00   # tulis eval/flows/report.md dan metrics.csv
 ```
 
+Tahap "Status Peringatan" menggabungkan keempat alur menjadi satu status
+terkini per incident (tabel `incident_tiers`): catatan resmi D4 (rekomendasi
+resmi atau peringatan hoaks) lebih dulu, lalu D2 yang dinyatakan sesuai
+(waspada), selain itu peringatan dini dari D1, beserta langkah pencegahan dan
+kanal pelaporan. Status ini tampil sebagai lencana di kartu incident, blok
+pencegahan di detail incident, dan halaman publik `/alerts`.
+
 Web menampilkan snapshot terakhir tiap alur di halaman detail incident dan
 ringkasan metrik semua incident di `/comparison`; laporan Markdown dan CSV tiap
 run juga diunggah sebagai artefak Actions (`flow-report-*`, 90 hari).

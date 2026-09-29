@@ -65,6 +65,7 @@ PIPELINE_STEPS = [
     ("Alur D1 - Keluaran Mesin", flows.run),
     ("Alur D2 - Survei Publik", survey.run),
     ("Alur D3/D4 - Pernyataan Lembaga", official.run),
+    ("Status Peringatan per Incident", flows.tiers_run),
     ("Ledger - Batch Merkle Bukti", ledger.run),
     ("Metrik Perbandingan Alur", flow_compare.run),
 ]

@@ -13,7 +13,7 @@ export function L(lang: Lang, path = ""): string {
 const id = {
   brand: "CSAIS",
   tagline: "Cyber Social Attack Intelligence System",
-  nav: { home: "Beranda", incidents: "Incident", findings: "Temuan", survey: "Survei", verify: "Verifikasi", sources: "Sumber", institutions: "Lembaga" },
+  nav: { home: "Beranda", incidents: "Incident", alerts: "Peringatan", findings: "Temuan", survey: "Survei", verify: "Verifikasi", sources: "Sumber", institutions: "Lembaga" },
   status: (date: string, version: string) => `Data ${date} · pipeline ${version}`,
   footer: {
     about: "Sistem intelijen serangan siber bersumber berita terbuka. Artikel dibaca setiap hari, dikelompokkan menjadi incident, dan buktinya disiapkan untuk pencatatan di blockchain.",
@@ -237,6 +237,33 @@ const id = {
     summary: "Ringkasan semua incident",
     verifyRecord: "Verifikasi catatan di ledger",
   },
+  alerts: {
+    title: "Peringatan dan langkah pencegahan",
+    lead: "Status terkini tiap incident: dibantah atau dikonfirmasi lembaga resmi, sudah dicek publik, atau masih peringatan dini dari mesin. Setiap kartu memuat langkah pencegahan dan kanal pelaporan.",
+    group: "Kelompok sasaran",
+    allGroups: "Semua",
+    sections: {
+      hoax: { title: "Peringatan hoaks", note: "dibantah lembaga resmi; jangan disebarkan" },
+      official: { title: "Rekomendasi resmi", note: "dikonfirmasi lembaga resmi" },
+      public: { title: "Waspada", note: "kartu sudah dinyatakan sesuai oleh survei publik" },
+      early: { title: "Peringatan dini", note: (days: number) => `hasil mesin, ${days} hari terakhir, minimal 2 artikel, trust tinggi/sedang; belum diverifikasi` },
+    },
+    empty: "Belum ada incident di bagian ini.",
+    unavailable: "Status peringatan belum tersedia. Terbit setelah run pipeline harian berikutnya.",
+  },
+  prevention: {
+    title: "Status dan langkah pencegahan",
+    source: {
+      D4: (inst: string) => `Keputusan resmi ${inst}`,
+      D2: "Sudah dicek publik lewat survei; belum ada keputusan lembaga",
+      D1: "Hasil mesin dari pemberitaan; belum diverifikasi publik atau lembaga",
+    } as { D4: (inst: string) => string; D2: string; D1: string },
+    reason: "Alasan lembaga",
+    official: "Imbauan lembaga",
+    steps: "Langkah pencegahan",
+    report: "Laporkan ke",
+    underReview: (inst: string) => `Sedang ditinjau ${inst}`,
+  },
   comparison: {
     title: "Perbandingan alur D1–D4",
     lead: "Seberapa dekat hasil mesin (D1) dan survei publik (D2) dengan pernyataan lembaga (D3) dan catatan resmi (D4). Angka dihitung ulang pipeline setiap hari dari snapshot terakhir tiap alur.",
@@ -454,7 +481,7 @@ type Dict = typeof id;
 const en: Dict = {
   brand: "CSAIS",
   tagline: "Cyber Social Attack Intelligence System",
-  nav: { home: "Home", incidents: "Incidents", findings: "Findings", survey: "Survey", verify: "Verify", sources: "Sources", institutions: "Institutions" },
+  nav: { home: "Home", incidents: "Incidents", alerts: "Warnings", findings: "Findings", survey: "Survey", verify: "Verify", sources: "Sources", institutions: "Institutions" },
   status: (date, version) => `Data ${date} · pipeline ${version}`,
   footer: {
     about: "Cyber-attack intelligence from open news reporting. Articles are read daily, grouped into incidents, and their evidence prepared for on-chain anchoring.",
@@ -677,6 +704,33 @@ const en: Dict = {
     judge: "Help review",
     summary: "Summary across incidents",
     verifyRecord: "Verify this record in the ledger",
+  },
+  alerts: {
+    title: "Warnings and preventive steps",
+    lead: "The current status of each incident: refuted or confirmed by an official institution, checked by the public, or still an early warning from the machine. Every card lists preventive steps and where to report.",
+    group: "Target group",
+    allGroups: "All",
+    sections: {
+      hoax: { title: "Hoax warnings", note: "refuted by an official institution; do not share" },
+      official: { title: "Official advice", note: "confirmed by an official institution" },
+      public: { title: "Caution", note: "the card was judged accurate by the public survey" },
+      early: { title: "Early warnings", note: (days) => `machine output, last ${days} days, at least 2 articles, high/medium trust; not verified yet` },
+    },
+    empty: "No incidents in this section yet.",
+    unavailable: "Warning status is not available yet. It is published after the next daily pipeline run.",
+  },
+  prevention: {
+    title: "Status and preventive steps",
+    source: {
+      D4: (inst) => `Official decision by ${inst}`,
+      D2: "Checked by the public survey; no institution decision yet",
+      D1: "Machine output from news coverage; not verified by the public or institutions",
+    },
+    reason: "Institution's reason",
+    official: "Institution advisory",
+    steps: "Preventive steps",
+    report: "Report to",
+    underReview: (inst) => `Under review by ${inst}`,
   },
   comparison: {
     title: "Flow comparison D1–D4",

@@ -117,6 +117,7 @@ export function IncidentCard({ row, lang, index = 0, thumb = false }: { row: Inc
         <span className={`text-[14px] font-semibold ${thumb ? "line-clamp-2 leading-snug" : "truncate"}`}>{incidentTitle(row.title)}</span>
         <span className="flex min-w-0 items-center gap-2">
           <LogoStack domains={domains} />
+          <TierBadge tier={row.alert_tier} lang={lang} institution={row.alert_institution} quiet />
           <TypeChip attackType={row.attack_type} lang={lang} />
           <span className="truncate text-[12.5px] text-muted">
             {f.num(row.document_count)} {t.common.articles} · {f.num(Number(row.domains ?? 0))} {t.common.domains}
@@ -133,6 +134,30 @@ export function IncidentCard({ row, lang, index = 0, thumb = false }: { row: Inc
  * Grafik batang harian sebagai SVG berskala. Dengan `hrefFor`, tiap batang
  * menjadi tautan filter per tanggal; `selected` menandai tanggal yang aktif.
  */
+const TIER_TONE: Record<string, string> = {
+  peringatan_dini: "var(--accent)",
+  waspada: "var(--med)",
+  rekomendasi_resmi: "var(--good)",
+  peringatan_hoaks: "var(--high)",
+};
+
+/** Lencana status peringatan terkini; `quiet` menyembunyikan peringatan dini (tingkat bawaan semua incident). */
+export function TierBadge({ tier, lang, institution, quiet = false, className = "" }: { tier: string | null; lang: Lang; institution?: string | null; quiet?: boolean; className?: string }) {
+  if (!tier || (quiet && tier === "peringatan_dini")) return null;
+  const t = getDict(lang);
+  const tone = TIER_TONE[tier] ?? "var(--muted)";
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11.5px] font-semibold ${className}`}
+      style={{ borderColor: tone, color: tone, background: `color-mix(in srgb, ${tone} 12%, transparent)` }}
+    >
+      <span className="h-1.5 w-1.5 rounded-full" style={{ background: tone }} aria-hidden="true" />
+      {t.flows.tiers[tier] ?? tier}
+      {institution ? <span className="font-normal">· {institution}</span> : null}
+    </span>
+  );
+}
+
 /** Label jenis serangan berwarna; nada sama dengan ikon jenis serangan. */
 export function TypeChip({ attackType, lang, className = "" }: { attackType: string | null; lang: Lang; className?: string }) {
   return (

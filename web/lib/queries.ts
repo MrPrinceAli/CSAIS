@@ -24,6 +24,8 @@ export type IncidentRow = {
   domains: number | null;
   independence: number | null;
   domain_list: string | null; // domain sumber dipisah koma (untuk tumpukan logo)
+  alert_tier: string | null; // status peringatan terkini (incident_tiers)
+  alert_institution: string | null;
 } & StoredTrust;
 
 /* --- Keberadaan tabel ---
@@ -100,7 +102,7 @@ const NO_TRUST_COLUMNS = `NULL AS trust_score, NULL AS trust_level, NULL AS trus
 
 /** SELECT incident beserta skor V0.7 bila tabel v07_trust sudah diterbitkan. */
 async function incidentSelect(): Promise<string> {
-  const withTrust = await hasTable("v07_trust");
+  const [withTrust, withTiers] = await Promise.all([hasTable("v07_trust"), hasTable("incident_tiers")]);
   return `
   SELECT i.incident_id, i.attack_type, i.target, i.threat_actor, i.location, i.attack_date,
          i.document_count, i.incident_confidence, i.anchor_article_id, i.anchor_published_date,
@@ -108,10 +110,12 @@ async function incidentSelect(): Promise<string> {
          (SELECT COUNT(DISTINCT e.source_domain) FROM v06_evidence e WHERE e.incident_id = i.incident_id) AS domains,
          (SELECT AVG(e.evidence_independence_score) FROM v06_evidence e WHERE e.incident_id = i.incident_id) AS independence,
          (SELECT GROUP_CONCAT(DISTINCT e.source_domain) FROM v06_evidence e WHERE e.incident_id = i.incident_id AND e.source_domain != '' AND e.source_domain NOT LIKE '%google.%') AS domain_list,
-         ${withTrust ? TRUST_COLUMNS : NO_TRUST_COLUMNS}
+         ${withTrust ? TRUST_COLUMNS : NO_TRUST_COLUMNS},
+         ${withTiers ? "it.tier AS alert_tier, it.institution AS alert_institution" : "NULL AS alert_tier, NULL AS alert_institution"}
   FROM v05_incidents i
   LEFT JOIN articles a ON a.article_id = i.anchor_article_id
   ${withTrust ? "LEFT JOIN v07_trust t ON t.incident_id = i.incident_id" : ""}
+  ${withTiers ? "LEFT JOIN incident_tiers it ON it.incident_id = i.incident_id" : ""}
 `;
 }
 
@@ -1029,4 +1033,59 @@ export async function getPortalQueue(mandate: { types: string[]; groups: string[
 export async function getPortalCardsById(ids: string[]): Promise<PortalCard[]> {
   if (!ids.length || !(await hasTable("flow_outputs"))) return [];
   return portalCards(`i.incident_id IN (${ids.map(() => "?").join(", ")})`, ids, ids.length, 0);
+}
+
+
+export type IncidentTier = {
+  incident_id: string;
+  tier: string;
+  source_flow: string;
+  institution: string | null;
+  reason: string | null;
+  prevention: string | null;
+  trust_level: string | null;
+  attack_type: string | null;
+  target_group: string | null;
+  review_note: string | null;
+  updated_at: string;
+};
+
+/** Status peringatan terkini satu incident (csais/flows.py record_tiers). */
+export async function getIncidentTier(id: string): Promise<IncidentTier | null> {
+  if (!(await hasTable("incident_tiers"))) return null;
+  return queryOne<IncidentTier>("SELECT * FROM incident_tiers WHERE incident_id = ?", [id]);
+}
+
+export type AlertRow = IncidentTier & { title: string | null; anchor_published_date: string | null; document_count: number };
+
+const ALERT_LIMIT = 24;
+export const EARLY_DAYS = 14;
+
+/**
+ * Halaman peringatan: hoaks yang dibantah, rekomendasi resmi, yang sudah
+ * dicek publik, dan peringatan dini terbaru (14 hari, minimal 2 artikel,
+ * trust tinggi/sedang). Opsional disaring per kelompok sasaran.
+ */
+export async function getAlerts(group?: string): Promise<Record<"hoax" | "official" | "public" | "early", AlertRow[]>> {
+  const empty = { hoax: [], official: [], public: [], early: [] };
+  if (!(await hasTable("incident_tiers"))) return empty;
+  const select = `SELECT it.*, a.title, i.anchor_published_date, i.document_count
+    FROM incident_tiers it
+    JOIN v05_incidents i ON i.incident_id = it.incident_id
+    LEFT JOIN articles a ON a.article_id = i.anchor_article_id`;
+  const groupClause = group ? " AND instr(COALESCE(it.target_group, ''), ?) > 0" : "";
+  const groupArgs = group ? [group] : [];
+  const section = (where: string, args: InValue[] = []) =>
+    query<AlertRow>(`${select} WHERE ${where}${groupClause} ORDER BY i.anchor_published_date DESC LIMIT ?`, [...args, ...groupArgs, ALERT_LIMIT]);
+  const [hoax, official, pub, early] = await Promise.all([
+    section("it.tier = 'peringatan_hoaks'"),
+    section("it.tier = 'rekomendasi_resmi'"),
+    section("it.tier = 'waspada'"),
+    section(
+      `it.tier = 'peringatan_dini' AND i.document_count >= 2 AND it.trust_level IN ('tinggi', 'sedang')
+       AND i.anchor_published_date >= date('now', ?)`,
+      [`-${EARLY_DAYS} days`],
+    ),
+  ]);
+  return { hoax, official, public: pub, early };
 }

@@ -1,5 +1,5 @@
 {
-  "_comment": "Panduan pencegahan umum, dipakai bersama oleh web (lib/prevention.ts) dan pipeline (csais/flows.py). Kunci langkah: type:<jenis>:<urutan> dan group:<kelompok>.",
+  "_comment": "Panduan pencegahan umum, dipakai bersama oleh web (lib/prevention.ts) dan pipeline (csais/flows.py). Kunci langkah: type:<jenis>:<urutan>, group:<kelompok>, dan hoax:<urutan> (untuk incident yang dibantah lembaga).",
   "by_type": {
     "phishing": [
       {
@@ -244,5 +244,15 @@
   "finance_groups": [
     "BANK_CUSTOMERS",
     "SMES"
+  ],
+  "hoax": [
+    {
+      "id": "Jangan teruskan informasi ini; lembaga resmi sudah menyatakan tidak benar.",
+      "en": "Do not forward this information; the official institution has stated it is false."
+    },
+    {
+      "id": "Periksa kabar serupa lewat situs dan akun resmi lembaga sebelum membagikannya.",
+      "en": "Check similar news on the institution's official site and accounts before sharing."
+    }
   ]
 }

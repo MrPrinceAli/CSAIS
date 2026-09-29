@@ -1,12 +1,13 @@
 /* Isi detail incident bersama untuk halaman penuh dan jendela pop-up. */
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getIncident, getPublisherDomains, type DocumentRow } from "@/lib/queries";
+import { getIncident, getIncidentTier, getPublisherDomains, type DocumentRow } from "@/lib/queries";
 import { domainOf, formatters, incidentTitle, publisherOf, severity } from "@/lib/format";
 import { attackLabel, evidenceRole, getDict, L, languageLabel, type Lang } from "@/lib/i18n";
 import { trustFromStored, trustScore, TRUST_COLOR } from "@/lib/trust";
 import { FlowCompare } from "@/components/flow-compare";
-import { HashGrid, IncidentCard, SectionTitle, SeverityText, SourceLogo, TrustRing, TypeChip } from "@/components/ui";
+import { PreventionPanel } from "@/components/prevention-panel";
+import { HashGrid, IncidentCard, SectionTitle, SeverityText, SourceLogo, TierBadge, TrustRing, TypeChip } from "@/components/ui";
 
 /** Jumlah artikel kronologi yang langsung terlihat; sisanya di balik "Lihat semua". */
 const VISIBLE = 10;
@@ -71,7 +72,7 @@ function groupByDay(docs: DocumentRow[], dayKey: (v: string | null) => string): 
 export async function IncidentDetailView({ lang, id, variant = "page" }: { lang: Lang; id: string; variant?: "page" | "modal" }) {
   const t = getDict(lang);
   const f = formatters(lang);
-  const [data, publisherDomains] = await Promise.all([getIncident(id), getPublisherDomains()]);
+  const [data, publisherDomains, tier] = await Promise.all([getIncident(id), getPublisherDomains(), getIncidentTier(id)]);
   if (!data) notFound();
   const { incident, docs, relations, related, ledgerCount, flows } = data;
   const level = severity(incident);
@@ -178,7 +179,9 @@ export async function IncidentDetailView({ lang, id, variant = "page" }: { lang:
       <header className="grid gap-4 border-b border-line pb-5 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="flex flex-col gap-2.5">
           <div className="flex flex-wrap items-center gap-3">
-            <SeverityText level={level} lang={lang} />
+            {/* keparahan dari pemberitaan tidak relevan bila lembaga membantah kejadiannya */}
+            {tier?.tier !== "peringatan_hoaks" ? <SeverityText level={level} lang={lang} /> : null}
+            <TierBadge tier={tier?.tier ?? null} lang={lang} institution={tier?.source_flow === "D4" ? tier.institution : null} />
             <TypeChip attackType={incident.attack_type} lang={lang} />
             <span className="text-[12.5px] text-muted">
               {[incident.location ? countryLabel(incident.location) : "", incident.language ? languageLabel(incident.language, lang) : ""].filter(Boolean).join(" · ")}
@@ -239,6 +242,8 @@ export async function IncidentDetailView({ lang, id, variant = "page" }: { lang:
           </div>
         </div>
       </header>
+
+      {tier ? <PreventionPanel tier={tier} lang={lang} /> : null}
 
       <div className="grid items-start gap-4 lg:grid-cols-[280px_minmax(0,1fr)_280px]">
         <section className="flex flex-col gap-4">
