@@ -1,4 +1,4 @@
-"""Titik masuk CSAIS: menjalankan crawler lalu pipeline V0.1 sampai V0.7 dan ledger.
+"""Titik masuk CSAIS: menjalankan crawler lalu pipeline V0.1 sampai V0.7, alur D1, dan ledger.
 
 Cara pakai (dari direktori mana pun):
 
@@ -25,6 +25,7 @@ from csais import (
     content_fetcher,
     crawler,
     export,
+    flows,
     image_resolver,
     language,
     ledger,
@@ -52,6 +53,7 @@ PIPELINE_STEPS = [
     ("Image - Gambar Incident", image_resolver.run),
     ("V0.6 - Evidence Correlation", v06_evidence_correlation.run),
     ("V0.7 - Trust Score", v07_trust_score.run),
+    ("Alur D1 - Keluaran Mesin", flows.run),
     ("Ledger - Batch Merkle Bukti", ledger.run),
 ]
 

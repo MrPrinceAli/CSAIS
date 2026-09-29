@@ -11,7 +11,7 @@ diterbitkan ke Turso dan ditampilkan oleh aplikasi web di folder `web/`
 ## Struktur proyek
 
 ```
-main.py                 titik masuk: crawler lalu V0.1 - V0.7 dan ledger berurutan
+main.py                 titik masuk: crawler lalu V0.1 - V0.7, alur D1, dan ledger berurutan
 requirements.txt        dependensi Python
 .env.example            contoh kredensial Turso; salin menjadi .env (tidak ikut di git)
 scripts/
@@ -38,18 +38,39 @@ csais/
   v05_incident_clustering.py     V0.5 pengelompokan artikel menjadi incident
   v06_evidence_correlation.py    V0.6 korelasi bukti antar sumber
   v07_trust_score.py             V0.7 indeks kepercayaan awal per incident
+  flows.py                       keluaran alur D1 - D4 per incident (tabel flow_outputs)
 database/
   csais.db              database SQLite (tidak ikut di git)
 ```
 
-Urutan tahap: crawler, V0.1, V0.2, content fetch, V0.3, V0.4, V0.5, V0.6,
-V0.7, ledger. Setiap tahap bersifat inkremental: hanya artikel yang belum
+Urutan tahap: crawler, V0.1, V0.2, content fetch, V0.3, V0.4, V0.5, gambar,
+V0.6, V0.7, alur D1, ledger. Setiap tahap bersifat inkremental: hanya artikel yang belum
 diproses yang diolah pada run berikutnya (V0.7 menghitung ulang semua
 incident karena masukannya berubah setiap run). Content fetch mengambil isi artikel penuh untuk
 kandidat V0.2 dengan anggaran per run (`--fetch-budget`, default 300);
 artikel yang isinya baru terambil otomatis diekstrak ulang oleh V0.3 dan
 V0.4. V0.5 membandingkan jenis serangan per keluarga (ransomware dan data
 breach satu keluarga) dan merangkai incident lanjutan bertarget sama.
+
+## Alur D1 - D4
+
+Setiap incident dinilai oleh empat alur yang menulis kolom sama ke tabel
+`flow_outputs` (tambah-saja, tidak ikut `--reset`):
+
+- D1 mesin: pipeline V0.1 - V0.7 atas semua berita (diisi tiap run; baris baru
+  hanya bila isinya berubah)
+- D2 kartu inti + survei publik (sesuai / tidak sesuai / tidak tahu per kolom)
+- D3 kartu inti + pernyataan lembaga atau kementerian
+- D4 catatan resmi: D3 yang dikonfirmasi atau dibantah, dengan reason statement
+
+Saran preventif memakai `web/lib/prevention.json`, yang dibaca bersama oleh
+pipeline dan web. Perbandingan untuk laporan:
+
+```bash
+./.venv/bin/python eval/compare_flows.py --as-of 2026-12-31T00:00:00+00:00   # tulis eval/flows/report.md dan metrics.csv
+```
+
+Web menampilkan snapshot terakhir tiap alur di halaman detail incident.
 
 ## Persiapan
 

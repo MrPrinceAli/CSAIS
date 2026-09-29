@@ -464,11 +464,30 @@ export type DocumentRow = {
   field_confidence: string | null;
 };
 
+export type FlowOutput = {
+  output_id: number;
+  flow: "D1" | "D2" | "D3" | "D4";
+  attack_type: string | null;
+  target: string | null;
+  threat_actor: string | null;
+  attack_date: string | null;
+  location: string | null;
+  target_group: string | null;
+  field_status: string | null;
+  status: string;
+  tier: string | null;
+  prevention: string | null;
+  basis: string | null;
+  source_ref: string | null;
+  reason: string | null;
+  recorded_at: string;
+};
+
 export const getIncident = cache(async (id: string) => {
   const select = await incidentSelect();
   const incident = await queryOne<IncidentRow>(`${select} WHERE i.incident_id = ?`, [id]);
   if (!incident) return null;
-  const [docs, relations, related, ledgerCount] = await Promise.all([
+  const [docs, relations, related, ledgerCount, flows] = await Promise.all([
     query<DocumentRow>(
       `SELECT a.article_id, a.title, a.published_date, a.resolved_url, a.article_url, a.source_name,
               a.syndicated_of, a.language, a.content_status, a.content_sha256, a.content_fetched_at,
@@ -505,8 +524,19 @@ export const getIncident = cache(async (id: string) => {
           ).then((r) => Number(r?.n ?? 0))
         : 0,
     ),
+    // snapshot alur D1 - D4 (csais/flows.py); tabel bisa belum terbit
+    hasTable("flow_outputs").then((ok) =>
+      ok
+        ? query<FlowOutput>(
+            `SELECT output_id, flow, attack_type, target, threat_actor, attack_date, location, target_group,
+                    field_status, status, tier, prevention, basis, source_ref, reason, recorded_at
+             FROM flow_outputs WHERE incident_id = ? ORDER BY output_id`,
+            [id],
+          )
+        : ([] as FlowOutput[]),
+    ),
   ]);
-  return { incident, docs, relations, related, ledgerCount };
+  return { incident, docs, relations, related, ledgerCount, flows };
 });
 
 export type GroupStat = {

@@ -5,6 +5,7 @@ import { getIncident, getPublisherDomains, type DocumentRow } from "@/lib/querie
 import { domainOf, formatters, incidentTitle, publisherOf, severity } from "@/lib/format";
 import { attackLabel, evidenceRole, getDict, L, languageLabel, type Lang } from "@/lib/i18n";
 import { trustFromStored, trustScore, TRUST_COLOR } from "@/lib/trust";
+import { FlowCompare } from "@/components/flow-compare";
 import { HashGrid, IncidentCard, SectionTitle, SeverityText, SourceLogo, TrustRing, TypeChip } from "@/components/ui";
 
 /** Jumlah artikel kronologi yang langsung terlihat; sisanya di balik "Lihat semua". */
@@ -72,7 +73,7 @@ export async function IncidentDetailView({ lang, id, variant = "page" }: { lang:
   const f = formatters(lang);
   const [data, publisherDomains] = await Promise.all([getIncident(id), getPublisherDomains()]);
   if (!data) notFound();
-  const { incident, docs, relations, related, ledgerCount } = data;
+  const { incident, docs, relations, related, ledgerCount, flows } = data;
   const level = severity(incident);
   const claims = bestClaims(docs);
   const domains = new Set(docs.map((d) => d.source_domain || domainOf(d.resolved_url) || d.source_name || "").filter(Boolean));
@@ -331,6 +332,8 @@ export async function IncidentDetailView({ lang, id, variant = "page" }: { lang:
           </div>
         </section>
       </div>
+
+      <FlowCompare lang={lang} outputs={flows} />
     </div>
   );
 

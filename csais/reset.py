@@ -4,7 +4,8 @@ Tabel hasil crawl (``articles`` dan ``crawl_state``) tidak disentuh. Karena
 setiap tahap dibangun dari tahap sebelumnya, menghapus tahap N berarti
 menghapus tahap N sampai V0.7. Tabel ledger (``evidence_batches`` dan
 ``evidence_leaves``) juga tidak pernah dihapus: batch Merkle bersifat
-tambah-saja dan akar yang sudah dijangkarkan tidak boleh hilang.
+tambah-saja dan akar yang sudah dijangkarkan tidak boleh hilang. Begitu pula ``flow_outputs``
+(snapshot alur D1 - D4): riwayatnya dibutuhkan untuk perbandingan antar alur.
 """
 
 from csais.db import get_connection
