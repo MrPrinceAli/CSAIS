@@ -23,7 +23,7 @@ import requests
 
 from csais import flows
 from csais.db import get_connection, get_timestamp
-from csais.official import DEMO_NOTE
+from csais.official import DEMO_NOTE, INSTITUTION_NAMES
 from csais.survey import DEMO_PREFIX, SURVEY_FIELDS
 
 PORTAL_URL = os.environ.get("CSAIS_WEB_URL") or "https://csais.vercel.app"
@@ -149,7 +149,7 @@ def seed_reviews(cards, institutions=None, log=print):
         body = {
             "incident_id": card[0], "output_id": int(card[1]), "status": status, "reason": reason,
             "fields": {"target": "salah"} if target_wrong and card[3] else {},
-            "note": f"{DEMO_NOTE}: keputusan contoh untuk pengujian alur, bukan pernyataan resmi {inst}.",
+            "note": f"{DEMO_NOTE}: keputusan contoh untuk pengujian alur, bukan pernyataan resmi {INSTITUTION_NAMES.get(inst, inst)}.",
         }
         response = session.post(f"{PORTAL_URL}/api/portal/review", json=body, timeout=60)
         if response.status_code == 200:
