@@ -10,6 +10,8 @@ Cara pakai (dari direktori mana pun):
     python main.py --export FILE      # ekspor incident ke JSON Lines lalu keluar
     python main.py --proof UID        # cetak bukti Merkle satu evidence_uid (JSON)
     python main.py --official-candidates FILE   # kandidat pernyataan lembaga (CSV)
+    python main.py --chain-deploy / --anchor / --anchor-status ROOT   # jaringan lokal
+    python main.py --llm-check / --llm-extract [--llm-limit N]        # LLM lokal (LM Studio)
     python main.py --redetect-language
 
 Seluruh keluaran layar juga disalin ke berkas di folder logs/.
@@ -23,6 +25,7 @@ import sys
 from datetime import datetime
 
 from csais import (
+    chain,
     content_fetcher,
     crawler,
     export,
@@ -31,6 +34,7 @@ from csais import (
     image_resolver,
     language,
     ledger,
+    llm_extraction,
     official,
     publish,
     reset,
@@ -52,6 +56,7 @@ PIPELINE_STEPS = [
     ("V0.2 - Relevance Detection", v02_relevance_detection.run),
     ("Content Fetch - Isi Artikel", content_fetcher.run),
     ("V0.3 - Information Extraction", v03_information_extraction.run),
+    ("V0.3 LLM - Hasil LLM Lokal", llm_extraction.run),
     ("V0.4 - Entity Resolution", v04_entity_resolution.run),
     ("V0.5 - Incident Clustering", v05_incident_clustering.run),
     ("Image - Gambar Incident", image_resolver.run),
@@ -157,6 +162,35 @@ def parse_args():
         help="cetak bukti Merkle (JSON) satu evidence_uid dari ledger, lalu keluar",
     )
     parser.add_argument(
+        "--llm-check",
+        action="store_true",
+        help="periksa koneksi LLM lokal (LLM_BASE_URL, LLM_MODEL) dengan satu contoh, lalu keluar",
+    )
+    parser.add_argument(
+        "--llm-extract",
+        action="store_true",
+        help="ekstrak artikel incident dengan LLM lokal dan kirim hasilnya ke database masukan, lalu keluar",
+    )
+    parser.add_argument(
+        "--llm-limit", type=int, default=100, metavar="N",
+        help="jumlah artikel per --llm-extract (default 100)",
+    )
+    parser.add_argument(
+        "--chain-deploy",
+        action="store_true",
+        help="pasang kontrak CsaisAnchor di jaringan lokal (CHAIN_RPC_URL), lalu keluar",
+    )
+    parser.add_argument(
+        "--anchor",
+        action="store_true",
+        help="jangkarkan batch PENDING dari Turso ke jaringan lokal dan catat buktinya, lalu keluar",
+    )
+    parser.add_argument(
+        "--anchor-status",
+        metavar="MERKLE_ROOT",
+        help="baca data jangkar satu akar dari kontrak, lalu keluar",
+    )
+    parser.add_argument(
         "--official-candidates",
         metavar="FILE",
         help="tulis CSV incident yang kemungkinan punya pernyataan resmi lembaga, lalu keluar",
@@ -197,6 +231,23 @@ def main():
         print(f"\n📦 Mengekspor incident (min {args.min_docs} artikel) ke {args.export}")
         total = export.export_incidents(args.export, min_docs=args.min_docs)
         print(f"Selesai: {total} incident ditulis.")
+        return
+
+    if args.llm_check:
+        llm_extraction.run_check()
+        return
+    if args.llm_extract:
+        llm_extraction.run_local(limit=args.llm_limit)
+        return
+
+    if args.chain_deploy:
+        chain.run_deploy()
+        return
+    if args.anchor:
+        chain.run_anchor()
+        return
+    if args.anchor_status:
+        chain.run_status(args.anchor_status)
         return
 
     if args.official_candidates:

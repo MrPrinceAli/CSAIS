@@ -14,6 +14,41 @@ function short(hex: string): string {
 }
 
 /** Posisi bukti dalam batch Merkle: akar, daun, hasil verifikasi proof, status penjangkaran. */
+/** "anvil-lokal:31337@0xabc..." -> nama jaringan yang enak dibaca. */
+function chainName(value: string): string {
+  const name = value.split(":")[0];
+  return name === "anvil-lokal" ? "Anvil lokal" : name;
+}
+
+/** Rincian jangkar: jaringan, blok, transaksi, kontrak; jaringan lokal diberi keterangan. */
+function AnchorLine({ ledger, lang }: { ledger: LedgerProof; lang: Lang }) {
+  const t = getDict(lang).verify.ledger;
+  const [head, contract] = (ledger.anchor_chain ?? "").split("@");
+  const [name, chainId] = head.split(":");
+  return (
+    <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 font-mono text-[11.5px]">
+      <span className="text-muted">{t.network}</span>
+      <span>
+        {chainName(name)} · chain {chainId}
+        {ledger.anchor_block !== null ? ` · ${t.block} ${ledger.anchor_block}` : ""}
+      </span>
+      {ledger.anchor_tx ? (
+        <>
+          <span className="text-muted">tx</span>
+          <span className="break-all">{ledger.anchor_tx}</span>
+        </>
+      ) : null}
+      {contract ? (
+        <>
+          <span className="text-muted">{t.contract}</span>
+          <span className="break-all">{contract}</span>
+        </>
+      ) : null}
+      {name.endsWith("lokal") ? <span className="col-span-2 font-sans text-[11.5px] text-muted">{t.localNote}</span> : null}
+    </div>
+  );
+}
+
 function LedgerBlock({ ledger, lang, snapshot }: { ledger: LedgerProof; lang: Lang; snapshot?: { same: string; changed: string } }) {
   const t = getDict(lang).verify.ledger;
   const f = formatters(lang);
@@ -37,10 +72,11 @@ function LedgerBlock({ ledger, lang, snapshot }: { ledger: LedgerProof; lang: La
         </span>
       </div>
       <MerkleMini siblings={ledger.proof.length} leafLabel={t.leafHash} rootLabel={t.root} valid={ok} anchored={ledger.anchor_status === "ANCHORED"} />
+      {ledger.anchor_status === "ANCHORED" ? <AnchorLine ledger={ledger} lang={lang} /> : null}
       <div className="flex flex-wrap gap-1.5 pt-0.5">
         <span className={`chip ${ok ? "chip-accent" : ""}`}>{ok ? t.proofValid : ledger.leaf_matches ? t.proofInvalid : t.leafMismatch}</span>
         <span className="chip chip-chain">
-          {ledger.anchor_status === "ANCHORED" && ledger.anchor_chain ? t.anchored(ledger.anchor_chain) : t.pending}
+          {ledger.anchor_status === "ANCHORED" && ledger.anchor_chain ? t.anchored(chainName(ledger.anchor_chain)) : t.pending}
         </span>
         <span className={`chip ${snapshot && ledger.snapshot_changed ? "text-high" : ""}`} title={ledger.snapshot_sha256 ?? undefined}>
           {ledger.snapshot_changed ? (snapshot?.changed ?? t.snapshotChanged) : (snapshot?.same ?? t.snapshotSame)}

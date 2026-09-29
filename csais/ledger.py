@@ -310,6 +310,18 @@ def ledger_summary(conn):
     return batches, leaves, pending
 
 
+def apply_remote_anchors(conn):
+    """Terapkan bukti penjangkaran dari database masukan (chain_anchors); 0 bila belum ada."""
+    from csais import chain, survey
+
+    try:
+        rows = survey.fetch_rows(chain.ANCHORS_SQL)
+    except Exception as error:  # jaringan/izin: jangan gagalkan ledger
+        print(f"   ⚠️ chain_anchors tidak terbaca: {error}")
+        return 0
+    return chain.apply_anchors(conn, rows) if rows else 0
+
+
 def run():
     """Jalankan tahap ledger: batch Merkle untuk bukti dan catatan D4 yang belum masuk batch."""
     print("\n==================================================")
@@ -319,6 +331,7 @@ def run():
     conn = get_connection()
     try:
         created = batch_pending(conn)
+        anchored = apply_remote_anchors(conn)
         batches, leaves, pending = ledger_summary(conn)
         total_leaves = sum(count for _, _, count in created)
         record_run(conn, "ledger_batch", started_at, total_leaves)
@@ -329,6 +342,8 @@ def run():
             print(f"   batch #{batch_id}: {count} daun, akar {root[:16]}…")
     else:
         print("   Tidak ada bukti baru; tidak ada batch dibuat.")
+    if anchored:
+        print(f"   {anchored} batch ditandai ANCHORED dari chain_anchors")
     print(f"\nTotal batch        : {batches}")
     print(f"Total daun         : {leaves}")
     print(f"Belum dijangkarkan : {pending}")

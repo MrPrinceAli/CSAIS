@@ -14,3 +14,6 @@ eval/flows/
 
 # kode akses portal lembaga (rahasia, hanya di komputer ini)
 .portal-codes.txt
+
+# cache jawaban LLM untuk eval/score_llm.py (lokal)
+eval/llm_cache.jsonl

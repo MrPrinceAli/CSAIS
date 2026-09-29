@@ -1,0 +1,5 @@
+out/
+cache/
+# state dan alamat kontrak jaringan lokal (khusus komputer ini)
+anvil-state.json
+deployment.local.json

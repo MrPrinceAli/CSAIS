@@ -92,6 +92,8 @@ jobs:
           # database survei publik (alur D2), token baca saja; kosong = tahap D2 dilewati
           SURVEY_DATABASE_URL: ${{ secrets.SURVEY_DATABASE_URL }}
           SURVEY_AUTH_TOKEN: ${{ secrets.SURVEY_AUTH_TOKEN }}
+          # off (default) atau fill_unknown: isi kolom V0.3 yang kosong dari hasil LLM lokal
+          LLM_MERGE: ${{ vars.LLM_MERGE }}
         run: |
           # Terbitkan hanya bila rahasia Turso sudah diisi; tanpa itu pipeline
           # tetap berjalan dan database tetap tersimpan di cache.

@@ -629,6 +629,7 @@ export type LedgerProof = {
   anchor_status: string;
   anchor_chain: string | null;
   anchor_tx: string | null;
+  anchor_block: number | null;
   proof: string[];
   valid: boolean; // daun + proof menghasilkan akar batch
   leaf_matches: boolean; // hash daun tersimpan = SHA-256(0x00 || payload)
@@ -689,13 +690,14 @@ type LeafRow = {
   anchor_status: string;
   anchor_chain: string | null;
   anchor_tx: string | null;
+  anchor_block: number | null;
 };
 
 /** Bukti Merkle satu evidence_uid, dihitung dari daun batch (maksimal 1.024 baris). */
 async function ledgerProof(evidenceUid: string, currentSha256: string | null): Promise<LedgerProof | null> {
   const leaf = await queryOne<LeafRow>(
     `SELECT l.batch_id, l.leaf_index, l.leaf_hash, l.payload, b.merkle_root, b.leaf_count, b.created_at,
-            b.anchor_status, b.anchor_chain, b.anchor_tx
+            b.anchor_status, b.anchor_chain, b.anchor_tx, b.anchor_block
      FROM evidence_leaves l JOIN evidence_batches b ON b.batch_id = l.batch_id
      WHERE l.evidence_uid = ?`,
     [evidenceUid],
@@ -721,6 +723,7 @@ async function ledgerProof(evidenceUid: string, currentSha256: string | null): P
     anchor_status: leaf.anchor_status,
     anchor_chain: leaf.anchor_chain,
     anchor_tx: leaf.anchor_tx,
+    anchor_block: leaf.anchor_block === null || leaf.anchor_block === undefined ? null : Number(leaf.anchor_block),
     proof: proof.map(toHex),
     valid: index < leaves.length && verifyProof(fromHex(leaf.leaf_hash), proof, fromHex(leaf.merkle_root)),
     leaf_matches: toHex(leafHash(leaf.payload)) === leaf.leaf_hash,

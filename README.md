@@ -42,11 +42,14 @@ csais/
   survey.py                      alur D2: kumpulkan jawaban survei publik dari database survei
   official.py                    alur D3/D4: pernyataan lembaga dari statements/official_statements.csv
   flow_compare.py                metrik perbandingan alur D1 - D4 (tabel flow_metrics)
+  llm.py, llm_extraction.py      LLM lokal (LM Studio) sebagai pelengkap V0.3
+  chain.py                       penjangkaran akar Merkle ke blockchain lokal
+chain/                  kontrak CsaisAnchor (Foundry) dan hasil kompilasinya
 database/
   csais.db              database SQLite (tidak ikut di git)
 ```
 
-Urutan tahap: crawler, V0.1, V0.2, content fetch, V0.3, V0.4, V0.5, gambar,
+Urutan tahap: crawler, V0.1, V0.2, content fetch, V0.3, V0.3 LLM, V0.4, V0.5, gambar,
 V0.6, V0.7, alur D1, alur D2, alur D3/D4, ledger, metrik perbandingan. Setiap tahap bersifat inkremental: hanya artikel yang belum
 diproses yang diolah pada run berikutnya (V0.7 menghitung ulang semua
 incident karena masukannya berubah setiap run). Content fetch mengambil isi artikel penuh untuk
@@ -96,6 +99,45 @@ pipeline dan web. Perbandingan untuk laporan:
 Web menampilkan snapshot terakhir tiap alur di halaman detail incident dan
 ringkasan metrik semua incident di `/comparison`; laporan Markdown dan CSV tiap
 run juga diunggah sebagai artefak Actions (`flow-report-*`, 90 hari).
+
+## Perintah lokal: LLM dan blockchain
+
+LM Studio dan blockchain lokal berjalan di komputer sendiri, sedangkan pipeline
+harian berjalan di GitHub Actions. Karena itu keduanya dijalankan sebagai
+perintah lokal yang mengirim hasilnya ke database masukan (`csais-survey`,
+butuh `SURVEY_WRITE_TOKEN` di `.env`); pipeline harian mengambilnya dari sana.
+
+**LLM lokal (LM Studio).** Muat model di LM Studio, klik Start Server di tab
+Developer, lalu isi `LLM_BASE_URL` (default `http://localhost:1234/v1`) dan
+`LLM_MODEL` (nama model seperti tampil di LM Studio) di `.env`.
+
+```bash
+./.venv/bin/python main.py --llm-check                   # cek koneksi + satu contoh ekstraksi
+./.venv/bin/python eval/score_llm.py                     # skor LLM vs aturan pada data berlabel
+./.venv/bin/python main.py --llm-extract --llm-limit 200 # ekstrak artikel incident, kirim ke database masukan
+```
+
+Hasil LLM disimpan di tabel `v03_llm_extraction`. Secara default hanya
+disimpan untuk dibandingkan; untuk mengisi kolom V0.3 yang kosong (UNKNOWN)
+dari LLM, set variabel repositori GitHub `LLM_MERGE=fill_unknown`, lalu jalankan
+workflow dengan `reset_from=4` agar V0.4 dan V0.5 memakai hasilnya.
+
+**Blockchain lokal (Anvil, Foundry).** Kontrak `chain/src/CsaisAnchor.sol`
+(permissioned: hanya relayer CSAIS yang boleh menjangkarkan; BSSN, OJK,
+Komdigi, dan Siber Polri terdaftar untuk atestasi berikutnya).
+
+```bash
+./scripts/chain_local.sh                       # jalankan Anvil; state di chain/anvil-state.json
+./.venv/bin/python main.py --chain-deploy      # sekali saja: pasang kontrak
+./.venv/bin/python main.py --anchor            # jangkarkan batch PENDING dari Turso
+./.venv/bin/python main.py --anchor-status ROOT
+(cd chain && forge test)                       # uji kontrak
+```
+
+Pipeline menandai batch yang akarnya ada di `chain_anchors` sebagai ANCHORED.
+Jaringan ini hanya ada di komputer lokal; web menampilkan jaringan, blok, dan
+transaksinya dengan keterangan prototipe. Nanti kontrak yang sama dipasang di
+Besu QBFT dengan validator lembaga.
 
 ## Persiapan
 
