@@ -102,14 +102,15 @@ def pick_reviews(cards):
     return picks
 
 
-def seed(log=print, with_survey=True, institutions=None):
-    """Isi data uji; ``with_survey=False`` dan ``institutions`` untuk melanjutkan sebagian."""
+def seed(log=print, with_survey=True, institutions=None, overlap=False):
+    """Isi data uji; ``with_survey=False`` dan ``institutions`` untuk melanjutkan sebagian,
+    ``overlap`` untuk keputusan lembaga pada incident yang sudah disurvei."""
     rng = random.Random(SEED)
     cards = _remote(CARDS_SQL)
     log(f"Kartu D1 kandidat dari Turso: {len(cards)}")
-    if with_survey:
+    if with_survey and not overlap:
         seed_survey(cards, rng, log)
-    seed_reviews(cards, institutions, log)
+    seed_reviews(cards, institutions, log, overlap)
 
 
 def seed_survey(cards, rng, log=print):
@@ -124,7 +125,19 @@ def seed_survey(cards, rng, log=print):
     log(f"Survei: {len(rows)} jawaban untuk {SURVEY_INCIDENTS} incident")
 
 
-def seed_reviews(cards, institutions=None, log=print):
+OVERLAP_PLAN = [("dikonfirmasi", "laporan_diterima", True), ("dibantah", "hoaks", False)]
+
+
+def pick_overlap(cards):
+    """Dua incident yang sudah disurvei per lembaga, agar D2 dan D3/D4 bisa dibandingkan."""
+    picks, pool = [], list(cards[:SURVEY_INCIDENTS])
+    for index, inst in enumerate(MANDATE):
+        for plan, card in zip(OVERLAP_PLAN, pool[index * 2 : index * 2 + 2]):
+            picks.append((inst, card, plan))
+    return picks
+
+
+def seed_reviews(cards, institutions=None, log=print, overlap=False):
     passwords = json.loads(os.environ.get("PORTAL_PASSWORDS") or "{}")
     if not passwords:
         log("PORTAL_PASSWORDS kosong; keputusan lembaga dilewati.")
@@ -134,7 +147,8 @@ def seed_reviews(cards, institutions=None, log=print):
     from csais.survey import fetch_rows
 
     done = {row[0] for row in fetch_rows(f"SELECT incident_id FROM official_reviews WHERE reason_text LIKE '{DEMO_NOTE}%'") or []}
-    for inst, card, (status, reason, target_wrong) in pick_reviews(cards[SURVEY_INCIDENTS:]):
+    picks = pick_overlap(cards) if overlap else pick_reviews(cards[SURVEY_INCIDENTS:])
+    for inst, card, (status, reason, target_wrong) in picks:
         if (institutions and inst not in institutions) or card[0] in done:
             continue
         if inst not in sessions:  # satu kali masuk per lembaga (portal membatasi percobaan masuk)

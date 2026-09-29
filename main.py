@@ -254,7 +254,7 @@ def main():
 
     if args.seed_demo:
         only = [x for x in (os.environ.get("DEMO_INSTITUTIONS") or "").split(",") if x]
-        demo.seed(with_survey=not only, institutions=only or None)
+        demo.seed(with_survey=not only, institutions=only or None, overlap=os.environ.get("DEMO_OVERLAP") == "1")
         return
 
     if args.llm_check:
