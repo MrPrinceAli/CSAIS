@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { getPortalCardsById, getPortalQueue, type PortalCard } from "@/lib/queries";
 import { formatters, incidentTitle } from "@/lib/format";
 import { attackLabel, getDict, isLang, L, type Lang } from "@/lib/i18n";
-import { INSTITUTION_LOGO, INSTITUTION_NAME, institutionFromSession, MANDATE, portalConfigured, REASONS, REVIEW_FIELDS, SESSION_COOKIE_NAME } from "@/lib/portal";
+import { INSTITUTION_LOGO, INSTITUTION_NAME, INSTITUTIONS, institutionFromSession, MANDATE, portalConfigured, REASONS, REVIEW_FIELDS, SESSION_COOKIE_NAME } from "@/lib/portal";
 import { reviewsBy } from "@/lib/survey";
 import { OrgLogo } from "@/components/org-logo";
 import { PortalLogin, PortalLogout } from "@/components/portal-login";
@@ -61,7 +61,10 @@ export default async function PortalPage({ params, searchParams }: { params: Pro
     return (
       <div className="flex flex-col gap-5 py-8">
         {header}
-        <PortalLogin strings={p.login} />
+        <PortalLogin
+          strings={p.login}
+          institutions={INSTITUTIONS.map((code) => ({ code, name: INSTITUTION_NAME[code], logo: `/logos/${INSTITUTION_LOGO[code].toLowerCase()}.png` }))}
+        />
       </div>
     );
   }
@@ -85,7 +88,6 @@ export default async function PortalPage({ params, searchParams }: { params: Pro
     fieldValues: p.fieldValues,
     note: p.note,
     source: p.source,
-    reviewer: p.reviewer,
     submit: p.submit,
     sending: p.sending,
     saved: p.saved,

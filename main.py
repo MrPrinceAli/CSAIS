@@ -181,6 +181,11 @@ def parse_args():
         help="pasang kontrak CsaisAnchor di jaringan lokal (CHAIN_RPC_URL), lalu keluar",
     )
     parser.add_argument(
+        "--chain-institutions",
+        action="store_true",
+        help="daftarkan alamat kunci lembaga (web/lib/institution-keys.json) ke kontrak, lalu keluar",
+    )
+    parser.add_argument(
         "--anchor",
         action="store_true",
         help="jangkarkan batch PENDING dari Turso ke jaringan lokal dan catat buktinya, lalu keluar",
@@ -242,6 +247,9 @@ def main():
 
     if args.chain_deploy:
         chain.run_deploy()
+        return
+    if args.chain_institutions:
+        chain.register_institutions()
         return
     if args.anchor:
         chain.run_anchor()

@@ -3,6 +3,7 @@ import type { InValue } from "@libsql/client";
 import { query, queryOne } from "./db";
 import { publisherOf } from "./format";
 import { fromHex, leafHash, merkleProof, toHex, verifyProof } from "./merkle";
+import { checkDecision, type SignatureCheck, type SignedDecision } from "./attestation";
 import { outputHash } from "./records";
 import type { StoredTrust } from "./trust";
 
@@ -660,6 +661,7 @@ export type VerifyRecord = {
   payload_hash: string | null; // output_hash yang dibukukan di daun ledger
   hash_matches: boolean; // isi baris saat ini menghasilkan output_hash yang sama
   ledger: LedgerProof | null;
+  signature: (SignatureCheck & { institution: string }) | null; // tanda tangan EIP-712 lembaga (portal)
 };
 
 export type VerifyResult = {
@@ -772,6 +774,13 @@ async function verifyRecord(uid: string): Promise<VerifyRecord | null> {
     `SELECT a.title FROM v05_incidents i LEFT JOIN articles a ON a.article_id = i.anchor_article_id WHERE i.incident_id = ?`,
     [row.incident_id],
   );
+  let signature: VerifyRecord["signature"] = null;
+  try {
+    const signed = (JSON.parse(String(row.basis ?? "{}")) as { signed?: SignedDecision }).signed;
+    if (signed?.signature) signature = { ...(await checkDecision(signed)), institution: signed.message.institution };
+  } catch {
+    signature = null;
+  }
   const current = outputHash(row);
   const matches = current === row.output_hash && current === payload.output_hash;
   const ledger = await ledgerProof(uid, null);
@@ -792,6 +801,7 @@ async function verifyRecord(uid: string): Promise<VerifyRecord | null> {
     payload_hash: payload.output_hash ?? null,
     hash_matches: matches,
     ledger,
+    signature,
   };
 }
 

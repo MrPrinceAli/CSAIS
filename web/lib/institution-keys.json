@@ -1,0 +1,15 @@
+{
+  "_comment": "Alamat publik kunci tanda tangan lembaga (portal) dan domain EIP-712. Dibuat scripts/portal-keys.mjs; alamat yang sama didaftarkan di kontrak CsaisAnchor (main.py --chain-institutions).",
+  "domain": {
+    "name": "CSAIS",
+    "version": "1",
+    "chainId": 31337,
+    "verifyingContract": "0x5fbdb2315678afecb367f032d93f642f64180aa3"
+  },
+  "addresses": {
+    "BSSN": "0x9446503fF122D720C9ED8E1BE619A6D14E8b7920",
+    "OJK": "0x694D23eB077c615b0B1FF26EAd43baFF7838f888",
+    "KOMDIGI": "0x5A6E6B600C7532A6e7248c8a9311aD37c2751190",
+    "POLRI": "0x403eb71Ec54db9616eA3136Ea02e944c2b090e0B"
+  }
+}

@@ -161,10 +161,25 @@ def test_load_reviews_from_file(tmp_path, monkeypatch):
     path = tmp_path / "survey.db"
     conn = sqlite3.connect(path)
     conn.execute(official.REVIEWS_SCHEMA)
-    conn.execute("INSERT INTO official_reviews VALUES (1, 'INC-A', 1, 'BSSN', 'dibantah', 'hoaks', NULL, '{}', NULL, NULL, 't')")
+    conn.execute(
+        "INSERT INTO official_reviews (incident_id, card_output_id, institution, status, reason_code, field_status, created_at, signed)"
+        " VALUES ('INC-A', 1, 'BSSN', 'dibantah', 'hoaks', '{}', 't', '{\"signer\": \"0xabc\", \"signature\": \"0x01\"}')"
+    )
     conn.commit()
     conn.close()
     monkeypatch.setenv("SURVEY_DATABASE_URL", f"file:{path}")
-    assert [r["statement_id"] for r in official.load_reviews()] == ["portal-1"]
+    reviews = official.load_reviews()
+    assert [r["statement_id"] for r in reviews] == ["portal-1"]
+    assert reviews[0]["signed"] == {"signer": "0xabc", "signature": "0x01"}
     monkeypatch.delenv("SURVEY_DATABASE_URL")
     assert official.load_reviews() == []
+
+
+def test_signature_travels_into_d4(temp_conn):
+    _pipeline_tables(temp_conn)
+    flows.record_d1(temp_conn)
+    signed = {"signer": "0xOJK", "signature": "0xsig", "message": {"institution": "OJK"}}
+    review = REVIEW + (json.dumps(signed),)
+    official.record_official(temp_conn, official.review_rows([review]))
+    basis = json.loads(_latest(temp_conn, "INC-A", "D4")["basis"])
+    assert basis["signed"] == signed

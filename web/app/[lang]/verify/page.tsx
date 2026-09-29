@@ -98,7 +98,7 @@ function RecordBlock({ record, lang }: { record: VerifyRecord; lang: Lang }) {
   const t = getDict(lang);
   const r = t.verify.record;
   const f = formatters(lang);
-  const ok = record.hash_matches && (record.ledger?.valid ?? false) && (record.ledger?.leaf_matches ?? false);
+  const ok = record.hash_matches && (record.ledger?.valid ?? false) && (record.ledger?.leaf_matches ?? false) && (record.signature?.valid ?? true);
   return (
     <section className="card flex flex-col gap-4 p-5" style={{ borderTopColor: "var(--good)", borderTopWidth: 2 }}>
       <div className="flex items-start gap-3">
@@ -151,6 +151,17 @@ function RecordBlock({ record, lang }: { record: VerifyRecord; lang: Lang }) {
           <span className="break-all font-mono text-[11.5px]">{record.output_hash}</span>
           <span className={record.hash_matches ? "text-good" : "text-high"}>{record.hash_matches ? r.hashOk : r.hashBad}</span>
         </dd>
+        {record.signature ? (
+          <>
+            <dt className="text-muted">{r.signature}</dt>
+            <dd className="flex flex-col gap-0.5">
+              <span className={record.signature.valid ? "text-good" : "text-high"}>
+                {record.signature.valid ? r.signatureOk(record.signature.institution === "POLRI" ? "Siber Polri" : record.signature.institution) : r.signatureBad}
+              </span>
+              <span className="break-all font-mono text-[11.5px] text-muted">{record.signature.signer || "—"}</span>
+            </dd>
+          </>
+        ) : null}
         <dt className="text-muted">{r.uid}</dt>
         <dd className="break-all font-mono text-[11.5px]">{record.uid}</dd>
       </dl>

@@ -12,7 +12,6 @@ type Strings = {
   fieldValues: Record<string, string>;
   note: string;
   source: string;
-  reviewer: string;
   submit: string;
   sending: string;
   saved: string;
@@ -45,7 +44,6 @@ export function ReviewCard({ incidentId, outputId, fields, reasonsByStatus, stri
   const [marks, setMarks] = useState<Record<string, string>>({});
   const [note, setNote] = useState("");
   const [source, setSource] = useState("");
-  const [reviewer, setReviewer] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "saved" | "error" | "noreason">("idle");
   const prefix = `rv-${incidentId}`;
 
@@ -60,7 +58,7 @@ export function ReviewCard({ incidentId, outputId, fields, reasonsByStatus, stri
       const response = await fetch("/api/portal/review", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ incident_id: incidentId, output_id: outputId, status, reason, fields: marks, note, source_url: source, reviewer }),
+        body: JSON.stringify({ incident_id: incidentId, output_id: outputId, status, reason, fields: marks, note, source_url: source }),
       });
       setState(response.ok ? "saved" : "error");
     } catch {
@@ -143,14 +141,11 @@ export function ReviewCard({ incidentId, outputId, fields, reasonsByStatus, stri
               {strings.note}
               <textarea id={`${prefix}-note`} value={note} onChange={(e) => setNote(e.target.value)} maxLength={600} rows={2} className="field text-[13px]" />
             </label>
-            <label className="flex flex-col gap-1 text-[12px] text-muted" htmlFor={`${prefix}-source`}>
+            <label className="flex flex-col gap-1 text-[12px] text-muted sm:col-span-2" htmlFor={`${prefix}-source`}>
               {strings.source}
               <input id={`${prefix}-source`} type="url" value={source} onChange={(e) => setSource(e.target.value)} className="field text-[13px]" />
             </label>
-            <label className="flex flex-col gap-1 text-[12px] text-muted" htmlFor={`${prefix}-reviewer`}>
-              {strings.reviewer}
-              <input id={`${prefix}-reviewer`} type="text" value={reviewer} onChange={(e) => setReviewer(e.target.value)} maxLength={80} className="field text-[13px]" />
-            </label>
+
           </div>
         </details>
       ) : null}

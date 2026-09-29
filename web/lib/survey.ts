@@ -122,8 +122,13 @@ const REVIEWS_SCHEMA = `
     field_status TEXT,
     source_url TEXT,
     reviewer TEXT,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    signer TEXT,
+    signature TEXT,
+    signed TEXT
   )`;
+// Kolom tanda tangan ditambahkan setelah tabel pertama dibuat
+const REVIEWS_COLUMNS = ["signer TEXT", "signature TEXT", "signed TEXT"];
 
 let reviewsReady: Promise<unknown> | null = null;
 
@@ -131,7 +136,16 @@ async function reviewsClient() {
   const db = getClient();
   await ready;
   if (!reviewsReady) {
-    reviewsReady = db.execute(REVIEWS_SCHEMA).catch((error: unknown) => {
+    reviewsReady = db
+      .execute(REVIEWS_SCHEMA)
+      .then(async () => {
+        const info = await db.execute("PRAGMA table_info(official_reviews)");
+        const have = new Set(info.rows.map((r) => String(r.name)));
+        for (const column of REVIEWS_COLUMNS) {
+          if (!have.has(column.split(" ")[0])) await db.execute(`ALTER TABLE official_reviews ADD COLUMN ${column}`);
+        }
+      })
+      .catch((error: unknown) => {
       reviewsReady = null;
       throw error;
     });
@@ -141,6 +155,7 @@ async function reviewsClient() {
 }
 
 export type OfficialReview = {
+  signed: import("./attestation").SignedDecision;
   incidentId: string;
   cardOutputId: number;
   institution: string;
@@ -155,9 +170,12 @@ export type OfficialReview = {
 export async function saveReview(r: OfficialReview): Promise<number> {
   const db = await reviewsClient();
   const result = await db.execute({
-    sql: `INSERT INTO official_reviews (incident_id, card_output_id, institution, status, reason_code, reason_text, field_status, source_url, reviewer, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [r.incidentId, r.cardOutputId, r.institution, r.status, r.reasonCode, r.reasonText, JSON.stringify(r.fieldStatus), r.sourceUrl, r.reviewer, new Date().toISOString()],
+    sql: `INSERT INTO official_reviews (incident_id, card_output_id, institution, status, reason_code, reason_text, field_status, source_url, reviewer, created_at, signer, signature, signed)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [
+      r.incidentId, r.cardOutputId, r.institution, r.status, r.reasonCode, r.reasonText, JSON.stringify(r.fieldStatus), r.sourceUrl, r.reviewer,
+      new Date().toISOString(), r.signed.signer, r.signed.signature, JSON.stringify(r.signed),
+    ],
   });
   return Number(result.lastInsertRowid ?? 0);
 }

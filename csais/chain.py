@@ -327,3 +327,25 @@ def run_status(root_hex):
         return
     batch_id, kind, previous, block, timestamp = found
     print(json.dumps({"batch_id": batch_id, "kind": kind, "previous_root": previous, "block": block, "timestamp": timestamp}, indent=2))
+
+
+INSTITUTION_KEYS_FILE = os.path.join(PROJECT_ROOT, "web", "lib", "institution-keys.json")
+
+
+def register_institutions(client=None, path=INSTITUTION_KEYS_FILE):
+    """Daftarkan alamat kunci tanda tangan portal (institution-keys.json) ke kontrak."""
+    deployment = load_deployment()
+    if not deployment:
+        raise SystemExit("Kontrak belum dipasang: jalankan python main.py --chain-deploy")
+    client = client or ChainClient()
+    with open(path, encoding="utf-8") as fh:
+        addresses = json.load(fh)["addresses"]
+    admin = client.accounts()[0]
+    for code, address in addresses.items():
+        client.send(admin, deployment["contract"], encode_call("setInstitution(bytes32,address)", code_bytes32(code), address))
+        words = decode_words(client.eth_call(deployment["contract"], encode_call("institutions(bytes32)", code_bytes32(code))))
+        print(f"   {code:8s} {address}  (terbaca di kontrak: 0x{words[0][24:]})")
+    deployment["institutions"] = addresses
+    if not os.environ.get("CHAIN_CONTRACT"):
+        with open(DEPLOYMENT_FILE, "w", encoding="utf-8") as fh:
+            json.dump(deployment, fh, indent=2)

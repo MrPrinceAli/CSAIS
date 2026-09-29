@@ -1,10 +1,12 @@
 import { queryOne } from "@/lib/db";
-import { institutionFromSession, REASONS, REVIEW_FIELDS, REVIEW_STATUSES, SESSION_COOKIE_NAME, type ReviewStatus } from "@/lib/portal";
+import { signDecision } from "@/lib/attestation";
+import { institutionFromSession, KEY_COOKIE_NAME, keyFromSession, REASONS, REVIEW_FIELDS, REVIEW_STATUSES, SESSION_COOKIE_NAME, type ReviewStatus } from "@/lib/portal";
 import { saveReview, surveyConfigured } from "@/lib/survey";
 
 /**
  * Simpan keputusan lembaga untuk satu kartu inti D1. Lembaga diambil dari
- * cookie sesi (bukan dari isi permintaan), kartu diperiksa ke flow_outputs.
+ * cookie sesi (bukan dari isi permintaan), kartu diperiksa ke flow_outputs, dan
+ * keputusan ditandatangani (EIP-712) dengan kunci lembaga dari cookie kunci.
  */
 export const dynamic = "force-dynamic";
 
@@ -22,8 +24,10 @@ function cookieValue(request: Request, name: string): string | undefined {
 }
 
 export async function POST(request: Request) {
-  const inst = institutionFromSession(cookieValue(request, SESSION_COOKIE_NAME));
-  if (!inst) return bad("not-signed-in", 401);
+  const session = cookieValue(request, SESSION_COOKIE_NAME);
+  const inst = institutionFromSession(session);
+  const privateKey = keyFromSession(session, cookieValue(request, KEY_COOKIE_NAME));
+  if (!inst || !privateKey) return bad("not-signed-in", 401);
   if (!surveyConfigured()) return bad("storage-unavailable", 503);
 
   let body: Record<string, unknown>;
@@ -49,14 +53,26 @@ export async function POST(request: Request) {
   const source = typeof body.source_url === "string" && /^https?:\/\/\S{3,500}$/.test(body.source_url.trim()) ? body.source_url.trim() : null;
   const reviewer = typeof body.reviewer === "string" ? body.reviewer.trim().slice(0, 80) || null : null;
 
-  const card = await queryOne<{ output_id: number }>(
-    `SELECT output_id FROM flow_outputs WHERE output_id = ? AND incident_id = ? AND flow = 'D1'`,
+  const card = await queryOne<{ output_id: number; output_hash: string }>(
+    `SELECT output_id, output_hash FROM flow_outputs WHERE output_id = ? AND incident_id = ? AND flow = 'D1'`,
     [outputId, incidentId],
   );
   if (!card) return bad("unknown-card", 404);
 
   try {
+    const signed = await signDecision(privateKey, {
+      incidentId,
+      cardHash: `0x${card.output_hash}`,
+      institution: inst,
+      status,
+      reason,
+      fields: JSON.stringify(fieldStatus),
+      note: note ?? "",
+      source: source ?? "",
+      issuedAt: Math.floor(Date.now() / 1000),
+    });
     const reviewId = await saveReview({
+      signed,
       incidentId,
       cardOutputId: outputId,
       institution: inst,

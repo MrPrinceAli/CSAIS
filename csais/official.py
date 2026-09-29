@@ -69,12 +69,15 @@ REVIEWS_SCHEMA = """
         field_status TEXT,
         source_url TEXT,
         reviewer TEXT,
-        created_at TEXT NOT NULL
+        created_at TEXT NOT NULL,
+        signer TEXT,
+        signature TEXT,
+        signed TEXT
     )
 """
 REVIEWS_SQL = """
     SELECT review_id, incident_id, institution, status, reason_code, reason_text,
-           field_status, source_url, reviewer, created_at
+           field_status, source_url, reviewer, created_at, signed
     FROM official_reviews ORDER BY review_id
 """
 OFFICIAL_TIER = {"dikonfirmasi": "rekomendasi_resmi", "dibantah": "peringatan_hoaks"}
@@ -120,7 +123,7 @@ def load_statements(path=STATEMENTS_FILE):
 def review_rows(rows):
     """Keputusan portal (baris official_reviews) sebagai baris pernyataan."""
     statements = []
-    for review_id, incident_id, institution, status, code, note, field_status, source_url, reviewer, created_at in rows:
+    for review_id, incident_id, institution, status, code, note, field_status, source_url, reviewer, created_at, *rest in rows:
         if status not in STATUSES or code not in REASON_TEXT:
             continue
         try:
@@ -128,6 +131,10 @@ def review_rows(rows):
         except ValueError:
             marks = {}
         reason = REASON_TEXT[code] + (f". {note.strip()}" if note and note.strip() else "")
+        try:
+            signed = json.loads(rest[0]) if rest and rest[0] else None
+        except ValueError:
+            signed = None
         statements.append({
             **{key: None for key in COLUMNS},
             "statement_id": f"portal-{review_id}",
@@ -139,6 +146,8 @@ def review_rows(rows):
             "reason": reason,
             "recorded_by": reviewer,
             "field_status": {k: v for k, v in marks.items() if k in SURVEY_FIELDS and v in ("dikonfirmasi", "dibantah")},
+            "institution_code": institution,
+            "signed": signed,
         })
     return statements
 
@@ -216,6 +225,8 @@ def d3_row(card, statement, items):
             "statement_date": statement["statement_date"],
             "statements": len(items),
             "institutions": sorted({r["institution"] for r in items}),
+            # tanda tangan EIP-712 lembaga (portal); ikut output_hash dan batch Merkle
+            **({"signed": statement["signed"]} if statement.get("signed") else {}),
         },
         "source_ref": statement["source_url"],
         "reason": statement["reason"],

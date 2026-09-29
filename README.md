@@ -76,18 +76,32 @@ minimal 3 jawaban sesuai/tidak sesuai dengan 2/3 sepakat. Untuk sementara satu
 orang boleh menjawab berkali-kali; penanda peramban dan hash IP disimpan agar
 penyaringan bisa ditambahkan nanti.
 
-Keputusan lembaga (D3) diberikan lewat portal `/portal`: petugas BSSN, OJK,
-Komdigi, atau Siber Polri masuk dengan kode akses lembaganya, melihat antrean
-incident sesuai mandat, lalu memilih keputusan (dikonfirmasi, dibantah,
-sebagian) dan alasannya dengan tombol; kolom kartu bisa ditandai benar/salah.
-Keputusan disimpan di tabel `official_reviews` pada database survei dan dibaca
-pipeline (`csais/official.py`). Keputusan terbaru berstatus dikonfirmasi atau
-dibantah menjadi catatan resmi D4; revisi menjadi baris baru yang merujuk baris
-lama, dan setiap catatan D4 masuk batch Merkle tersendiri
-(`batch_kind = official_record`). Pernyataan resmi yang sudah dipublikasikan
-juga bisa disalin tim ke `statements/official_statements.csv` (opsional).
-Kode akses disimpan sebagai hash di variabel Vercel `PORTAL_ACCESS`; kode
-aslinya ada di `.portal-codes.txt` (tidak ikut git).
+Keputusan lembaga (D3) diberikan lewat portal `/portal`: pilih lembaga (BSSN,
+OJK, Komdigi, Siber Polri; satu akun per lembaga) lalu masukkan password.
+Password membuka kunci tanda tangan lembaga yang tersimpan terenkripsi di
+variabel Vercel `PORTAL_KEYS`; tidak ada wallet. Petugas memilih keputusan
+(dikonfirmasi, dibantah, sebagian) dan alasannya dengan tombol, dan setiap
+keputusan ditandatangani (EIP-712) dengan kunci lembaga. Keputusan disimpan di
+tabel `official_reviews` pada database masukan dan dibaca pipeline
+(`csais/official.py`); keputusan terbaru berstatus dikonfirmasi atau dibantah
+menjadi catatan resmi D4 beserta tanda tangannya, masuk batch Merkle
+tersendiri (`batch_kind = official_record`), dan `/verify` memeriksa bahwa
+penanda tangan adalah alamat lembaga yang terdaftar
+(`web/lib/institution-keys.json`, juga terdaftar di kontrak). Pernyataan resmi
+yang sudah dipublikasikan juga bisa disalin tim ke
+`statements/official_statements.csv` (opsional).
+
+Mengganti password (membuat kunci baru untuk keempat lembaga):
+
+```bash
+cd web && node scripts/portal-keys.mjs < passwords.json > keys.json   # passwords.json: {"BSSN": "...", ...}
+# portalKeys -> variabel Vercel PORTAL_KEYS; addresses -> web/lib/institution-keys.json
+cd .. && ./.venv/bin/python main.py --chain-institutions              # daftarkan alamat baru ke kontrak
+```
+
+Hapus `passwords.json` dan `keys.json` setelah dipakai. Catatan lama tetap sah
+karena ditandatangani kunci yang berlaku saat itu, tetapi `/verify` memeriksa
+terhadap alamat terbaru, jadi simpan riwayat alamat bila kunci diganti.
 
 Saran preventif memakai `web/lib/prevention.json`, yang dibaca bersama oleh
 pipeline dan web. Perbandingan untuk laporan:
@@ -129,6 +143,7 @@ Komdigi, dan Siber Polri terdaftar untuk atestasi berikutnya).
 ```bash
 ./scripts/chain_local.sh                       # jalankan Anvil; state di chain/anvil-state.json
 ./.venv/bin/python main.py --chain-deploy      # sekali saja: pasang kontrak
+./.venv/bin/python main.py --chain-institutions   # daftarkan alamat kunci lembaga portal
 ./.venv/bin/python main.py --anchor            # jangkarkan batch PENDING dari Turso
 ./.venv/bin/python main.py --anchor-status ROOT
 (cd chain && forge test)                       # uji kontrak
