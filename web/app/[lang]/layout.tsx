@@ -31,6 +31,7 @@ const NAV: { key: keyof ReturnType<typeof getDict>["nav"]; path: string }[] = [
   { key: "home", path: "/" },
   { key: "incidents", path: "/incidents" },
   { key: "findings", path: "/findings" },
+  { key: "survey", path: "/survey" },
   { key: "verify", path: "/verify" },
   { key: "sources", path: "/sources" },
 ];

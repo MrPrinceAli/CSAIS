@@ -13,7 +13,7 @@ export function L(lang: Lang, path = ""): string {
 const id = {
   brand: "CSAIS",
   tagline: "Cyber Social Attack Intelligence System",
-  nav: { home: "Beranda", incidents: "Incident", findings: "Temuan", verify: "Verifikasi", sources: "Sumber", institutions: "Lembaga" },
+  nav: { home: "Beranda", incidents: "Incident", findings: "Temuan", survey: "Survei", verify: "Verifikasi", sources: "Sumber", institutions: "Lembaga" },
   status: (date: string, version: string) => `Data ${date} · pipeline ${version}`,
   footer: {
     about: "Sistem intelijen serangan siber bersumber berita terbuka. Artikel dibaca setiap hari, dikelompokkan menjadi incident, dan buktinya disiapkan untuk pencatatan di blockchain.",
@@ -448,7 +448,7 @@ type Dict = typeof id;
 const en: Dict = {
   brand: "CSAIS",
   tagline: "Cyber Social Attack Intelligence System",
-  nav: { home: "Home", incidents: "Incidents", findings: "Findings", verify: "Verify", sources: "Sources", institutions: "Institutions" },
+  nav: { home: "Home", incidents: "Incidents", findings: "Findings", survey: "Survey", verify: "Verify", sources: "Sources", institutions: "Institutions" },
   status: (date, version) => `Data ${date} · pipeline ${version}`,
   footer: {
     about: "Cyber-attack intelligence from open news reporting. Articles are read daily, grouped into incidents, and their evidence prepared for on-chain anchoring.",
