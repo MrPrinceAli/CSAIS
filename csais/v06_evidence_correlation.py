@@ -35,6 +35,7 @@ from csais.schema import (
     evidence_uid,
     record_run,
 )
+from csais.sources import PUBLISHER_PREFIX, publisher_domains, source_identity
 from csais.text import jaccard_index
 
 
@@ -349,6 +350,7 @@ def save_evidence(
     independence_score,
     evidence_confidence,
     fingerprint,
+    publishers=None,
 ):
     """Simpan record evidence untuk satu artikel dalam incident."""
     (
@@ -364,6 +366,11 @@ def save_evidence(
         uid,
     ) = article
     source_domain = extract_domain(article_url or source_url)
+    if publishers is not None:
+        # domain penerbit dari registri bila tautannya masih Google News
+        identity = source_identity(article_url or source_url, title, publishers)
+        if identity and not identity.startswith(PUBLISHER_PREFIX):
+            source_domain = identity
     cursor = conn.cursor()
     cursor.execute(
         """
@@ -417,8 +424,16 @@ def determine_evidence_types(relations):
 
 
 # --- Pemrosesan ---
-def process_incident(conn, incident_id):
-    """Bandingkan semua pasangan artikel dalam incident dan simpan hasilnya."""
+def process_incident(conn, incident_id, publishers=None):
+    """Bandingkan semua pasangan artikel dalam incident dan simpan hasilnya.
+
+    "Domain sama" memakai identitas sumber (``sources.source_identity``):
+    domain media asli, atau penerbit dari akhiran judul untuk tautan Google
+    News, agar artikel dari penerbit berbeda tidak dianggap satu domain
+    hanya karena sama-sama lewat news.google.com.
+    """
+    if publishers is None:
+        publishers = publisher_domains(conn)
     articles = get_incident_documents(conn, incident_id)
     if not articles:
         return {"articles": 0, "relations": 0, "independent": 0, "reproduced": 0}
@@ -444,7 +459,7 @@ def process_incident(conn, incident_id):
             parts.append(content)
         text = " ".join(parts)
         fingerprint = generate_content_fingerprint(title, summary, content)
-        domain = extract_domain(article_url or source_url)
+        domain = source_identity(article_url or source_url, title, publishers)
         article_data[article_id] = {
             "article": article,
             "text": text,
@@ -542,6 +557,7 @@ def process_incident(conn, incident_id):
             independence_score,
             evidence_confidence,
             data["fingerprint"],
+            publishers,
         )
 
     # Tandai incident sudah diproses
@@ -568,9 +584,10 @@ def process_batch(conn, incident_ids):
     batch_relations = 0
     batch_independent = 0
     batch_reproduced = 0
+    publishers = publisher_domains(conn)
     for incident_id in incident_ids:
         try:
-            result = process_incident(conn, incident_id)
+            result = process_incident(conn, incident_id, publishers)
             batch_incidents += 1
             batch_articles += result["articles"]
             batch_relations += result["relations"]

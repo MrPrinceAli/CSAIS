@@ -44,16 +44,16 @@ def test_levels(score, level, monkeypatch):
 def _seed(conn):
     conn.executescript("""
         CREATE TABLE articles (article_id INTEGER PRIMARY KEY, resolved_url TEXT, article_url TEXT,
-            source_name TEXT, content_status TEXT);
+            source_name TEXT, content_status TEXT, title TEXT);
         CREATE TABLE v05_incidents (incident_id TEXT PRIMARY KEY, incident_confidence REAL);
         CREATE TABLE v05_incident_documents (incident_id TEXT, article_id INTEGER);
         CREATE TABLE v06_evidence (incident_id TEXT, article_id INTEGER, source_domain TEXT,
             evidence_independence_score REAL);
         CREATE TABLE v03_information_extraction (article_id INTEGER PRIMARY KEY, target TEXT,
             field_confidence TEXT);
-        INSERT INTO articles VALUES (1, 'https://a.com/x', 'g1', 'A', 'ok');
-        INSERT INTO articles VALUES (2, NULL, 'https://www.b.com/y', 'B', 'error');
-        INSERT INTO articles VALUES (3, NULL, NULL, 'C Media', NULL);
+        INSERT INTO articles VALUES (1, 'https://a.com/x', 'g1', 'A', 'ok', NULL);
+        INSERT INTO articles VALUES (2, NULL, 'https://www.b.com/y', 'B', 'error', NULL);
+        INSERT INTO articles VALUES (3, NULL, NULL, 'C Media', NULL, NULL);
         INSERT INTO v05_incidents VALUES ('INC1', 0.9);
         INSERT INTO v05_incidents VALUES ('INC2', 0.4);
         INSERT INTO v05_incident_documents VALUES ('INC1', 1);
@@ -99,3 +99,21 @@ def test_compute_all_is_idempotent_and_drops_stale_incidents(temp_conn):
     temp_conn.commit()
     assert v07.compute_all(temp_conn) == 1
     assert [r[0] for r in temp_conn.execute("SELECT incident_id FROM v07_trust")] == ["INC1"]
+
+
+def test_google_news_links_count_publishers(temp_conn):
+    """Tautan Google News dihitung per penerbit (akhiran judul), bukan satu domain news.google.com."""
+    from csais.sources import source_identity
+
+    g = "https://news.google.com/rss/articles/abc"
+    publishers = {"reuters": "reuters.com"}
+    assert source_identity(g, "Bank X diserang - Reuters", publishers) == "reuters.com"
+    assert source_identity(g, "Bank X diserang - Kompas.com", publishers) == "penerbit:kompas.com"
+    assert source_identity("https://www.detik.com/a", "Judul - Reuters", publishers) == "detik.com"
+    assert source_identity(g, "Tanpa penerbit", publishers) == "news.google.com"
+    rows = [
+        ("I", "ok", "news.google.com", g, "A - Reuters", "Google News", 0.8, None, None),
+        ("I", None, "news.google.com", g, "B - Kompas.com", "Google News", 0.8, None, None),
+        ("I", None, "news.google.com", g, "C - Kompas.com", "Google News", 0.8, None, None),
+    ]
+    assert v07.incident_inputs(rows, publishers)["domains"] == 2

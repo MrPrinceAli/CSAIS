@@ -11,6 +11,7 @@
 """
 
 from datetime import datetime
+import sqlite3
 from urllib.parse import urlparse
 
 from csais.db import get_timestamp
@@ -37,6 +38,41 @@ def domain_of(url):
     """Nama host tanpa awalan www., huruf kecil; kosong bila URL kosong."""
     host = (urlparse(url or "").netloc or "").lower()
     return host[4:] if host.startswith("www.") else host
+
+
+AGGREGATOR_HOSTS = ("news.google.com",)
+PUBLISHER_PREFIX = "penerbit:"
+
+
+def publisher_domains(conn):
+    """Nama penerbit (huruf kecil) -> domain dari registri sources; {} bila belum ada."""
+    try:
+        rows = conn.execute(
+            "SELECT publisher_name, domain FROM sources WHERE publisher_name IS NOT NULL ORDER BY article_count DESC"
+        ).fetchall()
+    except sqlite3.OperationalError:
+        return {}
+    mapping = {}
+    for name, domain in rows:
+        mapping.setdefault(name.strip().lower(), domain)
+    return mapping
+
+
+def source_identity(url, title, publishers=None):
+    """Kunci sumber untuk menghitung sumber berbeda dan sumber sama.
+
+    Domain media asli bila URL-nya sudah terbuka; selain itu (tautan Google
+    News) penerbit dari akhiran judul, dipetakan ke domainnya lewat registri
+    bila dikenal, atau ``penerbit:<nama>`` bila tidak. Kosong bila keduanya
+    tidak ada.
+    """
+    domain = domain_of(url)
+    if domain and domain not in AGGREGATOR_HOSTS:
+        return domain
+    publisher = split_publisher(title)[1].strip().lower()
+    if publisher:
+        return (publishers or {}).get(publisher) or PUBLISHER_PREFIX + publisher
+    return domain
 
 
 # TLD negara yang lazim dipakai sebagai domain generik (tempo.co, industrialcyber.co,

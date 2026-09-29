@@ -7,7 +7,8 @@ dijangkarkan ke rantai. Web membaca tabel ``v07_trust`` bila ada dan hanya
 menghitung sendiri sebagai cadangan.
 
 Lima sinyal (bobot), semua dalam rentang 0..1:
-  corroboration 0,30  jumlah domain sumber berbeda: (domain - 1) / 4
+  corroboration 0,30  jumlah sumber berbeda: (sumber - 1) / 4; sumber = domain
+                      media asli, atau penerbit dari judul Google News
   independence  0,30  rata-rata evidence_independence_score V0.6;
                       0,35 untuk incident satu artikel (tidak ada pasangan)
   claim         0,20  keyakinan tertinggi field target V0.3 antar artikel
@@ -27,7 +28,7 @@ from itertools import groupby
 from csais.db import get_connection, get_timestamp
 from csais.provenance import pipeline_stamp
 from csais.schema import record_run
-from csais.v06_evidence_correlation import extract_domain
+from csais.sources import AGGREGATOR_HOSTS, publisher_domains, source_identity
 
 WEIGHTS = {
     "corroboration": 0.30,
@@ -86,7 +87,7 @@ def create_tables(conn):
 
 _DOCUMENT_SQL = """
     SELECT d.incident_id, a.content_status, e.source_domain,
-           COALESCE(a.resolved_url, a.article_url), a.source_name,
+           COALESCE(a.resolved_url, a.article_url), a.title, a.source_name,
            e.evidence_independence_score, x.target, x.field_confidence
     FROM v05_incident_documents d
     JOIN articles a ON a.article_id = d.article_id
@@ -107,18 +108,24 @@ def _target_confidence(target, field_confidence):
         return 0.0
 
 
-def incident_inputs(rows):
-    """Masukan skor dari baris artikel satu incident (hasil _DOCUMENT_SQL)."""
+def incident_inputs(rows, publishers=None):
+    """Masukan skor dari baris artikel satu incident (hasil _DOCUMENT_SQL).
+
+    Domain berbeda dihitung dari identitas sumber: domain media asli, atau
+    penerbit dari akhiran judul Google News (``sources.source_identity``).
+    """
     docs = 0
     with_content = 0
     domains = set()
     independence_values = []
     best_target = 0.0
-    for _, content_status, source_domain, url, source_name, independence, target, confidence in rows:
+    for _, content_status, source_domain, url, title, source_name, independence, target, confidence in rows:
         docs += 1
         if content_status == "ok":
             with_content += 1
-        domain = source_domain or extract_domain(url) or source_name or ""
+        domain = source_identity(url, title, publishers)
+        if not domain or domain in AGGREGATOR_HOSTS:
+            domain = (source_domain if source_domain not in AGGREGATOR_HOSTS else None) or domain or source_name or ""
         if domain:
             domains.add(domain)
         if independence is not None:
@@ -144,11 +151,12 @@ def compute_all(conn):
     stamp = pipeline_stamp()
     now = get_timestamp()
     rows_out = []
+    publishers = publisher_domains(conn)
     cursor.execute(_DOCUMENT_SQL)
     for incident_id, rows in groupby(cursor.fetchall(), key=lambda row: row[0]):
         if incident_id not in clustering:
             continue
-        inputs = incident_inputs(list(rows))
+        inputs = incident_inputs(list(rows), publishers)
         result = score_incident(
             inputs["independence"],
             inputs["domains"],
