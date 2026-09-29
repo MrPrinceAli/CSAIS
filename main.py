@@ -253,7 +253,8 @@ def main():
         return
 
     if args.seed_demo:
-        demo.seed()
+        only = [x for x in (os.environ.get("DEMO_INSTITUTIONS") or "").split(",") if x]
+        demo.seed(with_survey=not only, institutions=only or None)
         return
 
     if args.llm_check:

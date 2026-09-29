@@ -102,11 +102,17 @@ def pick_reviews(cards):
     return picks
 
 
-def seed(log=print):
+def seed(log=print, with_survey=True, institutions=None):
+    """Isi data uji; ``with_survey=False`` dan ``institutions`` untuk melanjutkan sebagian."""
     rng = random.Random(SEED)
     cards = _remote(CARDS_SQL)
     log(f"Kartu D1 kandidat dari Turso: {len(cards)}")
+    if with_survey:
+        seed_survey(cards, rng, log)
+    seed_reviews(cards, institutions, log)
 
+
+def seed_survey(cards, rng, log=print):
     now = get_timestamp()
     rows = survey_rows(cards[:SURVEY_INCIDENTS], rng, now)
     insert = (
@@ -117,16 +123,28 @@ def seed(log=print):
         _write_input([(insert, list(r)) for r in rows[start : start + 200]])
     log(f"Survei: {len(rows)} jawaban untuk {SURVEY_INCIDENTS} incident")
 
+
+def seed_reviews(cards, institutions=None, log=print):
     passwords = json.loads(os.environ.get("PORTAL_PASSWORDS") or "{}")
     if not passwords:
         log("PORTAL_PASSWORDS kosong; keputusan lembaga dilewati.")
         return
     saved = 0
+    sessions = {}
+    from csais.survey import fetch_rows
+
+    done = {row[0] for row in fetch_rows(f"SELECT incident_id FROM official_reviews WHERE reason_text LIKE '{DEMO_NOTE}%'") or []}
     for inst, card, (status, reason, target_wrong) in pick_reviews(cards[SURVEY_INCIDENTS:]):
-        session = requests.Session()
-        login = session.post(f"{PORTAL_URL}/api/portal/login", json={"institution": inst, "password": passwords.get(inst, "")}, timeout=60)
-        if login.status_code != 200:
-            log(f"   ⚠️ {inst}: gagal masuk ({login.status_code})")
+        if (institutions and inst not in institutions) or card[0] in done:
+            continue
+        if inst not in sessions:  # satu kali masuk per lembaga (portal membatasi percobaan masuk)
+            session = requests.Session()
+            login = session.post(f"{PORTAL_URL}/api/portal/login", json={"institution": inst, "password": passwords.get(inst, "")}, timeout=60)
+            sessions[inst] = session if login.status_code == 200 else None
+            if login.status_code != 200:
+                log(f"   ⚠️ {inst}: gagal masuk ({login.status_code})")
+        session = sessions[inst]
+        if session is None:
             continue
         body = {
             "incident_id": card[0], "output_id": int(card[1]), "status": status, "reason": reason,
