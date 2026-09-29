@@ -92,3 +92,15 @@ def test_fill_unknown_only_fills_blanks(temp_conn):
     assert (target, actor, attack, method) == ("BSI", "LockBit", "RANSOMWARE", "RULE_BASED+LLM")  # pelaku aturan tidak ditimpa
     assert json.loads(confidence)["target"] == llm_extraction.FILL_CONFIDENCE
     assert llm_extraction.fill_unknown(temp_conn) == 0
+
+
+def test_json_in_reasoning_content_when_content_empty():
+    class Session(FakeSession):
+        def post(self, url, json=None, headers=None, timeout=None):
+            self.payloads.append(json)
+            body = {"choices": [{"message": {"content": "", "reasoning_content": '{"is_incident": false, "attack_types": [], "target": null, "threat_actor": null, "attack_date": null, "location": null, "target_groups": [], "confidence": 0.2}'}}]}
+            return FakeResponse(200, body)
+
+    client = llm.LLMClient(session=Session(), base_url="http://x/v1", model="qwen")
+    result, _ = llm_extraction.extract(client, "Judul", "Ringkasan")
+    assert result["is_incident"] is False and result["confidence"] == 0.2

@@ -26,7 +26,7 @@ from csais.config import PROJECT_ROOT
 from csais.db import get_connection, get_timestamp
 from csais.schema import record_run
 
-PROMPT_VERSION = "llm-extract-v1"
+PROMPT_VERSION = "llm-extract-v2"
 FILL_CONFIDENCE = 0.7  # keyakinan kolom yang diisi LLM (aturan: 0.5 - 1.0)
 
 with open(os.path.join(PROJECT_ROOT, "csais", "data", "extraction_keywords.json"), encoding="utf-8") as _fh:
@@ -54,7 +54,7 @@ SCHEMA = {
 SYSTEM_PROMPT = f"""Anda analis intelijen serangan siber. Dari judul dan ringkasan berita, isi kartu inti incident.
 Aturan:
 - Isi hanya dari teks yang diberikan. Jangan menebak; pakai null atau [] bila tidak disebut.
-- is_incident: true bila berita melaporkan serangan, kebocoran, atau penipuan siber yang konkret (bukan tips umum, opini, atau ulasan produk).
+- is_incident: true hanya bila berita melaporkan kejadian konkret: serangan, kebocoran, atau penipuan siber yang sudah terjadi pada korban atau pihak tertentu, atau penangkapan/penindakan pelakunya. false untuk imbauan dan peringatan umum ("waspada link video viral berisi phishing", "jangan klik tautan ..."), statistik atau tren ("ratusan ribu malware incar ..."), tips keamanan, opini, ulasan produk, dan berita kebijakan tanpa kejadian tertentu.
 - attack_types: 1-3 kategori paling tepat dari daftar: {", ".join(ATTACK_TYPES)}. Pakai CYBER_ATTACK hanya bila jenisnya tidak jelas.
 - target: nama organisasi atau pihak yang menjadi korban, seperti tertulis (misalnya "Bank Syariah Indonesia"). null bila korban umum atau tidak disebut.
 - threat_actor: nama kelompok atau pelaku yang disebut (misalnya "LockBit"). null bila tidak disebut; jangan isi dengan kata umum seperti "hacker".

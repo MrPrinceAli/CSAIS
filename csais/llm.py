@@ -12,7 +12,9 @@ Server" di tab Developer. Semua pengaturan lewat variabel lingkungan (.env):
 
 Model Qwen dapat menulis blok ``<think>...</think>`` sebelum jawabannya, atau
 LM Studio memisahkannya ke ``reasoning_content``; keduanya dibuang sebelum
-JSON dibaca.
+JSON dibaca. Dengan Qwen3.5 di LM Studio, jawaban JSON bisa masuk ke
+``reasoning_content`` sementara ``content`` kosong; kolom itu dipakai bila
+``content`` kosong.
 """
 
 import json
@@ -111,7 +113,12 @@ class LLMClient:
             raise LLMError(f"server LLM {response.status_code}: {response.text[:200]}")
         body = response.json()
         try:
-            content = body["choices"][0]["message"].get("content") or ""
+            message = body["choices"][0]["message"]
         except (KeyError, IndexError) as error:
             raise LLMError(f"jawaban server tidak dikenal: {body}") from error
+        content = message.get("content") or ""
+        if not content.strip():
+            # LM Studio + Qwen3.5: dengan response_format, jawaban JSON kadang
+            # masuk ke kolom penalaran dan content kosong
+            content = message.get("reasoning_content") or message.get("reasoning") or ""
         return parse_json_text(content), body.get("usage") or {}

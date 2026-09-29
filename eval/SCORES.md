@@ -73,3 +73,21 @@ pelaku hanya tertangkap bila namanya ada di daftar (Akira, Lazarus). Keduanya
 bahan gelombang 3 butir 7 dan lanjutan butir 8. Di seluruh korpus, artikel
 Indonesia berlabel RELEVANT naik dari 69 menjadi 1.206 setelah kosakata
 ditambah.
+
+## LLM lokal (LM Studio, qwen/qwen3.5-9b) - sampel awal 2026-09-29
+
+`python eval/score_llm.py --limit 30` (30 baris pertama per berkas; sampel kecil,
+angka sementara). Kolom "aturan" = v03_target / v03_threat_actor yang tersimpan
+di berkas label saat label dibuat.
+
+| Berkas | Ukuran | Aturan P/R/F1 | LLM v1 | LLM v2 |
+|---|---|---|---|---|
+| labels.csv (en) | Target | 1.00/0.07/0.13 | 0.63/0.86/0.73 | 0.69/0.79/0.73 |
+| labels.csv (en) | Pelaku | 1.00/0.20/0.33 | 1.00/0.20/0.33 | 1.00/0.20/0.33 |
+| labels.csv (en) | Incident | - | 0.92/0.92/0.92 | 1.00/0.67/0.80 |
+| labels_id.csv (id) | Incident | - | 0.25/1.00/0.40 | 1.00/0.75/0.86 |
+
+Sampel Indonesia hanya berisi 4 artikel relevan tanpa label target/pelaku, jadi
+skor target/pelakunya belum bermakna. Prompt v2 menambahkan aturan bahwa imbauan
+dan peringatan umum ("waspada link video viral ...") bukan incident; v1
+menganggapnya incident. Rata-rata sekitar 4 detik per artikel.
