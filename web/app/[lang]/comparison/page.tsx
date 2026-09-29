@@ -8,6 +8,9 @@ import { SectionTitle } from "@/components/ui";
 
 type Params = { lang: string };
 
+// Metrik dihitung pipeline sekali sehari; tanpa ini halaman dirender statis saat build
+export const revalidate = 3600;
+
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { lang } = await params;
   return { title: getDict(isLang(lang) ? lang : "id").comparison.title };
