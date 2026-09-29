@@ -26,6 +26,7 @@ export type IncidentRow = {
   domain_list: string | null; // domain sumber dipisah koma (untuk tumpukan logo)
   alert_tier: string | null; // status peringatan terkini (incident_tiers)
   alert_institution: string | null;
+  alert_demo: number | null; // 1 bila status berasal dari data uji
 } & StoredTrust;
 
 /* --- Keberadaan tabel ---
@@ -97,12 +98,16 @@ export const getOverview = cache(async (): Promise<Overview> => {
 const TRUST_COLUMNS = `t.score AS trust_score, t.level AS trust_level, t.corroboration AS trust_corroboration,
          t.independence AS trust_independence, t.claim AS trust_claim, t.content AS trust_content,
          t.clustering AS trust_clustering`;
+// Kolom verifikasi (V0.7 Verifikasi) ada di Turso setelah pipeline versi baru terbit
+const VERIFICATION_COLUMNS = `t.machine_score AS trust_machine, t.verification AS trust_verification,
+         t.verification_weight AS trust_verification_weight, t.verification_source AS trust_verification_source`;
+const NO_VERIFICATION_COLUMNS = `NULL AS trust_machine, NULL AS trust_verification, NULL AS trust_verification_weight, NULL AS trust_verification_source`;
 const NO_TRUST_COLUMNS = `NULL AS trust_score, NULL AS trust_level, NULL AS trust_corroboration,
          NULL AS trust_independence, NULL AS trust_claim, NULL AS trust_content, NULL AS trust_clustering`;
 
 /** SELECT incident beserta skor V0.7 bila tabel v07_trust sudah diterbitkan. */
 async function incidentSelect(): Promise<string> {
-  const [withTrust, withTiers] = await Promise.all([hasTable("v07_trust"), hasTable("incident_tiers")]);
+  const [withTrust, withTiers, withVerification] = await Promise.all([hasTable("v07_trust"), hasTable("incident_tiers"), hasColumn("v07_trust", "verification_source")]);
   return `
   SELECT i.incident_id, i.attack_type, i.target, i.threat_actor, i.location, i.attack_date,
          i.document_count, i.incident_confidence, i.anchor_article_id, i.anchor_published_date,
@@ -111,7 +116,8 @@ async function incidentSelect(): Promise<string> {
          (SELECT AVG(e.evidence_independence_score) FROM v06_evidence e WHERE e.incident_id = i.incident_id) AS independence,
          (SELECT GROUP_CONCAT(DISTINCT e.source_domain) FROM v06_evidence e WHERE e.incident_id = i.incident_id AND e.source_domain != '' AND e.source_domain NOT LIKE '%google.%') AS domain_list,
          ${withTrust ? TRUST_COLUMNS : NO_TRUST_COLUMNS},
-         ${withTiers ? "it.tier AS alert_tier, it.institution AS alert_institution" : "NULL AS alert_tier, NULL AS alert_institution"}
+         ${withTrust && withVerification ? VERIFICATION_COLUMNS : NO_VERIFICATION_COLUMNS},
+         ${withTiers ? `it.tier AS alert_tier, it.institution AS alert_institution, ${(await hasColumn("incident_tiers", "demo")) ? "it.demo" : "0"} AS alert_demo` : "NULL AS alert_tier, NULL AS alert_institution, 0 AS alert_demo"}
   FROM v05_incidents i
   LEFT JOIN articles a ON a.article_id = i.anchor_article_id
   ${withTrust ? "LEFT JOIN v07_trust t ON t.incident_id = i.incident_id" : ""}
@@ -666,6 +672,7 @@ export type VerifyRecord = {
   hash_matches: boolean; // isi baris saat ini menghasilkan output_hash yang sama
   ledger: LedgerProof | null;
   signature: (SignatureCheck & { institution: string }) | null; // tanda tangan EIP-712 lembaga (portal)
+  demo: boolean; // catatan dari data uji
 };
 
 export type VerifyResult = {
@@ -779,8 +786,11 @@ async function verifyRecord(uid: string): Promise<VerifyRecord | null> {
     [row.incident_id],
   );
   let signature: VerifyRecord["signature"] = null;
+  let demo = false;
   try {
-    const signed = (JSON.parse(String(row.basis ?? "{}")) as { signed?: SignedDecision }).signed;
+    const basis = JSON.parse(String(row.basis ?? "{}")) as { signed?: SignedDecision; demo?: boolean };
+    demo = Boolean(basis.demo);
+    const signed = basis.signed;
     if (signed?.signature) signature = { ...(await checkDecision(signed)), institution: signed.message.institution };
   } catch {
     signature = null;
@@ -806,6 +816,7 @@ async function verifyRecord(uid: string): Promise<VerifyRecord | null> {
     hash_matches: matches,
     ledger,
     signature,
+    demo,
   };
 }
 
@@ -1048,6 +1059,7 @@ export type IncidentTier = {
   target_group: string | null;
   review_note: string | null;
   updated_at: string;
+  demo?: number | null;
 };
 
 /** Status peringatan terkini satu incident (csais/flows.py record_tiers). */

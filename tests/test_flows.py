@@ -54,7 +54,7 @@ def _pipeline_tables(conn):
         """)
     v07_trust_score.create_tables(conn)
     conn.execute(
-        "INSERT INTO v07_trust VALUES ('INC-A', 0.5, 'sedang', 0, 0, 0, 0, 0, 2, 2, 'v', 't')"
+        "INSERT INTO v07_trust (incident_id, score, level, corroboration, independence, claim, content, clustering, document_count, domain_count, pipeline_version, computed_at) VALUES ('INC-A', 0.5, 'sedang', 0, 0, 0, 0, 0, 2, 2, 'v', 't')"
     )
     conn.commit()
 

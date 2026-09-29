@@ -58,8 +58,11 @@ const id = {
       clustering: "Konsistensi pengelompokan",
     },
     legend:
-      "Indeks kepercayaan awal dihitung dari lima sinyal: jumlah domain berbeda yang memberitakan, independensi antar artikel, kejelasan nama korban, ketersediaan teks penuh, dan konsistensi pengelompokan. Indeks resmi akan menambahkan riwayat sumber dan atestasi lembaga.",
+      "Indeks kepercayaan awal dihitung dari lima sinyal: jumlah domain berbeda yang memberitakan, independensi antar artikel, kejelasan nama korban, ketersediaan teks penuh, dan konsistensi pengelompokan. Setelah ada hasil survei publik atau keputusan lembaga, skor akhir digeser: keputusan lembaga berbobot 60%, survei publik 25%.",
     computedBy: { pipeline: "dihitung pipeline (V0.7)", web: "perkiraan halaman" },
+    final: "terverifikasi",
+    verified: { D4: "Diverifikasi keputusan lembaga (D4)", D2: "Diverifikasi survei publik (D2)" } as Record<"D2" | "D4", string>,
+    shift: (machine: string, final: string, weight: number) => `skor mesin ${machine} → akhir ${final} (bobot verifikasi ${weight}%)`,
   },
   roles: { first: "Laporan pertama", independent: "Independen", syndicated: "Sindikasi", duplicate: "Duplikat", single: "Sumber tunggal" },
   relations: {
@@ -237,6 +240,7 @@ const id = {
     summary: "Ringkasan semua incident",
     verifyRecord: "Verifikasi catatan di ledger",
   },
+  demo: { label: "DATA UJI", hint: "Data contoh untuk pengujian alur, bukan jawaban publik atau keputusan lembaga yang sebenarnya." },
   alerts: {
     title: "Peringatan dan langkah pencegahan",
     lead: "Status terkini tiap incident: dibantah atau dikonfirmasi lembaga resmi, sudah dicek publik, atau masih peringatan dini dari mesin. Setiap kartu memuat langkah pencegahan dan kanal pelaporan.",
@@ -526,8 +530,11 @@ const en: Dict = {
       clustering: "Clustering consistency",
     },
     legend:
-      "The preliminary confidence index combines five signals: distinct reporting domains, independence between articles, clarity of the victim name, availability of full text, and clustering consistency. The final index will add source history and institutional attestations.",
+      "The preliminary confidence index combines five signals: distinct reporting domains, independence between articles, clarity of the victim name, availability of full text, and clustering consistency. Once public survey results or an institution decision exist, the final score shifts: institution decisions weigh 60%, the public survey 25%.",
     computedBy: { pipeline: "computed by the pipeline (V0.7)", web: "page estimate" },
+    final: "verified",
+    verified: { D4: "Verified by an institution decision (D4)", D2: "Verified by the public survey (D2)" },
+    shift: (machine, final, weight) => `machine score ${machine} → final ${final} (verification weight ${weight}%)`,
   },
   roles: { first: "First report", independent: "Independent", syndicated: "Syndicated", duplicate: "Duplicate", single: "Single source" },
   relations: {
@@ -705,6 +712,7 @@ const en: Dict = {
     summary: "Summary across incidents",
     verifyRecord: "Verify this record in the ledger",
   },
+  demo: { label: "TEST DATA", hint: "Sample data for testing the flow, not real public answers or institution decisions." },
   alerts: {
     title: "Warnings and preventive steps",
     lead: "The current status of each incident: refuted or confirmed by an official institution, checked by the public, or still an early warning from the machine. Every card lists preventive steps and where to report.",

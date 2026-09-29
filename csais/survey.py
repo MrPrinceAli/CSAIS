@@ -34,6 +34,7 @@ SURVEY_FIELDS = ("attack_type", "target", "threat_actor", "attack_date", "locati
 ANSWERS = ("sesuai", "tidak_sesuai", "tidak_tahu")
 MIN_DECISIVE = 3
 AGREEMENT = 2 / 3
+DEMO_PREFIX = "demo-"  # responden data uji (scripts/seed_demo.py); ditandai "DATA UJI" di web
 
 # Skema di database survei; web (web/lib/survey.ts) membuat tabel yang sama
 SURVEY_SCHEMA = """
@@ -144,7 +145,7 @@ def d2_rows(cards, responses):
     for incident_id, answers in grouped.items():
         card = cards[incident_id]
         counts = {field: {} for field in SURVEY_FIELDS}
-        respondents, matched, ignored = set(), 0, 0
+        respondents, matched, ignored, demo = set(), 0, 0, 0
         for field, shown, answer, respondent in answers:
             if (shown or None) != card.get(field):
                 ignored += 1
@@ -153,6 +154,7 @@ def d2_rows(cards, responses):
             counts[field][answer] = counts[field].get(answer, 0) + 1
             if respondent:
                 respondents.add(respondent)
+                demo += str(respondent).startswith(DEMO_PREFIX)
         if not matched:
             continue
         verdicts = {field: decide(counts[field]) for field in SURVEY_FIELDS if counts[field]}
@@ -175,6 +177,7 @@ def d2_rows(cards, responses):
                 "ignored_old_card": ignored,
                 "counts": {field: c for field, c in counts.items() if c},
                 "rule": {"min_decisive": MIN_DECISIVE, "agreement": round(AGREEMENT, 4)},
+                **({"demo": True, "demo_responses": demo} if demo else {}),
             },
             "source_ref": "survey",
         }

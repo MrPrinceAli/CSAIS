@@ -5,7 +5,7 @@ import Link from "next/link";
 import { attackLabel, getDict, groupLabel, L, type Lang } from "@/lib/i18n";
 import { channelOf, tipText } from "@/lib/prevention";
 import { recordUid } from "@/lib/records";
-import { SectionTitle } from "@/components/ui";
+import { DemoChip, SectionTitle } from "@/components/ui";
 
 const FLOWS = ["D1", "D2", "D3", "D4"] as const;
 const FIELDS = ["attack_type", "target", "threat_actor", "attack_date", "location", "target_group"] as const;
@@ -124,6 +124,7 @@ export function FlowCompare({ lang, incidentId, outputs }: { lang: Lang; inciden
                     </span>
                     <span className="text-[13px] text-fg">{t.flows.names[flow]}</span>
                     <span className="text-[11.5px] font-normal text-muted">{latest[flow] ? f.date(latest[flow].recorded_at) : t.flows.empty}</span>
+                    {parse<{ demo?: boolean }>(latest[flow]?.basis ?? null)?.demo ? <DemoChip lang={lang} /> : null}
                     {flow === "D2" ? (
                       <Link href={`${L(lang, "/survey")}?id=${encodeURIComponent(incidentId)}`} className="text-[11.5px] font-normal">
                         {t.flows.judge}

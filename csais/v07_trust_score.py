@@ -16,9 +16,14 @@ Lima sinyal (bobot), semua dalam rentang 0..1:
   clustering    0,10  incident_confidence V0.5
 Tingkat: tinggi >= 0,72; sedang >= 0,45; selain itu rendah.
 
-Bukan indeks Step 3 yang final (itu akan menambah riwayat sumber dan atestasi
-lembaga); gunanya membedakan incident yang dikuatkan banyak sumber dari yang
-hanya satu artikel. Seluruh incident dihitung ulang setiap run karena semua
+Skor di atas adalah skor mesin (``machine_score``). Setelah alur D2 - D4
+selesai, ``apply_verification`` menggeser skor akhir dengan verifikasi:
+  skor = (1 - b) * skor mesin + b * verifikasi
+  D4 dikonfirmasi lembaga  verifikasi 1,0  b 0,60
+  D4 dibantah lembaga      verifikasi 0,0  b 0,60
+  D2 survei publik         verifikasi = porsi jawaban sesuai  b 0,25
+  belum diverifikasi       b 0 (skor = skor mesin)
+D1 tetap memakai tingkat skor mesin agar perbandingan antar alur adil. Seluruh incident dihitung ulang setiap run karena semua
 masukannya bisa berubah (artikel baru, isi terambil, ekstraksi ulang).
 """
 
@@ -27,7 +32,7 @@ from itertools import groupby
 
 from csais.db import get_connection, get_timestamp
 from csais.provenance import pipeline_stamp
-from csais.schema import record_run
+from csais.schema import ensure_column, record_run
 from csais.sources import AGGREGATOR_HOSTS, publisher_domains, source_identity
 
 WEIGHTS = {
@@ -41,6 +46,14 @@ SINGLE_SOURCE_INDEPENDENCE = 0.35  # artikel tunggal: tidak ada pasangan untuk d
 LEVEL_HIGH = 0.72
 LEVEL_MEDIUM = 0.45
 PARTS = tuple(WEIGHTS)
+OFFICIAL_WEIGHT = 0.60
+PUBLIC_WEIGHT = 0.25
+VERIFICATION_COLUMNS = (
+    ("machine_score", "REAL"),
+    ("verification", "REAL"),
+    ("verification_weight", "REAL"),
+    ("verification_source", "TEXT"),
+)
 
 
 def _clamp(value):
@@ -59,8 +72,7 @@ def score_incident(independence, domains, docs, target_confidence, content_share
     if docs >= 2 and independence is None:
         parts["independence"] = 0.0
     score = sum(parts[key] * WEIGHTS[key] for key in PARTS)
-    level = "tinggi" if score >= LEVEL_HIGH else "sedang" if score >= LEVEL_MEDIUM else "rendah"
-    return {"score": round(score, 4), "level": level, "parts": parts}
+    return {"score": round(score, 4), "level": level_of(score), "parts": parts}
 
 
 # --- Database ---
@@ -83,6 +95,8 @@ def create_tables(conn):
         )
         """)
     conn.commit()
+    for column, definition in VERIFICATION_COLUMNS:
+        ensure_column(conn, "v07_trust", column, definition)
 
 
 _DOCUMENT_SQL = """
@@ -178,13 +192,85 @@ def compute_all(conn):
         """
         INSERT INTO v07_trust (
             incident_id, score, level, corroboration, independence, claim, content,
-            clustering, document_count, domain_count, pipeline_version, computed_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            clustering, document_count, domain_count, pipeline_version, computed_at, machine_score
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        rows_out,
+        [row + (row[1],) for row in rows_out],
     )
     conn.commit()
     return len(rows_out)
+
+
+def level_of(score):
+    return "tinggi" if score >= LEVEL_HIGH else "sedang" if score >= LEVEL_MEDIUM else "rendah"
+
+
+def verification_signal(d2, d4):
+    """(nilai, bobot, sumber) verifikasi dari snapshot D2/D4 terakhir; None bila belum ada."""
+    if d4 and d4.get("tier") == "rekomendasi_resmi":
+        return 1.0, OFFICIAL_WEIGHT, "D4"
+    if d4 and d4.get("tier") == "peringatan_hoaks":
+        return 0.0, OFFICIAL_WEIGHT, "D4"
+    if d2 and d2.get("status") in ("sesuai", "tidak_sesuai"):
+        try:
+            counts = json.loads(d2.get("basis") or "{}").get("counts", {})
+        except ValueError:
+            counts = {}
+        agree = sum(c.get("sesuai", 0) for c in counts.values())
+        decisive = agree + sum(c.get("tidak_sesuai", 0) for c in counts.values())
+        if decisive:
+            return round(agree / decisive, 4), PUBLIC_WEIGHT, "D2"
+    return None
+
+
+def apply_verification(conn):
+    """Geser skor akhir v07_trust dengan verifikasi D2/D4; kembalikan jumlah incident yang tergeser."""
+    from csais.official import latest_rows
+
+    create_tables(conn)
+    exists = conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'flow_outputs'").fetchone()
+    d2 = latest_rows(conn, "D2") if exists else {}
+    d4 = latest_rows(conn, "D4") if exists else {}
+    rows = conn.execute("SELECT incident_id, COALESCE(machine_score, score) FROM v07_trust").fetchall()
+    updates, shifted = [], 0
+    for incident_id, machine in rows:
+        signal = verification_signal(d2.get(incident_id), d4.get(incident_id))
+        if signal:
+            value, weight, source = signal
+            final = round((1 - weight) * machine + weight * value, 4)
+            shifted += 1
+        else:
+            value = weight = source = None
+            final = machine
+        updates.append((final, level_of(final), machine, value, weight, source, incident_id))
+    conn.executemany(
+        """
+        UPDATE v07_trust SET score = ?, level = ?, machine_score = ?, verification = ?,
+            verification_weight = ?, verification_source = ? WHERE incident_id = ?
+        """,
+        updates,
+    )
+    conn.commit()
+    return shifted
+
+
+def verification_run():
+    """Tahap pipeline: skor akhir = skor mesin digeser verifikasi publik dan lembaga."""
+    print("\n==================================================")
+    print("   V0.7 VERIFIKASI - SKOR AKHIR")
+    print("==================================================")
+    started_at = get_timestamp()
+    conn = get_connection()
+    try:
+        shifted = apply_verification(conn)
+        summary = level_summary(conn)
+        record_run(conn, "v07_verification", started_at, shifted)
+    finally:
+        conn.close()
+    print(f"Incident tergeser verifikasi: {shifted}")
+    for level in ("tinggi", "sedang", "rendah"):
+        print(f"   {level:8s} {summary.get(level, 0)}")
+    print("==================================================")
 
 
 def level_summary(conn):

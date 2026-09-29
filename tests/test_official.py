@@ -208,3 +208,41 @@ def test_tier_priority(temp_conn):
     flows.record_tiers(temp_conn, now="t")
     note = temp_conn.execute("SELECT tier, review_note FROM incident_tiers WHERE incident_id = 'INC-B'").fetchone()
     assert note == ("waspada", "BSSN")
+
+
+def test_trust_shifted_by_verification(temp_conn):
+    from csais import survey, v07_trust_score as v07
+
+    _pipeline_tables(temp_conn)
+    temp_conn.execute("INSERT INTO v07_trust (incident_id, score, level, corroboration, independence, claim, content, clustering, document_count, domain_count, pipeline_version, computed_at, machine_score) VALUES ('INC-B', 0.8, 'tinggi', 0, 0, 0, 0, 0, 1, 1, 'v', 't', 0.8)")
+    temp_conn.execute("UPDATE v07_trust SET machine_score = 0.5 WHERE incident_id = 'INC-A'")
+    temp_conn.commit()
+    flows.record_d1(temp_conn)
+    assert v07.apply_verification(temp_conn) == 0
+    official.record_official(temp_conn, [BASE])  # INC-A dikonfirmasi OJK
+    survey.record_d2(temp_conn, [("INC-B", "threat_actor", "LockBit", "tidak_sesuai", f"r{i}") for i in range(3)])
+    assert v07.apply_verification(temp_conn) == 2
+    rows = dict((r[0], r[1:]) for r in temp_conn.execute("SELECT incident_id, score, level, verification_source FROM v07_trust"))
+    assert rows["INC-A"] == (round(0.4 * 0.5 + 0.6, 4), "tinggi", "D4")
+    assert rows["INC-B"] == (round(0.75 * 0.8, 4), "sedang", "D2")  # 0 dari 3 jawaban sesuai
+    assert v07.apply_verification(temp_conn) == 2  # idempoten: dihitung dari machine_score
+    assert temp_conn.execute("SELECT score FROM v07_trust WHERE incident_id = 'INC-A'").fetchone()[0] == 0.8
+    official.record_official(temp_conn, [BASE, {**BASE, "statement_id": "OJK-9", "statement_date": "2026-09-30", "status": "dibantah", "reason": "Hoaks."}])
+    v07.apply_verification(temp_conn)
+    assert temp_conn.execute("SELECT score, level FROM v07_trust WHERE incident_id = 'INC-A'").fetchone() == (0.2, "rendah")
+
+
+def test_demo_flag_and_purge(temp_conn):
+    from csais import survey
+
+    _pipeline_tables(temp_conn)
+    flows.record_d1(temp_conn)
+    survey.record_d2(temp_conn, [("INC-B", "threat_actor", "LockBit", "sesuai", f"demo-{i}") for i in range(3)])
+    demo_review = REVIEW[:5] + ("DATA UJI: contoh.",) + REVIEW[6:]
+    official.record_official(temp_conn, official.review_rows([demo_review]))
+    counts = flows.record_tiers(temp_conn, now="t")
+    assert counts == {"rekomendasi_resmi": 1, "waspada": 1}
+    assert temp_conn.execute("SELECT COUNT(*) FROM incident_tiers WHERE demo = 1").fetchone()[0] == 2
+    assert json.loads(_latest(temp_conn, "INC-B", "D2")["basis"])["demo_responses"] == 3
+    assert flows.purge_demo_outputs(temp_conn) == 3  # D2, D3, D4
+    assert flows.record_tiers(temp_conn, now="t") == {"peringatan_dini": 2}

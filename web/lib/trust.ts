@@ -20,7 +20,9 @@ export type TrustPartKey = "corroboration" | "independence" | "claim" | "content
 export type TrustPart = { key: TrustPartKey; value: number; weight: number };
 export type TrustLevel = "tinggi" | "sedang" | "rendah";
 export type TrustSource = "pipeline" | "web";
-export type Trust = { score: number; level: TrustLevel; parts: TrustPart[]; source: TrustSource };
+/** Pergeseran skor oleh verifikasi (V0.7 Verifikasi): skor = (1 - weight) * machine + weight * value. */
+export type TrustVerification = { machine: number; value: number; weight: number; source: "D2" | "D4" };
+export type Trust = { score: number; level: TrustLevel; parts: TrustPart[]; source: TrustSource; verification?: TrustVerification | null };
 
 const W: Record<TrustPartKey, number> = { corroboration: 0.3, independence: 0.3, claim: 0.2, content: 0.1, clustering: 0.1 };
 const KEYS: TrustPartKey[] = ["corroboration", "independence", "claim", "content", "clustering"];
@@ -50,6 +52,10 @@ export type StoredTrust = {
   trust_claim: number | null;
   trust_content: number | null;
   trust_clustering: number | null;
+  trust_machine?: number | null;
+  trust_verification?: number | null;
+  trust_verification_weight?: number | null;
+  trust_verification_source?: string | null;
 };
 
 /** Skor hasil pipeline bila tersimpan; null bila incident belum dinilai V0.7. */
@@ -64,7 +70,16 @@ export function trustFromStored(row: Partial<StoredTrust>): Trust | null {
     clustering: Number(row.trust_clustering ?? 0),
   };
   const level = (row.trust_level as TrustLevel | null) ?? levelOf(score);
-  return { score, level, parts: KEYS.map((key) => ({ key, value: values[key], weight: W[key] })), source: "pipeline" };
+  const verification =
+    row.trust_verification !== null && row.trust_verification !== undefined && (row.trust_verification_source === "D2" || row.trust_verification_source === "D4")
+      ? {
+          machine: Number(row.trust_machine ?? score),
+          value: Number(row.trust_verification),
+          weight: Number(row.trust_verification_weight ?? 0),
+          source: row.trust_verification_source as "D2" | "D4",
+        }
+      : null;
+  return { score, level, parts: KEYS.map((key) => ({ key, value: values[key], weight: W[key] })), source: "pipeline", verification };
 }
 
 /** Versi ringkas untuk baris tabel: skor pipeline bila ada, selain itu perkiraan dari kolom baris. */

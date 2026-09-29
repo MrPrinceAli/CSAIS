@@ -117,6 +117,15 @@ resmi atau peringatan hoaks) lebih dulu, lalu D2 yang dinyatakan sesuai
 kanal pelaporan. Status ini tampil sebagai lencana di kartu incident, blok
 pencegahan di detail incident, dan halaman publik `/alerts`.
 
+Indeks kepercayaan akhir (V0.7 Verifikasi) = skor mesin digeser verifikasi:
+keputusan lembaga D4 berbobot 60% (dikonfirmasi 1, dibantah 0), survei publik D2
+berbobot 25% (porsi jawaban sesuai). D1 tetap memakai skor mesin.
+
+Data uji untuk melihat alurnya: `PORTAL_PASSWORDS='{"BSSN": "...", ...}' python
+main.py --seed-demo` (survei tiruan ke database masukan dan keputusan tiruan
+lewat portal, semuanya berlabel DATA UJI). Hapus dengan `python main.py
+--purge-demo` lalu jalankan workflow dengan input `purge_demo`.
+
 Web menampilkan snapshot terakhir tiap alur di halaman detail incident dan
 ringkasan metrik semua incident di `/comparison`; laporan Markdown dan CSV tiap
 run juga diunggah sebagai artefak Actions (`flow-report-*`, 90 hari).

@@ -36,6 +36,10 @@ on:
       reset_from:
         description: "Proses ulang mulai tahap V0.N (2-7); kosongkan bila tidak"
         default: ""
+      purge_demo:
+        description: "Hapus keluaran D2 - D4 data uji (DATA UJI) sebelum pipeline"
+        type: boolean
+        default: false
       refresh_bootstrap:
         description: "Unggah database ke rilis bootstrap pada run ini"
         type: boolean
@@ -109,7 +113,11 @@ jobs:
             RESET="--reset-from $RESET_FROM --yes"
             echo "::notice::Proses ulang mulai tahap V0.$RESET_FROM"
           fi
-          python main.py --crawl \
+          PURGE=""
+          if [ "${{ github.event.inputs.purge_demo }}" = "true" ]; then
+            PURGE="--purge-demo"
+          fi
+          python main.py --crawl $PURGE \
             --fetch-budget "${{ github.event.inputs.fetch_budget || '300' }}" \
             --image-budget "${{ github.event.inputs.image_budget || '120' }}" \
             $RESET $PUBLISH

@@ -28,6 +28,7 @@ from csais import (
     chain,
     content_fetcher,
     crawler,
+    demo,
     export,
     flow_compare,
     flows,
@@ -65,6 +66,7 @@ PIPELINE_STEPS = [
     ("Alur D1 - Keluaran Mesin", flows.run),
     ("Alur D2 - Survei Publik", survey.run),
     ("Alur D3/D4 - Pernyataan Lembaga", official.run),
+    ("V0.7 Verifikasi - Skor Akhir", v07_trust_score.verification_run),
     ("Status Peringatan per Incident", flows.tiers_run),
     ("Ledger - Batch Merkle Bukti", ledger.run),
     ("Metrik Perbandingan Alur", flow_compare.run),
@@ -177,6 +179,17 @@ def parse_args():
         help="jumlah artikel per --llm-extract (default 100)",
     )
     parser.add_argument(
+        "--seed-demo",
+        action="store_true",
+        help="isi data uji survei dan keputusan lembaga (ditandai DATA UJI), lalu keluar",
+    )
+    parser.add_argument(
+        "--purge-demo",
+        action="store_true",
+        help="hapus data uji (database masukan bila ada token tulis, dan keluaran D2 - D4 demo); "
+        "tanpa --no-crawl dsb. pipeline tetap berjalan sesudahnya",
+    )
+    parser.add_argument(
         "--chain-deploy",
         action="store_true",
         help="pasang kontrak CsaisAnchor di jaringan lokal (CHAIN_RPC_URL), lalu keluar",
@@ -239,6 +252,10 @@ def main():
         print(f"Selesai: {total} incident ditulis.")
         return
 
+    if args.seed_demo:
+        demo.seed()
+        return
+
     if args.llm_check:
         llm_extraction.run_check()
         return
@@ -279,6 +296,9 @@ def main():
     if args.publish_only:
         publish.run()
         return
+
+    if args.purge_demo:
+        demo.purge()
 
     if args.reset or args.reset_from:
         from_stage = args.reset_from or 2

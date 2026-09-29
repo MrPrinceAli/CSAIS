@@ -43,6 +43,7 @@ COLUMNS = (
     "location", "prevention_text", "prevention_keys", "recorded_by",
 )
 STATUSES = ("dikonfirmasi", "dibantah", "sebagian")
+DEMO_NOTE = "DATA UJI"  # catatan keputusan data uji (scripts/seed_demo.py)
 INSTITUTION_NAMES = {"BSSN": "BSSN", "OJK": "OJK", "KOMDIGI": "Komdigi", "POLRI": "Siber Polri"}
 # Teks alasan pilihan portal; sama dengan portal.reasons di web/lib/i18n.ts
 REASON_TEXT = {
@@ -148,6 +149,7 @@ def review_rows(rows):
             "field_status": {k: v for k, v in marks.items() if k in SURVEY_FIELDS and v in ("dikonfirmasi", "dibantah")},
             "institution_code": institution,
             "signed": signed,
+            "demo": bool(note and note.strip().upper().startswith(DEMO_NOTE)),
         })
     return statements
 
@@ -227,6 +229,7 @@ def d3_row(card, statement, items):
             "institutions": sorted({r["institution"] for r in items}),
             # tanda tangan EIP-712 lembaga (portal); ikut output_hash dan batch Merkle
             **({"signed": statement["signed"]} if statement.get("signed") else {}),
+            **({"demo": True} if statement.get("demo") else {}),
         },
         "source_ref": statement["source_url"],
         "reason": statement["reason"],

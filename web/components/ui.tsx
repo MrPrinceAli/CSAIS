@@ -117,7 +117,7 @@ export function IncidentCard({ row, lang, index = 0, thumb = false }: { row: Inc
         <span className={`text-[14px] font-semibold ${thumb ? "line-clamp-2 leading-snug" : "truncate"}`}>{incidentTitle(row.title)}</span>
         <span className="flex min-w-0 items-center gap-2">
           <LogoStack domains={domains} />
-          <TierBadge tier={row.alert_tier} lang={lang} institution={row.alert_institution} quiet />
+          <TierBadge tier={row.alert_tier} lang={lang} institution={row.alert_institution} demo={Boolean(row.alert_demo)} quiet />
           <TypeChip attackType={row.attack_type} lang={lang} />
           <span className="truncate text-[12.5px] text-muted">
             {f.num(row.document_count)} {t.common.articles} · {f.num(Number(row.domains ?? 0))} {t.common.domains}
@@ -142,7 +142,16 @@ const TIER_TONE: Record<string, string> = {
 };
 
 /** Lencana status peringatan terkini; `quiet` menyembunyikan peringatan dini (tingkat bawaan semua incident). */
-export function TierBadge({ tier, lang, institution, quiet = false, className = "" }: { tier: string | null; lang: Lang; institution?: string | null; quiet?: boolean; className?: string }) {
+/** Penanda data uji (scripts demo); tampil di mana pun data itu muncul. */
+export function DemoChip({ lang }: { lang: Lang }) {
+  return (
+    <span className="inline-flex items-center rounded border border-dashed px-1.5 py-0.5 font-mono text-[10.5px] font-semibold tracking-wide" style={{ borderColor: "var(--muted)", color: "var(--muted)" }} title={getDict(lang).demo.hint}>
+      {getDict(lang).demo.label}
+    </span>
+  );
+}
+
+export function TierBadge({ tier, lang, institution, quiet = false, demo = false, className = "" }: { tier: string | null; lang: Lang; institution?: string | null; quiet?: boolean; demo?: boolean; className?: string }) {
   if (!tier || (quiet && tier === "peringatan_dini")) return null;
   const t = getDict(lang);
   const tone = TIER_TONE[tier] ?? "var(--muted)";
@@ -154,6 +163,7 @@ export function TierBadge({ tier, lang, institution, quiet = false, className = 
       <span className="h-1.5 w-1.5 rounded-full" style={{ background: tone }} aria-hidden="true" />
       {t.flows.tiers[tier] ?? tier}
       {institution ? <span className="font-normal">· {institution}</span> : null}
+      {demo ? <span className="font-mono text-[10px] font-normal opacity-80">· {t.demo.label}</span> : null}
     </span>
   );
 }

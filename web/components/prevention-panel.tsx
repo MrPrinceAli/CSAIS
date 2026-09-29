@@ -2,7 +2,7 @@
 import type { IncidentTier } from "@/lib/queries";
 import { getDict, type Lang } from "@/lib/i18n";
 import { channelOf, tipText } from "@/lib/prevention";
-import { TierBadge } from "@/components/ui";
+import { DemoChip, TierBadge } from "@/components/ui";
 
 const TONE: Record<string, string> = {
   peringatan_dini: "var(--accent)",
@@ -35,6 +35,7 @@ export function PreventionPanel({ tier, lang, compact = false }: { tier: Inciden
         <TierBadge tier={tier.tier} lang={lang} />
         <span className="text-[12.5px] text-soft">{source}</span>
         {tier.review_note ? <span className="chip">{p.underReview(tier.review_note)}</span> : null}
+        {tier.demo ? <DemoChip lang={lang} /> : null}
       </div>
       {tier.reason ? (
         <p className="text-[13.5px] text-fg">

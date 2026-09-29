@@ -325,10 +325,14 @@ def create_tier_table(conn):
             attack_type TEXT,
             target_group TEXT,
             review_note TEXT,
-            updated_at TEXT NOT NULL
+            updated_at TEXT NOT NULL,
+            demo INTEGER NOT NULL DEFAULT 0
         )
         """)
     conn.commit()
+    from csais.schema import ensure_column
+
+    ensure_column(conn, "incident_tiers", "demo", "INTEGER NOT NULL DEFAULT 0")
 
 
 def _latest_full(conn, flow):
@@ -364,6 +368,7 @@ def tier_rows(d1, d2, d3, d4):
             "prevention": base, "trust_level": machine["status"],
             "attack_type": machine.get("attack_type"), "target_group": machine.get("target_group"),
             "review_note": None,
+            "demo": False,
         }
         official = d4.get(incident_id)
         public = d2.get(incident_id)
@@ -379,9 +384,9 @@ def tier_rows(d1, d2, d3, d4):
                     "text": plan.get("text"),
                 }
             row.update(tier=official["tier"], source_flow="D4", institution=basis.get("institution"),
-                       reason=official.get("reason"), prevention=prevention)
+                       reason=official.get("reason"), prevention=prevention, demo=bool(basis.get("demo")))
         elif public and public.get("status") == "sesuai":
-            row.update(tier="waspada", source_flow="D2")
+            row.update(tier="waspada", source_flow="D2", demo=bool(_loads(public.get("basis")).get("demo")))
         review = d3.get(incident_id)
         if review and review.get("status") == "sebagian":
             row["review_note"] = _loads(review.get("basis")).get("institution") or "lembaga"
@@ -399,12 +404,12 @@ def record_tiers(conn, now=None):
     conn.executemany(
         """
         INSERT INTO incident_tiers (incident_id, tier, source_flow, institution, reason, prevention,
-            trust_level, attack_type, target_group, review_note, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            trust_level, attack_type, target_group, review_note, updated_at, demo)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         [
             (incident_id, r["tier"], r["source_flow"], r["institution"], r["reason"], _canonical(r["prevention"]),
-             r["trust_level"], r["attack_type"], r["target_group"], r["review_note"], now)
+             r["trust_level"], r["attack_type"], r["target_group"], r["review_note"], now, int(r["demo"]))
             for incident_id, r in rows.items()
         ],
     )
@@ -430,3 +435,13 @@ def tiers_run():
     for tier in TIERS:
         print(f"   {tier:18s} {counts.get(tier, 0)}")
     print("==================================================")
+
+
+def purge_demo_outputs(conn):
+    """Hapus keluaran D2 - D4 yang berasal dari data uji; kembalikan jumlah baris."""
+    create_tables(conn)
+    cursor = conn.execute(
+        "DELETE FROM flow_outputs WHERE flow IN ('D2', 'D3', 'D4') AND json_extract(basis, '$.demo') = 1"
+    )
+    conn.commit()
+    return cursor.rowcount

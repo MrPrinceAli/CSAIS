@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { getLedgerStats, getSampleEvidence, verify, type LedgerProof, type VerifyRecord } from "@/lib/queries";
 import { formatters, incidentTitle } from "@/lib/format";
 import { evidenceRole, getDict, isLang, L, type Lang } from "@/lib/i18n";
-import { HashGrid } from "@/components/ui";
+import { DemoChip, HashGrid } from "@/components/ui";
 import { AttestationSection } from "@/components/attestation-section";
 import { MerkleMini } from "@/components/merkle-mini";
 import { SearchField } from "@/components/search-field";
@@ -107,9 +107,10 @@ function RecordBlock({ record, lang }: { record: VerifyRecord; lang: Lang }) {
             {ok ? <path d="M5 12l5 5L20 7" /> : <path d="M6 6l12 12M18 6L6 18" />}
           </svg>
         </span>
-        <div className="flex flex-col">
+        <div className="flex flex-col gap-1">
           <span className="text-[16px] font-semibold">{ok ? r.found : r.mismatch}</span>
           <span className="text-[12.5px] text-muted">{r.kind}</span>
+          {record.demo ? <DemoChip lang={lang} /> : null}
         </div>
       </div>
       <dl className="grid grid-cols-[150px_minmax(0,1fr)] gap-x-4 gap-y-2 text-[13px]">

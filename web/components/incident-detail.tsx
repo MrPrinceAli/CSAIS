@@ -181,7 +181,7 @@ export async function IncidentDetailView({ lang, id, variant = "page" }: { lang:
           <div className="flex flex-wrap items-center gap-3">
             {/* keparahan dari pemberitaan tidak relevan bila lembaga membantah kejadiannya */}
             {tier?.tier !== "peringatan_hoaks" ? <SeverityText level={level} lang={lang} /> : null}
-            <TierBadge tier={tier?.tier ?? null} lang={lang} institution={tier?.source_flow === "D4" ? tier.institution : null} />
+            <TierBadge tier={tier?.tier ?? null} lang={lang} institution={tier?.source_flow === "D4" ? tier.institution : null} demo={Boolean(tier?.demo)} />
             <TypeChip attackType={incident.attack_type} lang={lang} />
             <span className="text-[12.5px] text-muted">
               {[incident.location ? countryLabel(incident.location) : "", incident.language ? languageLabel(incident.language, lang) : ""].filter(Boolean).join(" · ")}
@@ -225,12 +225,20 @@ export async function IncidentDetailView({ lang, id, variant = "page" }: { lang:
           <TrustRing trust={trust} lang={lang} size={84} />
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
             <span className="label">
-              {t.trust.title} · {t.trust.preliminary}
+              {t.trust.title} · {trust.verification ? t.trust.final : t.trust.preliminary}
             </span>
             <span className="text-[11px] text-muted">{t.trust.computedBy[trust.source]}</span>
             <span className="text-[15px] font-semibold capitalize" style={{ color: TRUST_COLOR[trust.level] }}>
               {t.levels[trust.level]}
             </span>
+            {trust.verification ? (
+              <div className="flex flex-col gap-1 rounded-md border border-line p-2 text-[11.5px]">
+                <span className="font-semibold text-fg">{t.trust.verified[trust.verification.source]}</span>
+                <span className="text-soft">
+                  {t.trust.shift(f.score(trust.verification.machine), f.score(trust.score), Math.round(trust.verification.weight * 100))}
+                </span>
+              </div>
+            ) : null}
             {trust.parts.map((p) => (
               <div key={p.key} className="grid grid-cols-[minmax(0,1fr)_64px] items-center gap-2 text-[11.5px] text-soft">
                 <span className="truncate">{t.trust.parts[p.key]}</span>
