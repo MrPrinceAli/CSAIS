@@ -21,6 +21,7 @@ prompt yang berbeda tidak tercampur.
 import json
 import os
 import re
+import time
 
 from csais import llm
 from csais.config import PROJECT_ROOT
@@ -194,7 +195,15 @@ def store_rows(rows):
     token = os.environ.get("SURVEY_WRITE_TOKEN")
     if not token:
         raise ValueError("SURVEY_WRITE_TOKEN (token tulis database masukan) belum diisi")
-    TursoClient(url, token).execute([(LLM_SCHEMA, [])] + [(insert, v) for v in values])
+    statements = [(LLM_SCHEMA, [])] + [(insert, v) for v in values]
+    for attempt in range(3):  # gangguan jaringan sesaat tidak boleh menghentikan ekstraksi
+        try:
+            TursoClient(url, token).execute(statements)
+            return
+        except Exception:
+            if attempt == 2:
+                raise
+            time.sleep(5 * (attempt + 1))
 
 
 def run_local(limit=100, client=None, log=print):
@@ -218,7 +227,11 @@ def run_local(limit=100, client=None, log=print):
             "created_at": get_timestamp(),
         })
         if len(batch) >= 20 or index == len(pending):
-            store_rows(batch)
+            try:
+                store_rows(batch)
+            except Exception as error:  # batch disimpan ulang pada kiriman berikutnya
+                log(f"   ⚠️ gagal menyimpan {len(batch)} hasil, dicoba lagi nanti: {error}")
+                continue
             saved += len(batch)
             batch = []
             log(f"   {index}/{len(pending)} diproses")
