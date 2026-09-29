@@ -31,6 +31,7 @@ from csais import (
     ledger,
     publish,
     reset,
+    survey,
     v01_data_collector,
     v02_relevance_detection,
     v03_information_extraction,
@@ -54,6 +55,7 @@ PIPELINE_STEPS = [
     ("V0.6 - Evidence Correlation", v06_evidence_correlation.run),
     ("V0.7 - Trust Score", v07_trust_score.run),
     ("Alur D1 - Keluaran Mesin", flows.run),
+    ("Alur D2 - Survei Publik", survey.run),
     ("Ledger - Batch Merkle Bukti", ledger.run),
 ]
 

@@ -42,7 +42,7 @@ from datetime import datetime, timezone
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from csais.config import DATABASE_FILE  # noqa: E402
-from csais.flows import FLOWS, REMOVED, attack_types  # noqa: E402
+from csais.flows import FLOWS, PENDING, REMOVED, attack_types  # noqa: E402
 
 JUDGED_FIELDS = ("attack_type", "target", "threat_actor", "attack_date", "location")
 D2_JUDGMENT = {"sesuai": True, "tidak_sesuai": False}
@@ -88,7 +88,8 @@ def load_latest(conn, as_of):
         latest[row["flow"]][row["incident_id"]] = record
         first[row["flow"]].setdefault(row["incident_id"], moment)
     for flow in FLOWS:
-        latest[flow] = {k: v for k, v in latest[flow].items() if v["status"] != REMOVED}
+        # dihapus: incident sudah tidak ada; belum: jawaban belum cukup untuk memutuskan
+        latest[flow] = {k: v for k, v in latest[flow].items() if v["status"] not in (REMOVED, PENDING)}
     return latest, first
 
 

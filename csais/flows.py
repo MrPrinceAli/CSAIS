@@ -33,6 +33,7 @@ FLOWS = ("D1", "D2", "D3", "D4")
 FIELDS = ("attack_type", "target", "threat_actor", "attack_date", "location", "target_group")
 TIERS = ("peringatan_dini", "waspada", "rekomendasi_resmi", "peringatan_hoaks")
 REMOVED = "dihapus"
+PENDING = "belum"  # D2/D3: jawaban ada tetapi belum cukup untuk memutuskan
 NO_SCORE = "tanpa_skor"
 
 # Panduan pencegahan dipakai bersama dengan web (web/lib/prevention.ts)

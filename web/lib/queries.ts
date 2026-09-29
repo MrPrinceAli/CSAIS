@@ -846,3 +846,52 @@ export const getLanguageCounts = cache(async () => {
     `SELECT COALESCE(NULLIF(language, ''), 'unknown') AS language, COUNT(*) AS n FROM articles GROUP BY language ORDER BY n DESC LIMIT 6`,
   );
 });
+
+export type SurveyCard = {
+  incidentId: string;
+  card: FlowOutput;
+  title: string | null;
+  documentCount: number;
+  articles: { title: string | null; url: string | null; published_date: string | null }[];
+};
+
+/**
+ * Kartu inti D1 untuk survei publik (alur D2). Tanpa id, dipilih acak dari 300
+ * incident terbaru yang diberitakan minimal dua artikel. Null bila tabel
+ * flow_outputs belum terbit atau incident tidak punya kartu.
+ */
+export async function getSurveyCard(id?: string): Promise<SurveyCard | null> {
+  if (!(await hasTable("flow_outputs"))) return null;
+  let incidentId = id;
+  if (!incidentId) {
+    const pick = await queryOne<{ incident_id: string }>(
+      `SELECT incident_id FROM (
+         SELECT incident_id FROM v05_incidents WHERE document_count >= 2
+         ORDER BY anchor_published_date DESC LIMIT 300
+       ) ORDER BY RANDOM() LIMIT 1`,
+    );
+    incidentId = pick?.incident_id;
+  }
+  if (!incidentId) return null;
+  const card = await queryOne<FlowOutput>(
+    `SELECT output_id, flow, attack_type, target, threat_actor, attack_date, location, target_group,
+            field_status, status, tier, prevention, basis, source_ref, reason, recorded_at
+     FROM flow_outputs WHERE incident_id = ? AND flow = 'D1' ORDER BY output_id DESC LIMIT 1`,
+    [incidentId],
+  );
+  if (!card || card.status === "dihapus") return null;
+  const [head, articles] = await Promise.all([
+    queryOne<{ title: string | null; document_count: number }>(
+      `SELECT a.title, i.document_count FROM v05_incidents i
+       LEFT JOIN articles a ON a.article_id = i.anchor_article_id WHERE i.incident_id = ?`,
+      [incidentId],
+    ),
+    query<{ title: string | null; url: string | null; published_date: string | null }>(
+      `SELECT a.title, COALESCE(a.resolved_url, a.article_url) AS url, a.published_date
+       FROM v05_incident_documents d JOIN articles a ON a.article_id = d.article_id
+       WHERE d.incident_id = ? ORDER BY a.published_date ASC LIMIT 5`,
+      [incidentId],
+    ),
+  ]);
+  return { incidentId, card, title: head?.title ?? null, documentCount: Number(head?.document_count ?? 0), articles };
+}

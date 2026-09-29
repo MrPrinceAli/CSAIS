@@ -333,7 +333,7 @@ export async function IncidentDetailView({ lang, id, variant = "page" }: { lang:
         </section>
       </div>
 
-      <FlowCompare lang={lang} outputs={flows} />
+      <FlowCompare lang={lang} incidentId={incident.incident_id} outputs={flows} />
     </div>
   );
 

@@ -95,6 +95,7 @@ export default async function RootLayout({ children, modal, params }: { children
             <div className="flex flex-col gap-2">
               <span className="label">{t.footer.columns.access}</span>
               <Link href={`${L(lang, "/verify")}#lembaga`} className="text-soft no-underline hover:text-fg">{t.nav.institutions}</Link>
+              <Link href={L(lang, "/survey")} className="text-soft no-underline hover:text-fg">{t.footer.links.survey}</Link>
               <span className="text-muted">{t.footer.links.api}</span>
             </div>
           </div>

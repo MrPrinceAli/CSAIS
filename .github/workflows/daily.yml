@@ -9,6 +9,7 @@
 #
 # Rahasia yang harus diisi di Settings > Secrets and variables > Actions:
 #   TURSO_DATABASE_URL, TURSO_AUTH_TOKEN
+#   SURVEY_DATABASE_URL, SURVEY_AUTH_TOKEN (opsional, alur D2)
 # Bootstrap sekali (dari komputer lokal, database saat ini):
 #   gh release create bootstrap database/csais.db --title "Database bootstrap"
 #
@@ -88,6 +89,9 @@ jobs:
         env:
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          # database survei publik (alur D2), token baca saja; kosong = tahap D2 dilewati
+          SURVEY_DATABASE_URL: ${{ secrets.SURVEY_DATABASE_URL }}
+          SURVEY_AUTH_TOKEN: ${{ secrets.SURVEY_AUTH_TOKEN }}
         run: |
           # Terbitkan hanya bila rahasia Turso sudah diisi; tanpa itu pipeline
           # tetap berjalan dan database tetap tersimpan di cache.

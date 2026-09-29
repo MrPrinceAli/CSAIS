@@ -39,12 +39,13 @@ csais/
   v06_evidence_correlation.py    V0.6 korelasi bukti antar sumber
   v07_trust_score.py             V0.7 indeks kepercayaan awal per incident
   flows.py                       keluaran alur D1 - D4 per incident (tabel flow_outputs)
+  survey.py                      alur D2: kumpulkan jawaban survei publik dari database survei
 database/
   csais.db              database SQLite (tidak ikut di git)
 ```
 
 Urutan tahap: crawler, V0.1, V0.2, content fetch, V0.3, V0.4, V0.5, gambar,
-V0.6, V0.7, alur D1, ledger. Setiap tahap bersifat inkremental: hanya artikel yang belum
+V0.6, V0.7, alur D1, alur D2, ledger. Setiap tahap bersifat inkremental: hanya artikel yang belum
 diproses yang diolah pada run berikutnya (V0.7 menghitung ulang semua
 incident karena masukannya berubah setiap run). Content fetch mengambil isi artikel penuh untuk
 kandidat V0.2 dengan anggaran per run (`--fetch-budget`, default 300);
@@ -62,6 +63,13 @@ Setiap incident dinilai oleh empat alur yang menulis kolom sama ke tabel
 - D2 kartu inti + survei publik (sesuai / tidak sesuai / tidak tahu per kolom)
 - D3 kartu inti + pernyataan lembaga atau kementerian
 - D4 catatan resmi: D3 yang dikonfirmasi atau dibantah, dengan reason statement
+
+Jawaban survei D2 ditulis halaman web `/survey` ke database Turso terpisah
+(`csais-survey`, tabel `survey_responses`); pipeline membacanya dengan token baca
+(`SURVEY_DATABASE_URL`, `SURVEY_AUTH_TOKEN`) dan menghitung keputusan per kolom:
+minimal 3 jawaban sesuai/tidak sesuai dengan 2/3 sepakat. Untuk sementara satu
+orang boleh menjawab berkali-kali; penanda peramban dan hash IP disimpan agar
+penyaringan bisa ditambahkan nanti.
 
 Saran preventif memakai `web/lib/prevention.json`, yang dibaca bersama oleh
 pipeline dan web. Perbandingan untuk laporan:

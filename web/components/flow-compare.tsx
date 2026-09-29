@@ -1,7 +1,8 @@
 /* Perbandingan keluaran alur D1 - D4 satu incident: snapshot terakhir tiap alur berdampingan. */
 import type { FlowOutput } from "@/lib/queries";
 import { formatters } from "@/lib/format";
-import { attackLabel, getDict, groupLabel, type Lang } from "@/lib/i18n";
+import Link from "next/link";
+import { attackLabel, getDict, groupLabel, L, type Lang } from "@/lib/i18n";
 import { channelOf, tipText } from "@/lib/prevention";
 import { SectionTitle } from "@/components/ui";
 
@@ -51,7 +52,7 @@ function valueLabel(field: Field, value: string | null, lang: Lang): string | nu
   return value;
 }
 
-export function FlowCompare({ lang, outputs }: { lang: Lang; outputs: FlowOutput[] }) {
+export function FlowCompare({ lang, incidentId, outputs }: { lang: Lang; incidentId: string; outputs: FlowOutput[] }) {
   const t = getDict(lang);
   const f = formatters(lang);
   const latest: Partial<Record<(typeof FLOWS)[number], FlowOutput>> = {};
@@ -122,6 +123,11 @@ export function FlowCompare({ lang, outputs }: { lang: Lang; outputs: FlowOutput
                     </span>
                     <span className="text-[13px] text-fg">{t.flows.names[flow]}</span>
                     <span className="text-[11.5px] font-normal text-muted">{latest[flow] ? f.date(latest[flow].recorded_at) : t.flows.empty}</span>
+                    {flow === "D2" ? (
+                      <Link href={`${L(lang, "/survey")}?id=${encodeURIComponent(incidentId)}`} className="text-[11.5px] font-normal">
+                        {t.flows.judge}
+                      </Link>
+                    ) : null}
                   </span>
                 </th>
               ))}
