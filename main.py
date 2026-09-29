@@ -1,4 +1,4 @@
-"""Titik masuk CSAIS: menjalankan crawler lalu pipeline V0.1 sampai V0.7, alur D1, dan ledger.
+"""Titik masuk CSAIS: menjalankan crawler lalu pipeline V0.1 sampai V0.7, alur D1 - D4, dan ledger.
 
 Cara pakai (dari direktori mana pun):
 
@@ -9,6 +9,7 @@ Cara pakai (dari direktori mana pun):
     python main.py --reset-from 5     # hapus hasil V0.5 - V0.7 saja lalu proses ulang
     python main.py --export FILE      # ekspor incident ke JSON Lines lalu keluar
     python main.py --proof UID        # cetak bukti Merkle satu evidence_uid (JSON)
+    python main.py --official-candidates FILE   # kandidat pernyataan lembaga (CSV)
     python main.py --redetect-language
 
 Seluruh keluaran layar juga disalin ke berkas di folder logs/.
@@ -25,10 +26,12 @@ from csais import (
     content_fetcher,
     crawler,
     export,
+    flow_compare,
     flows,
     image_resolver,
     language,
     ledger,
+    official,
     publish,
     reset,
     survey,
@@ -56,7 +59,9 @@ PIPELINE_STEPS = [
     ("V0.7 - Trust Score", v07_trust_score.run),
     ("Alur D1 - Keluaran Mesin", flows.run),
     ("Alur D2 - Survei Publik", survey.run),
+    ("Alur D3/D4 - Pernyataan Lembaga", official.run),
     ("Ledger - Batch Merkle Bukti", ledger.run),
+    ("Metrik Perbandingan Alur", flow_compare.run),
 ]
 
 LOG_DIR = os.path.join(PROJECT_ROOT, "logs")
@@ -152,6 +157,11 @@ def parse_args():
         help="cetak bukti Merkle (JSON) satu evidence_uid dari ledger, lalu keluar",
     )
     parser.add_argument(
+        "--official-candidates",
+        metavar="FILE",
+        help="tulis CSV incident yang kemungkinan punya pernyataan resmi lembaga, lalu keluar",
+    )
+    parser.add_argument(
         "--publish",
         action="store_true",
         help="setelah pipeline (atau sendiri bersama --no-crawl --no-fetch), "
@@ -187,6 +197,11 @@ def main():
         print(f"\n📦 Mengekspor incident (min {args.min_docs} artikel) ke {args.export}")
         total = export.export_incidents(args.export, min_docs=args.min_docs)
         print(f"Selesai: {total} incident ditulis.")
+        return
+
+    if args.official_candidates:
+        total = official.write_candidates(args.official_candidates)
+        print(f"\n{total} incident kandidat ditulis ke {args.official_candidates}")
         return
 
     if args.proof:

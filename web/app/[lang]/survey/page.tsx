@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getSurveyCard } from "@/lib/queries";
+import { getSurveyCandidates, getSurveyCard } from "@/lib/queries";
 import { formatters, incidentTitle } from "@/lib/format";
 import { attackLabel, getDict, isLang, L } from "@/lib/i18n";
-import { SURVEY_FIELDS } from "@/lib/survey";
+import { submissionCounts, SURVEY_FIELDS } from "@/lib/survey";
 import { SurveyForm, type SurveyFieldView } from "@/components/survey-form";
 
 type Params = { lang: string };
@@ -22,6 +22,16 @@ function display(field: string, value: string | null, lang: "id" | "en"): string
   return value;
 }
 
+const LEAST_POOL = 30;
+
+/** Kartu yang paling sedikit dinilai didahulukan: acak di antara 30 calon dengan jawaban tersedikit. */
+async function pickCandidate(): Promise<string> {
+  const ids = await getSurveyCandidates();
+  const counts = await submissionCounts(ids);
+  const pool = [...ids].sort((a, b) => (counts.get(a) ?? 0) - (counts.get(b) ?? 0)).slice(0, LEAST_POOL);
+  return pool[Math.floor(Math.random() * pool.length)] ?? "";
+}
+
 /** Survei publik (alur D2): satu kartu inti D1 per halaman, dinilai terhadap beritanya. */
 export default async function SurveyPage({ params, searchParams }: { params: Promise<Params>; searchParams: Promise<Search> }) {
   const { lang } = await params;
@@ -29,7 +39,8 @@ export default async function SurveyPage({ params, searchParams }: { params: Pro
   const { id } = await searchParams;
   const t = getDict(lang);
   const f = formatters(lang);
-  const data = await getSurveyCard(typeof id === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(id) ? id : undefined);
+  const requested = typeof id === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(id) ? id : null;
+  const data = await getSurveyCard(requested ?? (await pickCandidate()));
 
   const fields: SurveyFieldView[] = data
     ? SURVEY_FIELDS.map((key) => ({ key, label: t.flows.rows[key], value: display(key, data.card[key], lang) }))
@@ -90,6 +101,7 @@ export default async function SurveyPage({ params, searchParams }: { params: Pro
               }}
             />
             <p className="text-[12px] text-muted">{t.survey.rule}</p>
+            <p className="text-[12px] text-muted">{t.survey.privacy}</p>
           </section>
         </>
       ) : (

@@ -112,6 +112,18 @@ jobs:
             --image-budget "${{ github.event.inputs.image_budget || '120' }}" \
             $RESET $PUBLISH
 
+      - name: Laporan perbandingan alur D1 - D4
+        if: success()
+        run: python eval/compare_flows.py --out eval/flows > /dev/null
+
+      - name: Unggah laporan perbandingan
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flow-report-${{ github.run_id }}
+          path: eval/flows/
+          retention-days: 90
+
       - name: Simpan database ke cache
         if: always()
         uses: actions/cache/save@v4

@@ -1,4 +1,4 @@
-"""Ledger bukti sisi off-chain: batch Merkle dari bukti V0.6.
+"""Ledger bukti sisi off-chain: batch Merkle dari bukti V0.6 dan catatan resmi D4.
 
 Setiap run, bukti yang belum pernah masuk batch dikumpulkan urut evidence_id,
 dipotong maksimal ``MAX_LEAVES`` per batch, lalu dihitung akar Merkle-nya.
@@ -19,6 +19,12 @@ Konstruksi pohon (harus sama di web/lib/merkle.ts dan di kontrak):
 SHA-256 dipakai (bukan keccak) agar dapat dihitung dengan hashlib, Web
 Crypto, dan precompile sha256 di EVM tanpa pustaka tambahan; awalan 0x00/0x01
 memisahkan ranah daun dan simpul (gaya RFC 6962).
+
+Catatan resmi D4 (``flow_outputs`` alur D4) dibatch terpisah
+(``batch_kind = 'official_record'``) dengan payload ``RECORD_FIELDS``;
+``output_hash`` di payload mengikat seluruh isi catatan, termasuk reason
+statement lembaga. ID daunnya ``record_uid`` (24 heksadesimal), disimpan di
+kolom ``evidence_uid`` agar halaman verifikasi bisa mencari keduanya.
 """
 
 import hashlib
@@ -26,7 +32,7 @@ import json
 
 from csais.db import get_connection, get_timestamp
 from csais.provenance import pipeline_stamp
-from csais.schema import record_run
+from csais.schema import ensure_column, record_run
 
 MAX_LEAVES = 1024
 PAYLOAD_FIELDS = (
@@ -36,11 +42,25 @@ PAYLOAD_FIELDS = (
 )
 
 
+RECORD_FIELDS = (
+    "kind", "record_uid", "incident_id", "output_id", "output_hash", "status",
+    "tier", "source_ref", "supersedes", "recorded_at",
+)
+EVIDENCE = "evidence"
+OFFICIAL_RECORD = "official_record"
+
+
 # --- Pohon Merkle ---
-def canonical_payload(record):
+def canonical_payload(record, fields=PAYLOAD_FIELDS):
     """JSON kanonis (kunci terurut, tanpa spasi, ASCII) dari kamus bukti."""
-    payload = {key: record.get(key) for key in PAYLOAD_FIELDS}
+    payload = {key: record.get(key) for key in fields}
     return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+
+
+def record_uid(output_id, output_hash):
+    """ID deterministik daun catatan resmi D4."""
+    raw = f"D4|{output_id}|{output_hash}"
+    return hashlib.sha256(raw.encode("ascii")).hexdigest()[:24]
 
 
 def leaf_hash(payload):
@@ -128,6 +148,8 @@ def create_tables(conn):
         )
         """)
     conn.commit()
+    # jenis batch: bukti artikel V0.6 atau catatan resmi D4
+    ensure_column(conn, "evidence_batches", "batch_kind", f"TEXT NOT NULL DEFAULT '{EVIDENCE}'")
 
 
 _PENDING_SQL = """
@@ -163,9 +185,42 @@ def latest_root(conn):
     return row[0] if row else None
 
 
-def create_batch(conn, records):
+_PENDING_RECORDS_SQL = """
+    SELECT o.output_id, o.incident_id, o.output_hash, o.status, o.tier, o.source_ref,
+           o.supersedes, o.recorded_at
+    FROM flow_outputs o
+    WHERE o.flow = 'D4'
+    ORDER BY o.output_id
+"""
+
+
+def pending_records(conn):
+    """Catatan resmi D4 yang belum masuk batch, urut output_id; [] bila tabel belum ada."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'flow_outputs'")
+    if cursor.fetchone() is None:
+        return []
+    cursor.execute("SELECT evidence_uid FROM evidence_leaves")
+    done = {row[0] for row in cursor.fetchall()}
+    records = []
+    for output_id, incident_id, digest, status, tier, source_ref, supersedes, recorded_at in cursor.execute(_PENDING_RECORDS_SQL).fetchall():
+        uid = record_uid(output_id, digest)
+        if uid in done:
+            continue
+        records.append({
+            "kind": OFFICIAL_RECORD, "record_uid": uid, "evidence_uid": uid,
+            "incident_id": incident_id, "output_id": output_id, "output_hash": digest,
+            "status": status, "tier": tier, "source_ref": source_ref,
+            "supersedes": supersedes, "recorded_at": recorded_at,
+        })
+    return records
+
+
+def create_batch(conn, records, kind=EVIDENCE):
     """Simpan satu batch dari daftar kamus bukti; kembalikan (batch_id, akar heksadesimal)."""
-    payloads = [canonical_payload(record) for record in records]
+    fields = RECORD_FIELDS if kind == OFFICIAL_RECORD else PAYLOAD_FIELDS
+    id_key = "output_id" if kind == OFFICIAL_RECORD else "evidence_id"
+    payloads = [canonical_payload(record, fields) for record in records]
     leaves = [leaf_hash(payload) for payload in payloads]
     root = merkle_root(leaves).hex()
     cursor = conn.cursor()
@@ -173,12 +228,12 @@ def create_batch(conn, records):
         """
         INSERT INTO evidence_batches (
             merkle_root, previous_root, leaf_count, first_evidence_id,
-            last_evidence_id, created_at, pipeline_version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            last_evidence_id, created_at, pipeline_version, batch_kind
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
-            root, latest_root(conn), len(records), records[0]["evidence_id"],
-            records[-1]["evidence_id"], get_timestamp(), pipeline_stamp(),
+            root, latest_root(conn), len(records), records[0][id_key],
+            records[-1][id_key], get_timestamp(), pipeline_stamp(), kind,
         ),
     )
     batch_id = cursor.lastrowid
@@ -195,14 +250,14 @@ def create_batch(conn, records):
 
 
 def batch_pending(conn, max_leaves=MAX_LEAVES):
-    """Masukkan semua bukti tertunda ke batch baru; kembalikan daftar (batch_id, akar, jumlah)."""
+    """Masukkan bukti dan catatan D4 tertunda ke batch baru; kembalikan (batch_id, akar, jumlah)."""
     create_tables(conn)
-    records = pending_evidence(conn)
     created = []
-    for start in range(0, len(records), max_leaves):
-        chunk = records[start : start + max_leaves]
-        batch_id, root = create_batch(conn, chunk)
-        created.append((batch_id, root, len(chunk)))
+    for kind, records in ((EVIDENCE, pending_evidence(conn)), (OFFICIAL_RECORD, pending_records(conn))):
+        for start in range(0, len(records), max_leaves):
+            chunk = records[start : start + max_leaves]
+            batch_id, root = create_batch(conn, chunk, kind)
+            created.append((batch_id, root, len(chunk)))
     return created
 
 
@@ -256,7 +311,7 @@ def ledger_summary(conn):
 
 
 def run():
-    """Jalankan tahap ledger: batch Merkle untuk bukti yang belum masuk batch."""
+    """Jalankan tahap ledger: batch Merkle untuk bukti dan catatan D4 yang belum masuk batch."""
     print("\n==================================================")
     print("   LEDGER - BATCH MERKLE BUKTI")
     print("==================================================")

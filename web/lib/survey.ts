@@ -88,3 +88,22 @@ export async function saveSubmission(s: SurveySubmission): Promise<string> {
   );
   return submissionId;
 }
+
+/** Jumlah kiriman per incident untuk daftar id; kosong bila survei belum dikonfigurasi atau gagal dibaca. */
+export async function submissionCounts(ids: string[]): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  if (!ids.length || !surveyConfigured()) return counts;
+  try {
+    const db = getClient();
+    await ready;
+    const result = await db.execute({
+      sql: `SELECT incident_id, COUNT(DISTINCT submission_id) AS n FROM survey_responses
+            WHERE incident_id IN (${ids.map(() => "?").join(", ")}) GROUP BY incident_id`,
+      args: ids,
+    });
+    for (const row of result.rows) counts.set(String(row.incident_id), Number(row.n));
+  } catch (error) {
+    console.error("survey: gagal membaca jumlah jawaban", error);
+  }
+  return counts;
+}

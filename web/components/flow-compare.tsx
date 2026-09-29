@@ -199,7 +199,10 @@ export function FlowCompare({ lang, incidentId, outputs }: { lang: Lang; inciden
           </tbody>
         </table>
       </div>
-      {!latest.D2 && !latest.D3 && !latest.D4 ? <p className="mt-2 text-[12px] text-muted">{t.flows.pending}</p> : null}
+      <p className="mt-2 flex flex-wrap gap-x-3 text-[12px] text-muted">
+        {!latest.D2 && !latest.D3 && !latest.D4 ? <span>{t.flows.pending}</span> : null}
+        <Link href={L(lang, "/comparison")}>{t.flows.summary}</Link>
+      </p>
     </div>
   );
 }

@@ -40,12 +40,14 @@ csais/
   v07_trust_score.py             V0.7 indeks kepercayaan awal per incident
   flows.py                       keluaran alur D1 - D4 per incident (tabel flow_outputs)
   survey.py                      alur D2: kumpulkan jawaban survei publik dari database survei
+  official.py                    alur D3/D4: pernyataan lembaga dari statements/official_statements.csv
+  flow_compare.py                metrik perbandingan alur D1 - D4 (tabel flow_metrics)
 database/
   csais.db              database SQLite (tidak ikut di git)
 ```
 
 Urutan tahap: crawler, V0.1, V0.2, content fetch, V0.3, V0.4, V0.5, gambar,
-V0.6, V0.7, alur D1, alur D2, ledger. Setiap tahap bersifat inkremental: hanya artikel yang belum
+V0.6, V0.7, alur D1, alur D2, alur D3/D4, ledger, metrik perbandingan. Setiap tahap bersifat inkremental: hanya artikel yang belum
 diproses yang diolah pada run berikutnya (V0.7 menghitung ulang semua
 incident karena masukannya berubah setiap run). Content fetch mengambil isi artikel penuh untuk
 kandidat V0.2 dengan anggaran per run (`--fetch-budget`, default 300);
@@ -71,6 +73,14 @@ minimal 3 jawaban sesuai/tidak sesuai dengan 2/3 sepakat. Untuk sementara satu
 orang boleh menjawab berkali-kali; penanda peramban dan hash IP disimpan agar
 penyaringan bisa ditambahkan nanti.
 
+Sampai portal lembaga tersedia, pernyataan resmi (D3) dicatat tim di
+`statements/official_statements.csv` (panduan kolom di `statements/README.md`).
+Pernyataan terbaru berstatus dikonfirmasi atau dibantah dengan alasan menjadi
+catatan resmi D4; revisi menjadi baris baru yang merujuk baris lama, dan setiap
+catatan D4 masuk batch Merkle tersendiri (`batch_kind = official_record`).
+`main.py --official-candidates FILE` menulis daftar incident yang kemungkinan
+punya pernyataan resmi untuk membantu pengisian.
+
 Saran preventif memakai `web/lib/prevention.json`, yang dibaca bersama oleh
 pipeline dan web. Perbandingan untuk laporan:
 
@@ -78,7 +88,9 @@ pipeline dan web. Perbandingan untuk laporan:
 ./.venv/bin/python eval/compare_flows.py --as-of 2026-12-31T00:00:00+00:00   # tulis eval/flows/report.md dan metrics.csv
 ```
 
-Web menampilkan snapshot terakhir tiap alur di halaman detail incident.
+Web menampilkan snapshot terakhir tiap alur di halaman detail incident dan
+ringkasan metrik semua incident di `/comparison`; laporan Markdown dan CSV tiap
+run juga diunggah sebagai artefak Actions (`flow-report-*`, 90 hari).
 
 ## Persiapan
 

@@ -8,3 +8,6 @@ database/*.db-shm
 logs/
 exports/
 .env
+
+# laporan perbandingan alur (dibuat ulang; salinan tiap run ada di artefak Actions)
+eval/flows/

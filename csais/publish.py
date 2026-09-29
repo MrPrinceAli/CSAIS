@@ -62,6 +62,8 @@ PUBLISH_TABLES = {
     "v06_source_relations": ("SELECT * FROM v06_source_relations", ["incident_id"]),
     "v07_trust": ("SELECT * FROM v07_trust", ["incident_id", "level"]),
     "flow_outputs": ("SELECT * FROM flow_outputs", ["incident_id", "flow"]),
+    "official_statements": ("SELECT * FROM official_statements", ["incident_id"]),
+    "flow_metrics": ("SELECT * FROM flow_metrics", []),
     "evidence_batches": ("SELECT * FROM evidence_batches", ["anchor_status"]),
     "evidence_leaves": ("SELECT * FROM evidence_leaves", ["batch_id", "evidence_uid"]),
 }

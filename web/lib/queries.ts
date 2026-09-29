@@ -855,24 +855,18 @@ export type SurveyCard = {
   articles: { title: string | null; url: string | null; published_date: string | null }[];
 };
 
-/**
- * Kartu inti D1 untuk survei publik (alur D2). Tanpa id, dipilih acak dari 300
- * incident terbaru yang diberitakan minimal dua artikel. Null bila tabel
- * flow_outputs belum terbit atau incident tidak punya kartu.
- */
-export async function getSurveyCard(id?: string): Promise<SurveyCard | null> {
+/** Kartu inti D1 satu incident untuk survei publik (alur D2); null bila belum ada kartu. */
+/** Calon kartu survei: 300 incident terbaru yang diberitakan minimal dua artikel. */
+export async function getSurveyCandidates(): Promise<string[]> {
+  const rows = await query<{ incident_id: string }>(
+    `SELECT incident_id FROM v05_incidents WHERE document_count >= 2
+     ORDER BY anchor_published_date DESC LIMIT 300`,
+  );
+  return rows.map((r) => r.incident_id);
+}
+
+export async function getSurveyCard(incidentId: string): Promise<SurveyCard | null> {
   if (!(await hasTable("flow_outputs"))) return null;
-  let incidentId = id;
-  if (!incidentId) {
-    const pick = await queryOne<{ incident_id: string }>(
-      `SELECT incident_id FROM (
-         SELECT incident_id FROM v05_incidents WHERE document_count >= 2
-         ORDER BY anchor_published_date DESC LIMIT 300
-       ) ORDER BY RANDOM() LIMIT 1`,
-    );
-    incidentId = pick?.incident_id;
-  }
-  if (!incidentId) return null;
   const card = await queryOne<FlowOutput>(
     `SELECT output_id, flow, attack_type, target, threat_actor, attack_date, location, target_group,
             field_status, status, tier, prevention, basis, source_ref, reason, recorded_at
@@ -894,4 +888,12 @@ export async function getSurveyCard(id?: string): Promise<SurveyCard | null> {
     ),
   ]);
   return { incidentId, card, title: head?.title ?? null, documentCount: Number(head?.document_count ?? 0), articles };
+}
+
+export type FlowMetric = { metric: string; flow: string; field: string; value: number | null; n: number; note: string | null; computed_at: string };
+
+/** Metrik perbandingan alur D1 - D4 yang dihitung pipeline (csais/flow_compare.py). */
+export async function getFlowMetrics(): Promise<FlowMetric[]> {
+  if (!(await hasTable("flow_metrics"))) return [];
+  return query<FlowMetric>("SELECT metric, flow, field, value, n, note, computed_at FROM flow_metrics");
 }

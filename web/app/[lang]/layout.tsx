@@ -96,6 +96,7 @@ export default async function RootLayout({ children, modal, params }: { children
               <span className="label">{t.footer.columns.access}</span>
               <Link href={`${L(lang, "/verify")}#lembaga`} className="text-soft no-underline hover:text-fg">{t.nav.institutions}</Link>
               <Link href={L(lang, "/survey")} className="text-soft no-underline hover:text-fg">{t.footer.links.survey}</Link>
+              <Link href={L(lang, "/comparison")} className="text-soft no-underline hover:text-fg">{t.footer.links.comparison}</Link>
               <span className="text-muted">{t.footer.links.api}</span>
             </div>
           </div>
