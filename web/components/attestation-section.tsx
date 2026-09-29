@@ -1,7 +1,7 @@
 /**
  * Bagian "Atestasi lembaga" di bawah halaman verifikasi (dulu halaman
- * /institutions sendiri). Isinya rencana portal atestasi: mandat tiap
- * lembaga, jenis keputusan, dan prinsip. Anchor: #lembaga.
+ * /institutions sendiri). Isinya portal lembaga: mandat tiap lembaga, jenis
+ * keputusan, prinsip, dan tombol masuk ke /portal. Anchor: #lembaga.
  */
 import Link from "next/link";
 import { getDict, L, type Lang } from "@/lib/i18n";
@@ -63,9 +63,14 @@ export function AttestationSection({ lang }: { lang: Lang }) {
         </div>
       </Reveal>
 
-      <Link href={L(lang, "/incidents")} className="btn btn-ghost self-start">
-        {t.institutions.cta}
-      </Link>
+      <div className="flex flex-wrap gap-2">
+        <Link href={L(lang, "/portal")} className="btn btn-primary no-underline">
+          {t.portal.enter}
+        </Link>
+        <Link href={L(lang, "/incidents")} className="btn btn-ghost">
+          {t.institutions.cta}
+        </Link>
+      </div>
     </section>
   );
 }

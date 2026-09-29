@@ -11,3 +11,6 @@ exports/
 
 # laporan perbandingan alur (dibuat ulang; salinan tiap run ada di artefak Actions)
 eval/flows/
+
+# kode akses portal lembaga (rahasia, hanya di komputer ini)
+.portal-codes.txt

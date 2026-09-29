@@ -107,3 +107,74 @@ export async function submissionCounts(ids: string[]): Promise<Map<string, numbe
   }
   return counts;
 }
+
+// --- Keputusan lembaga (alur D3, portal) ---
+// Skema sama dengan REVIEWS_SCHEMA di csais/official.py, yang membacanya setiap hari.
+const REVIEWS_SCHEMA = `
+  CREATE TABLE IF NOT EXISTS official_reviews (
+    review_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    incident_id TEXT NOT NULL,
+    card_output_id INTEGER NOT NULL,
+    institution TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('dikonfirmasi', 'dibantah', 'sebagian')),
+    reason_code TEXT NOT NULL,
+    reason_text TEXT,
+    field_status TEXT,
+    source_url TEXT,
+    reviewer TEXT,
+    created_at TEXT NOT NULL
+  )`;
+
+let reviewsReady: Promise<unknown> | null = null;
+
+async function reviewsClient() {
+  const db = getClient();
+  await ready;
+  if (!reviewsReady) {
+    reviewsReady = db.execute(REVIEWS_SCHEMA).catch((error: unknown) => {
+      reviewsReady = null;
+      throw error;
+    });
+  }
+  await reviewsReady;
+  return db;
+}
+
+export type OfficialReview = {
+  incidentId: string;
+  cardOutputId: number;
+  institution: string;
+  status: string;
+  reasonCode: string;
+  reasonText: string | null;
+  fieldStatus: Record<string, string>;
+  sourceUrl: string | null;
+  reviewer: string | null;
+};
+
+export async function saveReview(r: OfficialReview): Promise<number> {
+  const db = await reviewsClient();
+  const result = await db.execute({
+    sql: `INSERT INTO official_reviews (incident_id, card_output_id, institution, status, reason_code, reason_text, field_status, source_url, reviewer, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [r.incidentId, r.cardOutputId, r.institution, r.status, r.reasonCode, r.reasonText, JSON.stringify(r.fieldStatus), r.sourceUrl, r.reviewer, new Date().toISOString()],
+  });
+  return Number(result.lastInsertRowid ?? 0);
+}
+
+/** Keputusan terakhir satu lembaga per incident: incident_id -> {status, created_at}. */
+export async function reviewsBy(institution: string): Promise<Map<string, { status: string; created_at: string }>> {
+  const out = new Map<string, { status: string; created_at: string }>();
+  if (!surveyConfigured()) return out;
+  try {
+    const db = await reviewsClient();
+    const result = await db.execute({
+      sql: `SELECT incident_id, status, created_at FROM official_reviews WHERE institution = ? ORDER BY review_id`,
+      args: [institution],
+    });
+    for (const row of result.rows) out.set(String(row.incident_id), { status: String(row.status), created_at: String(row.created_at) });
+  } catch (error) {
+    console.error("portal: gagal membaca keputusan", error);
+  }
+  return out;
+}

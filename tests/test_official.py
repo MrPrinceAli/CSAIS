@@ -121,3 +121,50 @@ def test_store_metrics(temp_conn):
     flow_compare.store_metrics(temp_conn, metrics, "2026-09-29T00:00:00+00:00")
     stored = temp_conn.execute("SELECT value FROM flow_metrics WHERE metric = 'cakupan' AND flow = 'D1'").fetchone()
     assert stored == (2,)
+
+
+# --- Keputusan dari portal lembaga ---
+REVIEW = (7, "INC-A", "OJK", "dikonfirmasi", "ditangani", "Sudah diblokir.",
+          '{"target": "dibantah", "attack_type": "dikonfirmasi", "tidak_dikenal": "dibantah"}',
+          None, "Rina", "2026-09-29T08:00:00+00:00")
+
+
+def test_review_rows_mapping():
+    row = official.review_rows([REVIEW, (8, "INC-A", "OJK", "mungkin", "x", None, None, None, None, "t")])
+    assert len(row) == 1  # status tidak dikenal dilewati
+    row = row[0]
+    assert (row["statement_id"], row["institution"], row["source_url"]) == ("portal-7", "OJK", "portal:OJK:7")
+    assert row["reason"] == "Sudah ditangani atau diproses lembaga. Sudah diblokir."
+    assert row["field_status"] == {"target": "dibantah", "attack_type": "dikonfirmasi"}
+    assert official.review_rows([(9, "INC-B", "POLRI", "dibantah", "hoaks", None, None, "https://x.id/a", None, "t")])[0]["institution"] == "Siber Polri"
+
+
+def test_portal_review_becomes_d3_and_d4(temp_conn):
+    _pipeline_tables(temp_conn)
+    flows.record_d1(temp_conn)
+    assert official.record_official(temp_conn, official.review_rows([REVIEW]))[:2] == (1, 1)
+    d3 = _latest(temp_conn, "INC-A", "D3")
+    assert json.loads(d3["field_status"]) == {"target": "dibantah", "attack_type": "dikonfirmasi"}
+    assert d3["target"] == "Bank X"  # nilai kartu tetap, penilaiannya dibantah
+    d4 = _latest(temp_conn, "INC-A", "D4")
+    assert (d4["tier"], d4["source_ref"]) == ("rekomendasi_resmi", "portal:OJK:7")
+    # metrik: target mesin dinilai salah oleh lembaga walaupun nilainya sama dengan kartu
+    metrics = flow_compare.compute(temp_conn)
+    recall = next(m for m in metrics if (m["metric"], m["field"]) == ("ketepatan_recall", "target"))
+    assert (recall["value"], recall["n"]) == (0.0, 1)
+    ok = next(m for m in metrics if (m["metric"], m["field"]) == ("ketepatan_recall", "attack_type"))
+    assert ok["value"] == 1.0
+
+
+def test_load_reviews_from_file(tmp_path, monkeypatch):
+    import sqlite3
+    path = tmp_path / "survey.db"
+    conn = sqlite3.connect(path)
+    conn.execute(official.REVIEWS_SCHEMA)
+    conn.execute("INSERT INTO official_reviews VALUES (1, 'INC-A', 1, 'BSSN', 'dibantah', 'hoaks', NULL, '{}', NULL, NULL, 't')")
+    conn.commit()
+    conn.close()
+    monkeypatch.setenv("SURVEY_DATABASE_URL", f"file:{path}")
+    assert [r["statement_id"] for r in official.load_reviews()] == ["portal-1"]
+    monkeypatch.delenv("SURVEY_DATABASE_URL")
+    assert official.load_reviews() == []

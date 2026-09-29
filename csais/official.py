@@ -1,18 +1,19 @@
 """Alur D3 dan D4: pernyataan lembaga atau kementerian per incident.
 
-Sampai portal lembaga (Sprint 3) ada, pernyataan dicatat tim peneliti di
-``statements/official_statements.csv``: satu baris per pernyataan resmi yang
-sudah dipublikasikan lembaga (siaran pers, unggahan akun resmi, jawaban
-tertulis), dengan tautan sumbernya. Berkas itu ada di git, jadi setiap
-perubahan tercatat siapa dan kapan.
+Pernyataan datang dari dua sumber:
+  - portal lembaga (web /portal): petugas BSSN, OJK, Komdigi, atau Siber Polri
+    memilih keputusan dan alasan dengan tombol; tersimpan di tabel
+    ``official_reviews`` pada database survei (dibaca dengan token baca);
+  - ``statements/official_statements.csv`` (opsional): pernyataan resmi yang
+    sudah dipublikasikan dan disalin tim, dengan tautan sumbernya.
 
 Setiap run tahap ini:
-  1. memuat CSV ke tabel ``official_statements`` (diganti penuh; riwayatnya
-     di git), baris yang tidak valid dilaporkan dan dilewati;
+  1. memuat keputusan portal dan CSV ke tabel ``official_statements``
+     (diganti penuh), baris CSV yang tidak valid dilaporkan dan dilewati;
   2. D3: pernyataan terbaru per incident menjadi keluaran D3. Kolom yang
-     disebut lembaga dibandingkan dengan kartu D1: sama = dikonfirmasi,
-     berbeda = dibantah (kartu mesin keliru); kolom yang tidak disebut
-     memakai nilai kartu dan tidak dinilai;
+     ditandai benar/salah di portal, atau yang nilainya disebut di CSV,
+     dinilai terhadap kartu D1 (dikonfirmasi/dibantah); kolom lain memakai
+     nilai kartu dan tidak dinilai;
   3. D4: pernyataan terbaru berstatus dikonfirmasi atau dibantah yang punya
      reason statement dicatat sebagai catatan resmi, tingkat
      ``rekomendasi_resmi`` atau ``peringatan_hoaks``. Catatan tidak pernah
@@ -33,7 +34,7 @@ from csais.config import PROJECT_ROOT
 from csais.db import get_connection, get_timestamp
 from csais.provenance import pipeline_stamp
 from csais.schema import record_run
-from csais.survey import SURVEY_FIELDS, latest_d1
+from csais.survey import SURVEY_FIELDS, fetch_rows, latest_d1
 
 STATEMENTS_FILE = os.path.join(PROJECT_ROOT, "statements", "official_statements.csv")
 COLUMNS = (
@@ -42,6 +43,40 @@ COLUMNS = (
     "location", "prevention_text", "prevention_keys", "recorded_by",
 )
 STATUSES = ("dikonfirmasi", "dibantah", "sebagian")
+INSTITUTION_NAMES = {"BSSN": "BSSN", "OJK": "OJK", "KOMDIGI": "Komdigi", "POLRI": "Siber Polri"}
+# Teks alasan pilihan portal; sama dengan portal.reasons di web/lib/i18n.ts
+REASON_TEXT = {
+    "ditangani": "Sudah ditangani atau diproses lembaga",
+    "laporan_diterima": "Sesuai laporan yang diterima lembaga",
+    "imbauan_terbit": "Lembaga sudah menerbitkan imbauan",
+    "hoaks": "Informasi tidak benar (hoaks)",
+    "bukan_serangan": "Bukan serangan siber (gangguan teknis atau kesalahan sistem)",
+    "keliru_sasaran": "Korban atau pelaku yang disebut keliru",
+    "diselidiki": "Masih diselidiki",
+    "sebagian_benar": "Sebagian informasi benar",
+    "di_luar_mandat": "Di luar kewenangan lembaga ini",
+}
+# Tabel keputusan portal di database survei; web (web/lib/survey.ts) membuat tabel yang sama
+REVIEWS_SCHEMA = """
+    CREATE TABLE IF NOT EXISTS official_reviews (
+        review_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        incident_id TEXT NOT NULL,
+        card_output_id INTEGER NOT NULL,
+        institution TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('dikonfirmasi', 'dibantah', 'sebagian')),
+        reason_code TEXT NOT NULL,
+        reason_text TEXT,
+        field_status TEXT,
+        source_url TEXT,
+        reviewer TEXT,
+        created_at TEXT NOT NULL
+    )
+"""
+REVIEWS_SQL = """
+    SELECT review_id, incident_id, institution, status, reason_code, reason_text,
+           field_status, source_url, reviewer, created_at
+    FROM official_reviews ORDER BY review_id
+"""
 OFFICIAL_TIER = {"dikonfirmasi": "rekomendasi_resmi", "dibantah": "peringatan_hoaks"}
 INSTITUTION_WORDS = ("BSSN", "OJK", "Komdigi", "Kominfo", "Polri", "Bareskrim", "Siber Polri", "Bank Indonesia")
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}")
@@ -80,6 +115,38 @@ def load_statements(path=STATEMENTS_FILE):
             seen.add(row["statement_id"])
             rows.append(row)
     return rows, errors
+
+
+def review_rows(rows):
+    """Keputusan portal (baris official_reviews) sebagai baris pernyataan."""
+    statements = []
+    for review_id, incident_id, institution, status, code, note, field_status, source_url, reviewer, created_at in rows:
+        if status not in STATUSES or code not in REASON_TEXT:
+            continue
+        try:
+            marks = json.loads(field_status or "{}")
+        except ValueError:
+            marks = {}
+        reason = REASON_TEXT[code] + (f". {note.strip()}" if note and note.strip() else "")
+        statements.append({
+            **{key: None for key in COLUMNS},
+            "statement_id": f"portal-{review_id}",
+            "incident_id": incident_id,
+            "institution": INSTITUTION_NAMES.get(institution, institution),
+            "status": status,
+            "statement_date": created_at,
+            "source_url": source_url or f"portal:{institution}:{review_id}",
+            "reason": reason,
+            "recorded_by": reviewer,
+            "field_status": {k: v for k, v in marks.items() if k in SURVEY_FIELDS and v in ("dikonfirmasi", "dibantah")},
+        })
+    return statements
+
+
+def load_reviews():
+    """Keputusan dari portal lembaga; [] bila database survei belum dikonfigurasi."""
+    rows = fetch_rows(REVIEWS_SQL)
+    return review_rows(rows) if rows else []
 
 
 def create_tables(conn):
@@ -125,11 +192,14 @@ def latest_statements(rows):
 def d3_row(card, statement, items):
     """Keluaran D3 dari kartu D1 dan pernyataan terbaru."""
     values, verdicts = {}, {}
+    marked = statement.get("field_status") or {}
     for field in flows.FIELDS:
         stated = statement.get(field) if field in SURVEY_FIELDS else None
         values[field] = stated or card.get(field)
         if stated:
             verdicts[field] = "dikonfirmasi" if card.get(field) and _same(field, card.get(field), stated) else "dibantah"
+        elif field in marked:
+            verdicts[field] = marked[field]
     keys = [k.strip() for k in (statement["prevention_keys"] or "").split(";") if k.strip()]
     prevention = None
     if keys or statement["prevention_text"]:
@@ -267,6 +337,8 @@ def run():
     print("==================================================")
     started_at = get_timestamp()
     rows, errors = load_statements()
+    reviews = load_reviews()
+    rows = rows + reviews
     conn = get_connection()
     try:
         store_statements(conn, rows, started_at)
@@ -274,7 +346,7 @@ def run():
         record_run(conn, "flows_d3_d4", started_at, new_d3 + new_d4)
     finally:
         conn.close()
-    print(f"Pernyataan valid     : {len(rows)}")
+    print(f"Pernyataan valid     : {len(rows)} (portal {len(reviews)})")
     for message in errors:
         print(f"   ⚠️ {message}")
     for incident_id in unknown:

@@ -73,13 +73,18 @@ minimal 3 jawaban sesuai/tidak sesuai dengan 2/3 sepakat. Untuk sementara satu
 orang boleh menjawab berkali-kali; penanda peramban dan hash IP disimpan agar
 penyaringan bisa ditambahkan nanti.
 
-Sampai portal lembaga tersedia, pernyataan resmi (D3) dicatat tim di
-`statements/official_statements.csv` (panduan kolom di `statements/README.md`).
-Pernyataan terbaru berstatus dikonfirmasi atau dibantah dengan alasan menjadi
-catatan resmi D4; revisi menjadi baris baru yang merujuk baris lama, dan setiap
-catatan D4 masuk batch Merkle tersendiri (`batch_kind = official_record`).
-`main.py --official-candidates FILE` menulis daftar incident yang kemungkinan
-punya pernyataan resmi untuk membantu pengisian.
+Keputusan lembaga (D3) diberikan lewat portal `/portal`: petugas BSSN, OJK,
+Komdigi, atau Siber Polri masuk dengan kode akses lembaganya, melihat antrean
+incident sesuai mandat, lalu memilih keputusan (dikonfirmasi, dibantah,
+sebagian) dan alasannya dengan tombol; kolom kartu bisa ditandai benar/salah.
+Keputusan disimpan di tabel `official_reviews` pada database survei dan dibaca
+pipeline (`csais/official.py`). Keputusan terbaru berstatus dikonfirmasi atau
+dibantah menjadi catatan resmi D4; revisi menjadi baris baru yang merujuk baris
+lama, dan setiap catatan D4 masuk batch Merkle tersendiri
+(`batch_kind = official_record`). Pernyataan resmi yang sudah dipublikasikan
+juga bisa disalin tim ke `statements/official_statements.csv` (opsional).
+Kode akses disimpan sebagai hash di variabel Vercel `PORTAL_ACCESS`; kode
+aslinya ada di `.portal-codes.txt` (tidak ikut git).
 
 Saran preventif memakai `web/lib/prevention.json`, yang dibaca bersama oleh
 pipeline dan web. Perbandingan untuk laporan:

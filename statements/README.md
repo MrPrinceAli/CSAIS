@@ -1,10 +1,14 @@
 # Pernyataan lembaga (alur D3 dan D4)
 
+Cara utama memberi keputusan lembaga adalah portal web `/portal` (cukup klik
+tombol). Berkas ini opsional, untuk menyalin pernyataan resmi yang sudah
+dipublikasikan lembaga di luar portal.
+
 `official_statements.csv` berisi pernyataan resmi lembaga atau kementerian
 tentang incident CSAIS. Pipeline membacanya setiap run (`csais/official.py`):
 pernyataan terbaru per incident menjadi keluaran D3, dan yang berstatus
 `dikonfirmasi` atau `dibantah` dengan `reason` terisi menjadi catatan resmi D4
-(masuk ledger Merkle). Berkas ini dipakai sampai portal lembaga tersedia.
+(masuk ledger Merkle).
 
 Isi hanya pernyataan yang sudah dipublikasikan lembaga, dan selalu sertakan
 tautannya. Satu baris = satu pernyataan; revisi ditulis sebagai baris baru

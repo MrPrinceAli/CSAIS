@@ -92,12 +92,14 @@ function RecordBlock({ record, lang }: { record: VerifyRecord; lang: Lang }) {
         <dd className="text-soft">{record.reason ?? "—"}</dd>
         <dt className="text-muted">{r.source}</dt>
         <dd className="break-all">
-          {record.source_ref ? (
+          {record.source_ref && /^https?:\/\//.test(record.source_ref) ? (
             <a href={record.source_ref} target="_blank" rel="noreferrer">
               {record.source_ref}
             </a>
+          ) : record.source_ref?.startsWith("portal:") ? (
+            r.viaPortal
           ) : (
-            "—"
+            record.source_ref ?? "—"
           )}
         </dd>
         <dt className="text-muted">{r.recorded}</dt>

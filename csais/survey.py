@@ -63,11 +63,11 @@ def _hrana_value(cell):
     return None if cell.get("type") == "null" else cell.get("value")
 
 
-def fetch_remote(database_url, auth_token):
-    """Baca semua jawaban dari Turso; [] bila tabel belum ada."""
+def fetch_remote(database_url, auth_token, sql=RESPONSES_SQL):
+    """Baca baris dari database survei di Turso; [] bila tabel belum ada."""
     client = TursoClient(database_url, auth_token)
     try:
-        results = client.execute([(RESPONSES_SQL, [])])
+        results = client.execute([(sql, [])])
     except RuntimeError as error:
         if "no such table" in str(error):
             return []
@@ -76,11 +76,11 @@ def fetch_remote(database_url, auth_token):
     return [tuple(_hrana_value(cell) for cell in row) for row in result["rows"]]
 
 
-def fetch_file(path):
-    """Baca semua jawaban dari berkas SQLite lokal (pengujian dan pengembangan)."""
+def fetch_file(path, sql=RESPONSES_SQL):
+    """Baca baris dari berkas SQLite lokal (pengujian dan pengembangan)."""
     conn = sqlite3.connect(path)
     try:
-        return conn.execute(RESPONSES_SQL).fetchall()
+        return conn.execute(sql).fetchall()
     except sqlite3.OperationalError as error:
         if "no such table" in str(error):
             return []
@@ -89,14 +89,19 @@ def fetch_file(path):
         conn.close()
 
 
-def fetch_responses():
-    """Jawaban dari database survei; None bila belum dikonfigurasi."""
+def fetch_rows(sql):
+    """Baris hasil ``sql`` dari database survei; None bila belum dikonfigurasi."""
     url = (os.environ.get("SURVEY_DATABASE_URL") or "").strip()
     if not url:
         return None
     if url.startswith("file:"):
-        return fetch_file(url[len("file:"):])
-    return fetch_remote(url, os.environ.get("SURVEY_AUTH_TOKEN"))
+        return fetch_file(url[len("file:"):], sql)
+    return fetch_remote(url, os.environ.get("SURVEY_AUTH_TOKEN"), sql)
+
+
+def fetch_responses():
+    """Jawaban dari database survei; None bila belum dikonfigurasi."""
+    return fetch_rows(RESPONSES_SQL)
 
 
 # --- Agregasi ---

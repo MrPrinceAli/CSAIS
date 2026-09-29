@@ -962,3 +962,58 @@ export async function getFlowMetrics(): Promise<FlowMetric[]> {
   if (!(await hasTable("flow_metrics"))) return [];
   return query<FlowMetric>("SELECT metric, flow, field, value, n, note, computed_at FROM flow_metrics");
 }
+
+export type PortalCard = {
+  incident_id: string;
+  title: string | null;
+  anchor_published_date: string | null;
+  document_count: number;
+  trust_level: string | null;
+  indonesia: number;
+  card: FlowOutput;
+};
+
+async function portalCards(where: string, args: InValue[], limit: number, offset: number): Promise<PortalCard[]> {
+  const withTrust = await hasTable("v07_trust");
+  const rows = await query<{ incident_id: string; title: string | null; anchor_published_date: string | null; document_count: number; trust_level: string | null; indonesia: number; card_id: number | null }>(
+    `SELECT i.incident_id, a.title, i.anchor_published_date, i.document_count,
+            ${withTrust ? "t.level" : "NULL"} AS trust_level,
+            (lower(COALESCE(i.location, '')) LIKE '%indonesia%' OR a.language = 'id') AS indonesia,
+            (SELECT MAX(o.output_id) FROM flow_outputs o WHERE o.incident_id = i.incident_id AND o.flow = 'D1') AS card_id
+     FROM v05_incidents i
+     LEFT JOIN articles a ON a.article_id = i.anchor_article_id
+     ${withTrust ? "LEFT JOIN v07_trust t ON t.incident_id = i.incident_id" : ""}
+     WHERE ${where}
+     ORDER BY indonesia DESC, i.anchor_published_date DESC
+     LIMIT ? OFFSET ?`,
+    [...args, limit, offset],
+  );
+  const ids = rows.map((r) => r.card_id).filter((v): v is number => v !== null);
+  if (!ids.length) return [];
+  const cards = await query<FlowOutput>(
+    `SELECT output_id, flow, attack_type, target, threat_actor, attack_date, location, target_group,
+            field_status, status, tier, prevention, basis, source_ref, reason, output_hash, recorded_at
+     FROM flow_outputs WHERE output_id IN (${ids.map(() => "?").join(", ")})`,
+    ids,
+  );
+  const byId = new Map(cards.map((c) => [Number(c.output_id), c]));
+  return rows
+    .filter((r) => r.card_id !== null && byId.has(Number(r.card_id)) && byId.get(Number(r.card_id))?.status !== "dihapus")
+    .map((r) => ({ ...r, document_count: Number(r.document_count), indonesia: Number(r.indonesia), card: byId.get(Number(r.card_id)) as FlowOutput }));
+}
+
+/** Antrean portal lembaga: incident multi-artikel sesuai mandat, Indonesia dan terbaru lebih dulu. */
+export async function getPortalQueue(mandate: { types: string[]; groups: string[] }, limit: number, offset: number): Promise<PortalCard[]> {
+  if (!(await hasTable("flow_outputs"))) return [];
+  const typeClause = mandate.types.map(() => "instr(i.attack_type, ?) > 0").join(" OR ");
+  const groupClause = mandate.groups.length
+    ? `i.incident_id IN (SELECT incident_id FROM flow_outputs WHERE flow = 'D1' AND target_group IN (${mandate.groups.map(() => "?").join(", ")}))`
+    : "0";
+  return portalCards(`i.document_count >= 2 AND ((${typeClause || "0"}) OR ${groupClause})`, [...mandate.types, ...mandate.groups], limit, offset);
+}
+
+/** Kartu portal untuk daftar incident tertentu (tab "sudah ditinjau"). */
+export async function getPortalCardsById(ids: string[]): Promise<PortalCard[]> {
+  if (!ids.length || !(await hasTable("flow_outputs"))) return [];
+  return portalCards(`i.incident_id IN (${ids.map(() => "?").join(", ")})`, ids, ids.length, 0);
+}

@@ -169,7 +169,9 @@ def compare(latest, first, seen):
             if truth is None or machine is None:
                 continue
             guess = norm(machine.get(field))
-            if same_value(field, guess, truth):
+            # kolom yang ditandai salah oleh lembaga: nilai kartu mesin keliru
+            refuted = _json(official.get("field_status")).get(field) == "dibantah"
+            if same_value(field, guess, truth) and not refuted:
                 tp += 1
             else:
                 fn += 1
@@ -194,7 +196,8 @@ def compare(latest, first, seen):
                 if judged is None:
                     continue
                 n += 1
-                correct += judged == same_value(field, row.get(field), truth)
+                refuted = _json(official.get("field_status")).get(field) == "dibantah"
+                correct += judged == (same_value(field, row.get(field), truth) and not refuted)
             add("penilaian_tepat", flow, field, correct / n if n else None, n)
 
     # Kesepakatan D2 dengan D3

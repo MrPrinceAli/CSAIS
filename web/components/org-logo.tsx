@@ -5,6 +5,7 @@ const LOGOS: Record<string, string> = {
   BSSN: "/logos/bssn.png",
   OJK: "/logos/ojk.png",
   Polri: "/logos/polri.png",
+  "Siber Polri": "/logos/polri.png",
   Komdigi: "/logos/komdigi.png",
 };
 
