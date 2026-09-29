@@ -85,13 +85,20 @@ def test_fill_unknown_only_fills_blanks(temp_conn):
     """)
     row = lambda uid, incident, attack, target, actor: (uid, "qwen", "v1", incident, attack, target, actor, None, "indonesia", None, 0.8, "{}", "t")  # noqa: E731
     llm_extraction.store_local(temp_conn, [row("u1", 1, "RANSOMWARE", "BSI", "ALPHV"), row("u2", 0, "MALWARE", "Bank Y", "Z")])
-    assert llm_extraction.fill_unknown(temp_conn) == 1  # u2 bukan incident menurut LLM
+    assert llm_extraction.fill_unknown(temp_conn, fields=llm_extraction._FILL_FIELDS) == 1  # u2 bukan incident menurut LLM
     target, actor, attack, method, confidence = temp_conn.execute(
         "SELECT target, threat_actor, attack_type, extraction_method, field_confidence FROM v03_information_extraction WHERE article_id = 1"
     ).fetchone()
     assert (target, actor, attack, method) == ("BSI", "LockBit", "RANSOMWARE", "RULE_BASED+LLM")  # pelaku aturan tidak ditimpa
     assert json.loads(confidence)["target"] == llm_extraction.FILL_CONFIDENCE
-    assert llm_extraction.fill_unknown(temp_conn) == 0
+    assert llm_extraction.fill_unknown(temp_conn, fields=llm_extraction._FILL_FIELDS) == 0
+
+
+def test_default_merge_fields_skip_actor(monkeypatch):
+    monkeypatch.delenv("LLM_MERGE_FIELDS", raising=False)
+    assert "threat_actor" not in llm_extraction.merge_fields()
+    monkeypatch.setenv("LLM_MERGE_FIELDS", "target, threat_actor, bukan_kolom")
+    assert llm_extraction.merge_fields() == ("target", "threat_actor")
 
 
 def test_json_in_reasoning_content_when_content_empty():

@@ -91,3 +91,25 @@ Sampel Indonesia hanya berisi 4 artikel relevan tanpa label target/pelaku, jadi
 skor target/pelakunya belum bermakna. Prompt v2 menambahkan aturan bahwa imbauan
 dan peringatan umum ("waspada link video viral ...") bukan incident; v1
 menganggapnya incident. Rata-rata sekitar 4 detik per artikel.
+
+
+## LLM lokal - uji penuh 2026-09-29 (qwen/qwen3.5-9b, prompt llm-extract-v2)
+
+`python eval/score_llm.py`: 448 baris (298 en, 150 id), 0 gagal, sekitar 4 detik
+per artikel (LM Studio di MacBook 16 GB). Pembanding "aturan terbaru" = baris
+26 September di tabel atas (V0.3 in-process); untuk bahasa Indonesia angka
+aturan optimistis karena sampelnya dipakai sebagai set pengembangan.
+
+| Berkas | Ukuran | Aturan terbaru P/R/F1 | LLM P/R/F1 |
+|---|---|---|---|
+| labels.csv (en) | Target | 0.68 / 0.21 / 0.32 | 0.64 / 0.85 / 0.73 |
+| labels.csv (en) | Pelaku | 0.78 / 0.50 / 0.61 | 0.53 / 0.32 / 0.40 |
+| labels.csv (en) | Incident (V0.2 ketat vs is_incident) | 0.76 / 0.51 / 0.61 | 0.97 / 0.67 / 0.80 |
+| labels_id.csv (id) | Target | 0.77 / 0.67 / 0.71 | 0.62 / 0.67 / 0.65 |
+| labels_id.csv (id) | Pelaku | 0.57 / 0.31 / 0.40 | 0.50 / 0.15 / 0.24 |
+| labels_id.csv (id) | Incident (V0.2 ketat vs is_incident) | 0.62 / 0.48 / 0.54 | 0.85 / 0.52 / 0.65 |
+
+Keputusan: `LLM_MERGE=fill_unknown` hanya mengisi kolom yang kosong, dan secara
+default tidak mengisi pelaku (`LLM_MERGE_FIELDS` tanpa threat_actor), karena
+aturan lebih tepat untuk pelaku sedangkan LLM jauh lebih baik untuk korban
+berita Inggris dan untuk menyaring incident.

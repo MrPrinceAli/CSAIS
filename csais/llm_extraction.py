@@ -10,7 +10,8 @@ harian berjalan di GitHub Actions:
   2. pipeline: tahap ``run()`` (setelah V0.3) menyalin hasil itu ke tabel
      lokal ``v03_llm_extraction``. Bila ``LLM_MERGE=fill_unknown``, kolom
      V0.3 yang kosong (UNKNOWN) diisi dari LLM dan extraction_method menjadi
-     ``RULE_BASED+LLM``; nilai hasil aturan tidak pernah ditimpa. Default
+     ``RULE_BASED+LLM``; nilai hasil aturan tidak pernah ditimpa. Kolom yang
+     diisi diatur ``LLM_MERGE_FIELDS`` (default tanpa pelaku). Default
      ``off``: hasil hanya disimpan untuk dibandingkan (eval/score_llm.py).
 
 Setiap hasil diberi ``model`` dan ``prompt_version`` agar hasil model atau
@@ -263,6 +264,17 @@ def store_local(conn, rows):
 
 
 _FILL_FIELDS = ("attack_type", "target", "threat_actor", "attack_date", "location", "target_group")
+# Kolom yang diisi LLM_MERGE=fill_unknown. Pelaku tidak termasuk secara default:
+# pada uji penuh (eval/SCORES.md, 29 Sep 2026) aturan lebih tepat untuk pelaku
+# (F1 0,61 vs 0,40 en), sedangkan LLM jauh lebih baik untuk korban (0,32 vs 0,73 en).
+DEFAULT_MERGE_FIELDS = ("attack_type", "target", "attack_date", "location", "target_group")
+
+
+def merge_fields():
+    raw = os.environ.get("LLM_MERGE_FIELDS")
+    if not raw:
+        return DEFAULT_MERGE_FIELDS
+    return tuple(f.strip() for f in raw.split(",") if f.strip() in _FILL_FIELDS)
 
 
 def _unknown(value, field):
@@ -271,8 +283,9 @@ def _unknown(value, field):
     return field == "attack_type" and str(value).strip().upper() == "CYBER_ATTACK"
 
 
-def fill_unknown(conn):
+def fill_unknown(conn, fields=None):
     """Isi kolom V0.3 yang kosong dari hasil LLM terbaru per artikel; kembalikan jumlah artikel yang berubah."""
+    fields = fields or merge_fields()
     rows = conn.execute(
         f"""
         SELECT x.article_id, {", ".join(f"x.{f}" for f in _FILL_FIELDS)}, x.field_confidence, x.extraction_method,
@@ -295,7 +308,7 @@ def fill_unknown(conn):
             confidence = {}
         updates = {}
         for field, current, proposed in zip(_FILL_FIELDS, rule, model_values):
-            if proposed and _unknown(current, field) and proposed != current:
+            if field in fields and proposed and _unknown(current, field) and proposed != current:
                 updates[field] = proposed
                 confidence[field] = FILL_CONFIDENCE
         if not updates:
