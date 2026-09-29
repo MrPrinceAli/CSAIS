@@ -566,6 +566,8 @@ def extract_threat_actor(raw_text):
             name = _clean_name(match.group(1))
             if name and name.lower() in _COUNTRY_WORDS:
                 name = None  # "kelompok hacker Indonesia": kebangsaan, bukan nama
+            if name and (_is_media_name(name) or _REPORTER_BEFORE.search(raw_text[max(0, match.start(1) - 30) : match.start(1)])):
+                name = None  # "reporter BBC News mengaku telah melihat ...": media, bukan pelaku
             if name and name.lower() not in {a.lower() for a in actors}:
                 actors.append(name[:100])
             if len(actors) >= 3:
@@ -574,6 +576,23 @@ def extract_threat_actor(raw_text):
     if not actors:
         return "UNKNOWN"
     return ", ".join(actors[:3])
+
+
+# Nama media yang ikut tertangkap pola pelaku ("reporter BBC News mengaku telah ...")
+_MEDIA_WORDS = {
+    "news", "times", "post", "today", "daily", "media", "tv", "online", "journal", "herald",
+    "magazine", "tribune", "gazette", "reuters", "bbc", "cnn", "cnbc", "bloomberg", "guardian",
+    "telegraph", "kompas", "detik", "detikcom", "tempo", "antara", "tribun", "liputan6", "okezone",
+    "kumparan", "suara", "republika", "katadata", "metrotv", "idntimes",
+}
+_REPORTER_BEFORE = re.compile(
+    r"(?i:reporter|wartawan|jurnalis|redaksi|koresponden|menurut|dilansir|dikutip|melaporkan|according to|told)\W*$"
+)
+
+
+def _is_media_name(name):
+    tokens = re.findall(r"[a-z0-9]+", name.lower())
+    return bool(tokens) and any(token in _MEDIA_WORDS for token in tokens)
 
 
 _COUNTRY_WORDS = {name.lower() for name in COUNTRY_NAMES} | {
@@ -709,8 +728,12 @@ def extract_information(article_id, title, summary, content):
     Isi artikel penuh (bila sudah diambil content_fetcher) ikut dipindai;
     tanpa isi, ekstraksi bekerja pada judul dan ringkasan saja.
     """
-    title_text = normalize_text(title)
-    summary_text = normalize_text(summary)
+    # Kata kunci dipindai tanpa nama media di akhir judul Google News: "... -
+    # vietnam.vn" bukan berarti lokasinya Vietnam
+    headline, publisher = split_publisher(title)
+    raw_summary = remove_publisher(summary, publisher)
+    title_text = normalize_text(headline)
+    summary_text = normalize_text(raw_summary)
     content_text = normalize_text(content)
     combined_text = f"{title_text} {summary_text} {content_text}".strip()
 
@@ -724,8 +747,6 @@ def extract_information(article_id, title, summary, content):
     indicators = extract_indicators(combined_text)
 
     # Teks asli (huruf besar dipertahankan) tanpa nama media Google News
-    headline, publisher = split_publisher(title)
-    raw_summary = remove_publisher(summary, publisher)
     threat_actor, actor_confidence = extract_threat_actor_tiered(
         headline, raw_summary, content
     )
