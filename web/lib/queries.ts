@@ -1101,3 +1101,19 @@ export async function getAlerts(group?: string): Promise<Record<"hoax" | "offici
   ]);
   return { hoax, official, public: pub, early };
 }
+
+
+export type RelatedIncident = IncidentRow & { similarity: number; same_event: number; cross_language: number };
+
+/** Incident terkait lewat embedding (csais/related.py): kejadian sama lebih dulu, lalu kemiripan. */
+export async function getRelatedIncidents(id: string, limit = 5): Promise<RelatedIncident[]> {
+  if (!(await hasTable("incident_links"))) return [];
+  const select = await incidentSelect();
+  return query<RelatedIncident>(
+    `${select.replace("SELECT i.incident_id,", "SELECT l.similarity, l.same_event, l.cross_language, i.incident_id,")}
+     JOIN incident_links l ON l.related_id = i.incident_id AND l.incident_id = ?
+     ORDER BY l.same_event DESC, l.similarity DESC
+     LIMIT ?`,
+    [id, limit],
+  );
+}

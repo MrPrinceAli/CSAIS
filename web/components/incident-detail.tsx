@@ -1,7 +1,7 @@
 /* Isi detail incident bersama untuk halaman penuh dan jendela pop-up. */
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getIncident, getIncidentTier, getPublisherDomains, type DocumentRow } from "@/lib/queries";
+import { getIncident, getIncidentTier, getPublisherDomains, getRelatedIncidents, type DocumentRow } from "@/lib/queries";
 import { domainOf, formatters, incidentTitle, publisherOf, severity } from "@/lib/format";
 import { attackLabel, evidenceRole, getDict, L, languageLabel, type Lang } from "@/lib/i18n";
 import { trustFromStored, trustScore, TRUST_COLOR } from "@/lib/trust";
@@ -72,7 +72,7 @@ function groupByDay(docs: DocumentRow[], dayKey: (v: string | null) => string): 
 export async function IncidentDetailView({ lang, id, variant = "page" }: { lang: Lang; id: string; variant?: "page" | "modal" }) {
   const t = getDict(lang);
   const f = formatters(lang);
-  const [data, publisherDomains, tier] = await Promise.all([getIncident(id), getPublisherDomains(), getIncidentTier(id)]);
+  const [data, publisherDomains, tier, similar] = await Promise.all([getIncident(id), getPublisherDomains(), getIncidentTier(id), getRelatedIncidents(id)]);
   if (!data) notFound();
   const { incident, docs, relations, related, ledgerCount, flows } = data;
   const level = severity(incident);
@@ -278,6 +278,23 @@ export async function IncidentDetailView({ lang, id, variant = "page" }: { lang:
               ))}
             </div>
           </div>
+          {similar.length ? (
+            <div>
+              <SectionTitle aside={t.detail.similarNote}>{t.detail.similarTitle}</SectionTitle>
+              <div className="flex flex-col gap-2">
+                {similar.map((row) => (
+                  <div key={row.incident_id} className="flex flex-col gap-1">
+                    <span className="flex flex-wrap items-center gap-1.5 text-[11.5px] text-muted">
+                      {row.same_event ? <span className="chip chip-accent">{t.detail.sameEvent}</span> : null}
+                      {row.cross_language ? <span className="chip">{t.detail.otherLanguage(languageLabel(row.language ?? "", lang))}</span> : null}
+                      <span className="font-mono">{t.detail.similarity(Math.round(Number(row.similarity) * 100))}</span>
+                    </span>
+                    <IncidentCard row={row} lang={lang} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
           {related.length ? (
             <div>
               <SectionTitle>{t.detail.relatedTitle}</SectionTitle>

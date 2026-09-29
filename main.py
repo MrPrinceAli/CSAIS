@@ -38,6 +38,7 @@ from csais import (
     llm_extraction,
     official,
     publish,
+    related,
     reset,
     survey,
     v01_data_collector,
@@ -68,6 +69,7 @@ PIPELINE_STEPS = [
     ("Alur D3/D4 - Pernyataan Lembaga", official.run),
     ("V0.7 Verifikasi - Skor Akhir", v07_trust_score.verification_run),
     ("Status Peringatan per Incident", flows.tiers_run),
+    ("Incident Terkait (Embedding)", related.run),
     ("Ledger - Batch Merkle Bukti", ledger.run),
     ("Metrik Perbandingan Alur", flow_compare.run),
 ]
@@ -179,6 +181,11 @@ def parse_args():
         help="jumlah artikel per --llm-extract (default 100)",
     )
     parser.add_argument(
+        "--embed",
+        action="store_true",
+        help="embedding incident lewat LM Studio, cari incident terkait, tulis ke database masukan, lalu keluar",
+    )
+    parser.add_argument(
         "--seed-demo",
         action="store_true",
         help="isi data uji survei dan keputusan lembaga (ditandai DATA UJI), lalu keluar",
@@ -250,6 +257,10 @@ def main():
         print(f"\n📦 Mengekspor incident (min {args.min_docs} artikel) ke {args.export}")
         total = export.export_incidents(args.export, min_docs=args.min_docs)
         print(f"Selesai: {total} incident ditulis.")
+        return
+
+    if args.embed:
+        related.run_embed()
         return
 
     if args.seed_demo:

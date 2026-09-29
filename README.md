@@ -152,6 +152,15 @@ disimpan untuk dibandingkan; untuk mengisi kolom V0.3 yang kosong (UNKNOWN)
 dari LLM, set variabel repositori GitHub `LLM_MERGE=fill_unknown`, lalu jalankan
 workflow dengan `reset_from=4` agar V0.4 dan V0.5 memakai hasilnya.
 
+**Incident terkait (embedding).** Muat model embedding di LM Studio
+(`text-embedding-nomic-embed-text-v1.5`, bisa diganti lewat `EMBED_MODEL`), lalu
+jalankan `./.venv/bin/python main.py --embed` (butuh `pip install -r
+requirements-local.txt`). Vektor per incident di-cache di
+`database/embeddings.db`; tetangga terdekat dalam 60 hari (kemiripan >= 0,88)
+ditulis ke `incident_links` di database masukan, dan pasangan sangat mirip yang
+berdekatan waktunya ditandai "kemungkinan kejadian sama" (termasuk lintas
+bahasa). Detail incident menampilkannya sebagai "Incident terkait".
+
 **Blockchain lokal (Anvil, Foundry).** Kontrak `chain/src/CsaisAnchor.sol`
 (permissioned: hanya relayer CSAIS yang boleh menjangkarkan; BSSN, OJK,
 Komdigi, dan Siber Polri terdaftar untuk atestasi berikutnya).
