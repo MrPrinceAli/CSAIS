@@ -3,6 +3,7 @@ import type { InValue } from "@libsql/client";
 import { query, queryOne } from "./db";
 import { publisherOf } from "./format";
 import { fromHex, leafHash, merkleProof, toHex, verifyProof } from "./merkle";
+import { outputHash } from "./records";
 import type { StoredTrust } from "./trust";
 
 export type IncidentRow = {
@@ -480,6 +481,7 @@ export type FlowOutput = {
   basis: string | null;
   source_ref: string | null;
   reason: string | null;
+  output_hash: string;
   recorded_at: string;
 };
 
@@ -529,7 +531,7 @@ export const getIncident = cache(async (id: string) => {
       ok
         ? query<FlowOutput>(
             `SELECT output_id, flow, attack_type, target, threat_actor, attack_date, location, target_group,
-                    field_status, status, tier, prevention, basis, source_ref, reason, recorded_at
+                    field_status, status, tier, prevention, basis, source_ref, reason, output_hash, recorded_at
              FROM flow_outputs WHERE incident_id = ? ORDER BY output_id`,
             [id],
           )
@@ -642,8 +644,26 @@ export type VerifyEvidence = {
   ledger: LedgerProof | null;
 };
 
+export type VerifyRecord = {
+  uid: string;
+  output_id: number;
+  incident_id: string;
+  title: string | null;
+  status: string;
+  tier: string | null;
+  reason: string | null;
+  source_ref: string | null;
+  recorded_at: string;
+  supersedes: number | null;
+  output_hash: string;
+  payload_hash: string | null; // output_hash yang dibukukan di daun ledger
+  hash_matches: boolean; // isi baris saat ini menghasilkan output_hash yang sama
+  ledger: LedgerProof | null;
+};
+
 export type VerifyResult = {
-  kind: "hash" | "url" | "uid" | "kosong";
+  kind: "hash" | "url" | "uid" | "record" | "kosong";
+  record?: VerifyRecord | null;
   article: {
     article_id: number;
     article_uid: string | null;
@@ -729,6 +749,49 @@ export const getLedgerStats = cache(async (): Promise<LedgerStats | null> => {
   return row ? { batches: Number(row.batches), leaves: Number(row.leaves), pending: Number(row.pending), latest: row.latest } : null;
 });
 
+/** Catatan resmi D4 dari ID daunnya (record_uid); null bila bukan daun catatan resmi. */
+async function verifyRecord(uid: string): Promise<VerifyRecord | null> {
+  if (!/^[0-9a-f]{24}$/.test(uid) || !(await hasTable("evidence_leaves")) || !(await hasTable("flow_outputs"))) return null;
+  const leaf = await queryOne<{ payload: string }>(`SELECT payload FROM evidence_leaves WHERE evidence_uid = ?`, [uid]);
+  let payload: { kind?: string; output_id?: number; output_hash?: string } = {};
+  try {
+    payload = leaf ? JSON.parse(leaf.payload) : {};
+  } catch {
+    payload = {};
+  }
+  if (payload.kind !== "official_record" || payload.output_id === undefined) return null;
+  const row = await queryOne<Record<string, unknown> & { output_id: number; incident_id: string; status: string; output_hash: string; recorded_at: string }>(
+    `SELECT * FROM flow_outputs WHERE output_id = ? AND flow = 'D4'`,
+    [payload.output_id],
+  );
+  if (!row) return null;
+  const head = await queryOne<{ title: string | null }>(
+    `SELECT a.title FROM v05_incidents i LEFT JOIN articles a ON a.article_id = i.anchor_article_id WHERE i.incident_id = ?`,
+    [row.incident_id],
+  );
+  const current = outputHash(row);
+  const matches = current === row.output_hash && current === payload.output_hash;
+  const ledger = await ledgerProof(uid, null);
+  // untuk catatan resmi, "salinan berubah" berarti isi baris tidak lagi sama dengan hash yang dibukukan
+  if (ledger) ledger.snapshot_changed = !matches;
+  return {
+    uid,
+    output_id: Number(row.output_id),
+    incident_id: row.incident_id,
+    title: head?.title ?? null,
+    status: row.status,
+    tier: (row.tier as string | null) ?? null,
+    reason: (row.reason as string | null) ?? null,
+    source_ref: (row.source_ref as string | null) ?? null,
+    recorded_at: row.recorded_at,
+    supersedes: row.supersedes === null || row.supersedes === undefined ? null : Number(row.supersedes),
+    output_hash: row.output_hash,
+    payload_hash: payload.output_hash ?? null,
+    hash_matches: matches,
+    ledger,
+  };
+}
+
 export async function verify(input: string): Promise<VerifyResult> {
   const value = input.trim();
   if (!value) return { kind: "kosong", article: null, evidence: [] };
@@ -753,6 +816,8 @@ export async function verify(input: string): Promise<VerifyResult> {
       [value, `${bare}%`, value, `${bare}%`],
     );
   } else {
+    const record = await verifyRecord(value.toLowerCase());
+    if (record) return { kind: "record", article: null, evidence: [], record };
     const ev = await queryOne<{ article_id: number }>(`SELECT article_id FROM v06_evidence WHERE evidence_uid = ? LIMIT 1`, [value.toLowerCase()]);
     if (ev) {
       article = await queryOne(`SELECT ${articleCols} FROM articles WHERE article_id = ?`, [ev.article_id]);
@@ -869,7 +934,7 @@ export async function getSurveyCard(incidentId: string): Promise<SurveyCard | nu
   if (!(await hasTable("flow_outputs"))) return null;
   const card = await queryOne<FlowOutput>(
     `SELECT output_id, flow, attack_type, target, threat_actor, attack_date, location, target_group,
-            field_status, status, tier, prevention, basis, source_ref, reason, recorded_at
+            field_status, status, tier, prevention, basis, source_ref, reason, output_hash, recorded_at
      FROM flow_outputs WHERE incident_id = ? AND flow = 'D1' ORDER BY output_id DESC LIMIT 1`,
     [incidentId],
   );

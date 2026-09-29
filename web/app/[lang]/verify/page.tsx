@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getLedgerStats, getSampleEvidence, verify, type LedgerProof } from "@/lib/queries";
-import { formatters } from "@/lib/format";
+import { getLedgerStats, getSampleEvidence, verify, type LedgerProof, type VerifyRecord } from "@/lib/queries";
+import { formatters, incidentTitle } from "@/lib/format";
 import { evidenceRole, getDict, isLang, L, type Lang } from "@/lib/i18n";
 import { HashGrid } from "@/components/ui";
 import { AttestationSection } from "@/components/attestation-section";
@@ -14,7 +14,7 @@ function short(hex: string): string {
 }
 
 /** Posisi bukti dalam batch Merkle: akar, daun, hasil verifikasi proof, status penjangkaran. */
-function LedgerBlock({ ledger, lang }: { ledger: LedgerProof; lang: Lang }) {
+function LedgerBlock({ ledger, lang, snapshot }: { ledger: LedgerProof; lang: Lang; snapshot?: { same: string; changed: string } }) {
   const t = getDict(lang).verify.ledger;
   const f = formatters(lang);
   const ok = ledger.valid && ledger.leaf_matches;
@@ -42,8 +42,8 @@ function LedgerBlock({ ledger, lang }: { ledger: LedgerProof; lang: Lang }) {
         <span className="chip chip-chain">
           {ledger.anchor_status === "ANCHORED" && ledger.anchor_chain ? t.anchored(ledger.anchor_chain) : t.pending}
         </span>
-        <span className="chip" title={ledger.snapshot_sha256 ?? undefined}>
-          {ledger.snapshot_changed ? t.snapshotChanged : t.snapshotSame}
+        <span className={`chip ${snapshot && ledger.snapshot_changed ? "text-high" : ""}`} title={ledger.snapshot_sha256 ?? undefined}>
+          {ledger.snapshot_changed ? (snapshot?.changed ?? t.snapshotChanged) : (snapshot?.same ?? t.snapshotSame)}
         </span>
       </div>
     </div>
@@ -55,6 +55,70 @@ type Search = Record<string, string | string[] | undefined>;
 export async function generateMetadata({ params }: { params: Promise<{ lang: string }> }): Promise<Metadata> {
   const { lang } = await params;
   return { title: getDict(isLang(lang) ? lang : "id").verify.title };
+}
+
+/** Hasil verifikasi catatan resmi D4: isi catatan, kecocokan hash, dan posisinya di batch Merkle. */
+function RecordBlock({ record, lang }: { record: VerifyRecord; lang: Lang }) {
+  const t = getDict(lang);
+  const r = t.verify.record;
+  const f = formatters(lang);
+  const ok = record.hash_matches && (record.ledger?.valid ?? false) && (record.ledger?.leaf_matches ?? false);
+  return (
+    <section className="card flex flex-col gap-4 p-5" style={{ borderTopColor: "var(--good)", borderTopWidth: 2 }}>
+      <div className="flex items-start gap-3">
+        <span className={`mt-0.5 inline-flex h-8 w-8 flex-none items-center justify-center rounded-full ${ok ? "bg-good" : "bg-high"}`} aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0f1720" strokeWidth="3">
+            {ok ? <path d="M5 12l5 5L20 7" /> : <path d="M6 6l12 12M18 6L6 18" />}
+          </svg>
+        </span>
+        <div className="flex flex-col">
+          <span className="text-[16px] font-semibold">{ok ? r.found : r.mismatch}</span>
+          <span className="text-[12.5px] text-muted">{r.kind}</span>
+        </div>
+      </div>
+      <dl className="grid grid-cols-[150px_minmax(0,1fr)] gap-x-4 gap-y-2 text-[13px]">
+        <dt className="text-muted">{r.incident}</dt>
+        <dd>
+          <Link href={L(lang, `/incidents/${record.incident_id}`)} className="no-underline">
+            {incidentTitle(record.title) || record.incident_id}
+          </Link>
+        </dd>
+        <dt className="text-muted">{r.status}</dt>
+        <dd className="flex flex-wrap gap-2">
+          <span className={record.status === "dibantah" ? "text-high" : "text-good"}>{t.flows.status[record.status] ?? record.status}</span>
+          {record.tier ? <span className="chip">{t.flows.tiers[record.tier] ?? record.tier}</span> : null}
+        </dd>
+        <dt className="text-muted">{r.reason}</dt>
+        <dd className="text-soft">{record.reason ?? "—"}</dd>
+        <dt className="text-muted">{r.source}</dt>
+        <dd className="break-all">
+          {record.source_ref ? (
+            <a href={record.source_ref} target="_blank" rel="noreferrer">
+              {record.source_ref}
+            </a>
+          ) : (
+            "—"
+          )}
+        </dd>
+        <dt className="text-muted">{r.recorded}</dt>
+        <dd>{f.dateTime(record.recorded_at)}</dd>
+        {record.supersedes !== null ? (
+          <>
+            <dt className="text-muted">{r.supersedes}</dt>
+            <dd className="font-mono">#{record.supersedes}</dd>
+          </>
+        ) : null}
+        <dt className="text-muted">{r.hash}</dt>
+        <dd className="flex flex-col gap-0.5">
+          <span className="break-all font-mono text-[11.5px]">{record.output_hash}</span>
+          <span className={record.hash_matches ? "text-good" : "text-high"}>{record.hash_matches ? r.hashOk : r.hashBad}</span>
+        </dd>
+        <dt className="text-muted">{r.uid}</dt>
+        <dd className="break-all font-mono text-[11.5px]">{record.uid}</dd>
+      </dl>
+      {record.ledger ? <LedgerBlock ledger={record.ledger} lang={lang} snapshot={{ same: r.chipSame, changed: r.chipChanged }} /> : null}
+    </section>
+  );
 }
 
 export default async function VerifyPage({ params, searchParams }: { params: Promise<{ lang: string }>; searchParams: Promise<Search> }) {
@@ -121,7 +185,9 @@ export default async function VerifyPage({ params, searchParams }: { params: Pro
         </div>
       </section>
 
-      {result ? (
+      {result?.record ? (
+        <RecordBlock record={result.record} lang={lang} />
+      ) : result ? (
         result.article ? (
           <section className="card flex flex-col gap-4 p-5">
             <div className="flex items-start gap-3">

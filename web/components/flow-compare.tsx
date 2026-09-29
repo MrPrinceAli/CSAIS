@@ -4,6 +4,7 @@ import { formatters } from "@/lib/format";
 import Link from "next/link";
 import { attackLabel, getDict, groupLabel, L, type Lang } from "@/lib/i18n";
 import { channelOf, tipText } from "@/lib/prevention";
+import { recordUid } from "@/lib/records";
 import { SectionTitle } from "@/components/ui";
 
 const FLOWS = ["D1", "D2", "D3", "D4"] as const;
@@ -183,6 +184,11 @@ export function FlowCompare({ lang, incidentId, outputs }: { lang: Lang; inciden
                     {o?.reason ? (
                       <span className="flex flex-col gap-1">
                         <span className="text-soft">{o.reason}</span>
+                        {flow === "D4" ? (
+                          <Link href={`${L(lang, "/verify")}?q=${recordUid(o.output_id, o.output_hash)}`} className="text-[11.5px]">
+                            {t.flows.verifyRecord}
+                          </Link>
+                        ) : null}
                         {hostOf(o.source_ref) ? (
                           <a href={o.source_ref ?? "#"} target="_blank" rel="noreferrer" className="text-[11.5px]">
                             {hostOf(o.source_ref)}
