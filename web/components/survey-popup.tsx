@@ -6,8 +6,10 @@
  * ulang = kunjungan baru; selama tahap pengujian tidak ada "jangan tampilkan
  * lagi"). Pengunjung bisa mengganti berita, menilai kartu, atau menutupnya.
  */
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { SafeImage } from "@/components/safe-image";
 import { SurveyForm, type SurveyFieldView } from "@/components/survey-form";
 
 type Card = {
@@ -15,7 +17,8 @@ type Card = {
   outputId: number;
   title: string;
   documentCount: number;
-  articles: { title: string; url: string | null; date: string }[];
+  logos: string[];
+  publishers: number;
   fields: SurveyFieldView[];
 };
 
@@ -25,8 +28,8 @@ type Strings = {
   rate: string;
   other: string;
   close: string;
-  read: string;
-  articles: string;
+  detail: string;
+  publishers: string; // label setelah angka, mis. "penerbit"
   form: {
     answers: Record<string, string>;
     submit: string;
@@ -98,23 +101,27 @@ export function SurveyPopup({ lang, strings }: { lang: string; strings: Strings 
         </button>
       </div>
       <div className="survey-pop-body">
-        <div className="flex flex-col gap-1.5 px-3.5 py-3">
-          <span className="text-[14px] font-semibold leading-snug">{card.title}</span>
-          <span className="text-[11.5px] text-muted">
-            {strings.read} · {card.documentCount} {strings.articles}
-          </span>
-          <ul className="flex flex-col gap-0.5 text-[12px]">
-            {card.articles.map((a, i) =>
-              a.url ? (
-                <li key={i} className="truncate">
-                  <span className="font-mono text-muted">{a.date} </span>
-                  <a href={a.url} target="_blank" rel="noreferrer">
-                    {a.title}
-                  </a>
-                </li>
-              ) : null,
-            )}
-          </ul>
+        <div className="survey-pop-hero">
+          <div className="survey-pop-media" aria-hidden="true">
+            <SafeImage key={card.incidentId} src={`/api/incident-image/${encodeURIComponent(card.incidentId)}`} alt="" fill unoptimized referrerPolicy="no-referrer" sizes="380px" className="object-cover" />
+          </div>
+          <div className="relative flex flex-col gap-2 px-3.5 pb-3 pt-10">
+            <span className="text-[14.5px] font-semibold leading-snug">{card.title}</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center">
+                {card.logos.map((domain, i) => (
+                  <span key={domain} className={`survey-pop-logo ${i ? "-ml-1.5" : ""}`} style={{ zIndex: 3 - i }} title={domain}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`} alt="" width={16} height={16} loading="lazy" />
+                  </span>
+                ))}
+              </span>
+              <span className="text-[11.5px] text-soft">{card.publishers} {strings.publishers}</span>
+              <Link href={`/${lang}/incidents/${card.incidentId}`} className="btn btn-ghost ml-auto px-2.5 py-1 text-[12px] no-underline">
+                {strings.detail}
+              </Link>
+            </div>
+          </div>
         </div>
         {phase === "form" ? (
           <SurveyForm key={card.outputId} lang={lang} incidentId={card.incidentId} outputId={card.outputId} fields={card.fields} strings={strings.form} onDone={() => setPhase("closed")} compact />

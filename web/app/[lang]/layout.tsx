@@ -110,8 +110,8 @@ export default async function RootLayout({ children, modal, params }: { children
             rate: t.surveyPopup.rate,
             other: t.surveyPopup.other,
             close: t.surveyPopup.close,
-            read: t.surveyPopup.read,
-            articles: t.common.articles,
+            detail: t.surveyPopup.detail,
+            publishers: t.surveyPopup.publishers,
             form: {
               answers: t.survey.answers,
               submit: t.survey.submit,

@@ -355,7 +355,8 @@ const id = {
     rate: "Nilai berita ini",
     other: "Ganti berita lain",
     close: "Tutup",
-    read: "baca beritanya",
+    detail: "Detail incident",
+    publishers: "penerbit",
     thanks: "Terima kasih, penilaian tersimpan.",
   },
   survey: {
@@ -850,7 +851,8 @@ const en: Dict = {
     rate: "Review this story",
     other: "Show another story",
     close: "Close",
-    read: "read the news",
+    detail: "Incident details",
+    publishers: "publishers",
     thanks: "Thank you, your review is saved.",
   },
   survey: {

@@ -832,3 +832,9 @@ body:has(.im-root) { overflow: hidden; }
 @keyframes survey-pop-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 @media (max-width: 640px) { .survey-pop { right: 16px; left: 16px; width: auto; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); } }
 @media (prefers-reduced-motion: reduce) { .survey-pop { animation: none; } }
+.survey-pop-hero { position: relative; isolation: isolate; overflow: hidden; border-bottom: 1px solid var(--line); background: var(--bg); }
+.survey-pop-media { position: absolute; inset: 0; z-index: -1; }
+.survey-pop-media img { opacity: .55; }
+.survey-pop-media::after { content: ""; position: absolute; inset: 0;
+  background: linear-gradient(0deg, color-mix(in srgb, var(--surface) 96%, transparent) 20%, color-mix(in srgb, var(--surface) 55%, transparent) 70%, color-mix(in srgb, var(--surface) 25%, transparent) 100%); }
+.survey-pop-logo { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 6px; border: 1px solid var(--line); background: var(--nav, var(--surface)); overflow: hidden; }
