@@ -6,6 +6,7 @@ import { domainOf, formatters, incidentTitle, publisherOf, severity } from "@/li
 import { attackLabel, evidenceRole, getDict, L, languageLabel, type Lang } from "@/lib/i18n";
 import { trustFromStored, trustScore, TRUST_COLOR } from "@/lib/trust";
 import { FlowCompare } from "@/components/flow-compare";
+import { SafeImage } from "@/components/safe-image";
 import { PreventionPanel } from "@/components/prevention-panel";
 import { HashGrid, IncidentCard, SectionTitle, SeverityText, SourceLogo, TierBadge, TrustRing, TypeChip } from "@/components/ui";
 
@@ -176,7 +177,13 @@ export async function IncidentDetailView({ lang, id, variant = "page" }: { lang:
         </nav>
       ) : null}
 
-      <header className="grid gap-4 border-b border-line pb-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+      {/* Banner: foto berita incident (og:image artikel sumber) sebagai latar bagian atas saja;
+          bila tidak ada foto, SafeImage menghilang dan banner tampil polos */}
+      <div className="detail-hero">
+        <div className="detail-hero-media" aria-hidden="true">
+          <SafeImage src={`/api/incident-image/${encodeURIComponent(incident.incident_id)}`} alt="" fill unoptimized referrerPolicy="no-referrer" sizes="(max-width: 1024px) 100vw, 1200px" className="object-cover" />
+        </div>
+      <header className="relative grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="flex flex-col gap-2.5">
           <div className="flex flex-wrap items-center gap-3">
             {/* keparahan dari pemberitaan tidak relevan bila lembaga membantah kejadiannya */}
@@ -250,6 +257,7 @@ export async function IncidentDetailView({ lang, id, variant = "page" }: { lang:
           </div>
         </div>
       </header>
+      </div>
 
       {tier ? <PreventionPanel tier={tier} lang={lang} /> : null}
 

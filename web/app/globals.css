@@ -812,3 +812,12 @@ body:has(.im-root) { overflow: hidden; }
   .cc-backdrop, .cc-drawer { animation: none !important; }
   .im-panel, .im-backdrop, .im-body, .im-sk, .im-led { animation: none !important; }
 }
+
+/* Banner detail incident: foto berita di persegi panjang bagian atas, gradasi agar teks terbaca */
+.detail-hero { position: relative; isolation: isolate; overflow: hidden; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); }
+.detail-hero-media { position: absolute; inset: 0; z-index: -1; }
+.detail-hero-media img { opacity: .6; filter: saturate(.85); }
+.detail-hero-media::after { content: ""; position: absolute; inset: 0;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--bg) 94%, transparent) 0%, color-mix(in srgb, var(--bg) 78%, transparent) 45%, color-mix(in srgb, var(--bg) 40%, transparent) 100%),
+    linear-gradient(0deg, color-mix(in srgb, var(--bg) 70%, transparent) 0%, transparent 55%); }
