@@ -359,7 +359,7 @@ export async function IncidentDetailView({ lang, id, variant = "page" }: { lang:
       {similar.length ? (
         <section>
           <SectionTitle aside={t.detail.similarNote}>{t.detail.similarTitle}</SectionTitle>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-3 lg:grid-cols-2">
             {similar.map((row) => (
               <div key={row.incident_id} className="flex min-w-0 flex-col gap-1">
                 <span className="flex flex-wrap items-center gap-1.5 text-[11.5px] text-muted">
