@@ -161,6 +161,14 @@ ditulis ke `incident_links` di database masukan, dan pasangan sangat mirip yang
 berdekatan waktunya ditandai "kemungkinan kejadian sama" (termasuk lintas
 bahasa). Detail incident menampilkannya sebagai "Incident terkait".
 
+**Gabung kejadian yang sama (#21).** Setelah `--embed`, jalankan
+`./.venv/bin/python main.py --judge-merges` (LLM lokal, sekitar 5 detik per
+pasangan): setiap pasangan "kemungkinan kejadian sama" dinilai LLM (sama atau
+tidak, keyakinan, alasan) dan keputusannya ditulis ke `merge_decisions`. V0.5
+menggabungkan pasangan yang dinyatakan sama dengan keyakinan >= 0,7 (incident
+paling awal menjadi induk, `clustering_method = LLM_MERGED`). Artikel lama ikut
+tergabung setelah workflow dijalankan dengan `reset_from=5`.
+
 **Blockchain lokal (Anvil, Foundry).** Kontrak `chain/src/CsaisAnchor.sol`
 (permissioned: hanya relayer CSAIS yang boleh menjangkarkan; BSSN, OJK,
 Komdigi, dan Siber Polri terdaftar untuk atestasi berikutnya).

@@ -79,3 +79,32 @@ def test_generic_attack_type_behaves_as_unknown():
     assert v05.prefer_specific_attack_type("cyber_attack", "ransomware") == "ransomware"
     assert v05.prefer_specific_attack_type("ransomware", "phishing") == "ransomware"
     assert v05.prefer_specific_attack_type(None, "cyber_attack") == "cyber_attack"
+
+
+def test_judged_merges_union_and_head(temp_conn):
+    """Keputusan LLM 'sama' digabung per kelompok; incident paling awal menjadi induk."""
+    from csais import merge_judge
+
+    v05.create_tables(temp_conn)
+    for incident_id, date, docs in (("A", "2026-09-03", 2), ("B", "2026-09-01", 1), ("C", "2026-09-05", 3), ("D", "2026-09-04", 1)):
+        temp_conn.execute(
+            "INSERT INTO v05_incidents (incident_id, attack_type, document_count, anchor_text, anchor_published_date, last_published_date) VALUES (?, 'ransomware', ?, 'x', ?, ?)",
+            (incident_id, docs, date, date),
+        )
+        for n in range(docs):
+            temp_conn.execute("INSERT INTO v05_incident_documents (incident_id, article_id) VALUES (?, ?)", (incident_id, hash((incident_id, n)) % 100000))
+    temp_conn.commit()
+    rows = [("A", "B", 0.9), ("B", "C", 0.8), ("X", "D", 0.95)]  # X sudah tidak ada: dilewati
+    assert merge_judge.apply_judged_merges(temp_conn, rows) == 2
+    remaining = dict(temp_conn.execute("SELECT incident_id, document_count FROM v05_incidents").fetchall())
+    assert remaining == {"B": 6, "D": 1}
+    methods = {m for (m,) in temp_conn.execute("SELECT clustering_method FROM v05_incident_documents WHERE incident_id = 'B'")}
+    assert merge_judge.METHOD in methods
+    assert merge_judge.apply_judged_merges(temp_conn, rows) == 0  # A dan C sudah tidak ada
+
+
+def test_merge_groups():
+    from csais.merge_judge import merge_groups
+
+    groups = sorted(sorted(g) for g in merge_groups([("a", "b"), ("c", "d"), ("b", "e")]))
+    assert groups == [["a", "b", "e"], ["c", "d"]]

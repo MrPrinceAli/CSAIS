@@ -1063,7 +1063,7 @@ def _table_exists(conn, table):
     return cursor.fetchone() is not None
 
 
-def merge_incident(conn, head, other):
+def merge_incident(conn, head, other, method="CHAINED"):
     """Pindahkan seluruh artikel ``other`` ke ``head``, hapus ``other``.
 
     Hasil V0.6 kedua incident dihapus agar dihitung ulang pada run V0.6.
@@ -1072,9 +1072,9 @@ def merge_incident(conn, head, other):
     cursor = conn.cursor()
     head_id, other_id = head["incident_id"], other["incident_id"]
     cursor.execute(
-        "UPDATE v05_incident_documents SET incident_id = ?, clustering_method = 'CHAINED' "
+        "UPDATE v05_incident_documents SET incident_id = ?, clustering_method = ? "
         "WHERE incident_id = ?",
-        (head_id, other_id),
+        (head_id, method, other_id),
     )
     cursor.execute(
         "UPDATE v05_processed_articles SET incident_id = ? WHERE incident_id = ?",
@@ -1369,6 +1369,11 @@ def run():
         merged = chain_incidents(conn)
         if merged:
             print(f"\n🔗 {merged} incident lanjutan dirangkai ke incident sebelumnya.")
+        from csais.merge_judge import apply_judged_merges
+
+        judged = apply_judged_merges(conn)
+        if judged:
+            print(f"🤝 {judged} incident digabung ke kejadian yang sama (dinilai LLM).")
     except KeyboardInterrupt:
         conn.commit()
         print("\n\n⚠️ V0.5 dihentikan oleh user.")

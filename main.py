@@ -36,6 +36,7 @@ from csais import (
     language,
     ledger,
     llm_extraction,
+    merge_judge,
     official,
     publish,
     related,
@@ -186,6 +187,11 @@ def parse_args():
         help="embedding incident lewat LM Studio, cari incident terkait, tulis ke database masukan, lalu keluar",
     )
     parser.add_argument(
+        "--judge-merges",
+        action="store_true",
+        help="nilai pasangan 'kemungkinan kejadian sama' dengan LLM lokal (batas: --llm-limit, 0 = semua), lalu keluar",
+    )
+    parser.add_argument(
         "--seed-demo",
         action="store_true",
         help="isi data uji survei dan keputusan lembaga (ditandai DATA UJI), lalu keluar",
@@ -257,6 +263,10 @@ def main():
         print(f"\n📦 Mengekspor incident (min {args.min_docs} artikel) ke {args.export}")
         total = export.export_incidents(args.export, min_docs=args.min_docs)
         print(f"Selesai: {total} incident ditulis.")
+        return
+
+    if args.judge_merges:
+        merge_judge.run_local(limit=args.llm_limit if "--llm-limit" in sys.argv else 0)
         return
 
     if args.embed:
