@@ -286,23 +286,6 @@ export async function IncidentDetailView({ lang, id, variant = "page" }: { lang:
               ))}
             </div>
           </div>
-          {similar.length ? (
-            <div>
-              <SectionTitle aside={t.detail.similarNote}>{t.detail.similarTitle}</SectionTitle>
-              <div className="flex flex-col gap-2">
-                {similar.map((row) => (
-                  <div key={row.incident_id} className="flex flex-col gap-1">
-                    <span className="flex flex-wrap items-center gap-1.5 text-[11.5px] text-muted">
-                      {row.same_event ? <span className="chip chip-accent">{t.detail.sameEvent}</span> : null}
-                      {row.cross_language ? <span className="chip">{t.detail.otherLanguage(languageLabel(row.language ?? "", lang))}</span> : null}
-                      <span className="font-mono">{t.detail.similarity(Math.round(Number(row.similarity) * 100))}</span>
-                    </span>
-                    <IncidentCard row={row} lang={lang} />
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
           {related.length ? (
             <div>
               <SectionTitle>{t.detail.relatedTitle}</SectionTitle>
@@ -372,6 +355,24 @@ export async function IncidentDetailView({ lang, id, variant = "page" }: { lang:
       </div>
 
       <FlowCompare lang={lang} incidentId={incident.incident_id} outputs={flows} />
+
+      {similar.length ? (
+        <section>
+          <SectionTitle aside={t.detail.similarNote}>{t.detail.similarTitle}</SectionTitle>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {similar.map((row) => (
+              <div key={row.incident_id} className="flex min-w-0 flex-col gap-1">
+                <span className="flex flex-wrap items-center gap-1.5 text-[11.5px] text-muted">
+                  {row.same_event ? <span className="chip chip-accent">{t.detail.sameEvent}</span> : null}
+                  {row.cross_language ? <span className="chip">{t.detail.otherLanguage(languageLabel(row.language ?? "", lang))}</span> : null}
+                  <span className="font-mono">{t.detail.similarity(Math.round(Number(row.similarity) * 100))}</span>
+                </span>
+                <IncidentCard row={row} lang={lang} />
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 
