@@ -9,6 +9,7 @@ import { formatters } from "@/lib/format";
 import { getDict, isLang, L, LANGS, type Lang } from "@/lib/i18n";
 import { LangToggle } from "@/components/lang-toggle";
 import { NavLinks } from "@/components/nav-links";
+import { SurveyPopup } from "@/components/survey-popup";
 
 const plex = IBM_Plex_Sans({ variable: "--font-plex", subsets: ["latin"], weight: ["400", "500", "600", "700"] });
 const jet = JetBrains_Mono({ variable: "--font-jet", subsets: ["latin"], weight: ["400", "600"] });
@@ -31,7 +32,6 @@ const NAV: { key: keyof ReturnType<typeof getDict>["nav"]; path: string }[] = [
   { key: "home", path: "/" },
   { key: "incidents", path: "/incidents" },
   { key: "alerts", path: "/alerts" },
-  { key: "survey", path: "/survey" },
   { key: "transparency", path: "/transparency" },
 ];
 
@@ -102,6 +102,28 @@ export default async function RootLayout({ children, modal, params }: { children
           </div>
         </footer>
         {modal}
+        <SurveyPopup
+          lang={lang}
+          strings={{
+            eyebrow: t.surveyPopup.eyebrow,
+            ask: t.surveyPopup.ask,
+            rate: t.surveyPopup.rate,
+            other: t.surveyPopup.other,
+            close: t.surveyPopup.close,
+            read: t.surveyPopup.read,
+            articles: t.common.articles,
+            form: {
+              answers: t.survey.answers,
+              submit: t.survey.submit,
+              sending: t.survey.sending,
+              chooseOne: t.survey.chooseOne,
+              thanks: t.surveyPopup.thanks,
+              next: t.survey.next,
+              failed: t.survey.failed,
+              unknown: t.common.unknown,
+            },
+          }}
+        />
       </body>
     </html>
   );

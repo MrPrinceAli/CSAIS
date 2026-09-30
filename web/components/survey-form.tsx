@@ -33,7 +33,7 @@ function respondentId(): string | null {
   }
 }
 
-export function SurveyForm({ lang, incidentId, outputId, fields, nextHref, strings }: { lang: string; incidentId: string; outputId: number; fields: SurveyFieldView[]; nextHref: string; strings: Strings }) {
+export function SurveyForm({ lang, incidentId, outputId, fields, nextHref, strings, onDone, compact = false }: { lang: string; incidentId: string; outputId: number; fields: SurveyFieldView[]; nextHref?: string; strings: Strings; onDone?: () => void; compact?: boolean }) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [state, setState] = useState<"idle" | "sending" | "done" | "error" | "empty">("idle");
 
@@ -51,6 +51,7 @@ export function SurveyForm({ lang, incidentId, outputId, fields, nextHref, strin
         body: JSON.stringify({ incident_id: incidentId, output_id: outputId, answers, respondent: respondentId(), lang }),
       });
       setState(response.ok ? "done" : "error");
+      if (response.ok && onDone) window.setTimeout(onDone, 2500);
     } catch {
       setState("error");
     }
@@ -60,9 +61,11 @@ export function SurveyForm({ lang, incidentId, outputId, fields, nextHref, strin
     return (
       <div className="card flex flex-col items-start gap-3 p-5" role="status">
         <p className="text-[14px] text-good">{strings.thanks}</p>
-        <a href={nextHref} className="btn btn-primary no-underline">
-          {strings.next}
-        </a>
+        {nextHref ? (
+          <a href={nextHref} className="btn btn-primary no-underline">
+            {strings.next}
+          </a>
+        ) : null}
       </div>
     );
   }
@@ -70,11 +73,11 @@ export function SurveyForm({ lang, incidentId, outputId, fields, nextHref, strin
   return (
     <form onSubmit={submit} className="card flex flex-col">
       {fields.map((field) => (
-        <fieldset key={field.key} className="grid gap-3 border-b border-line px-4 py-3.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+        <fieldset key={field.key} className={`grid gap-2 border-b border-line ${compact ? "px-3 py-2.5" : "px-4 py-3.5 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"}`}>
           <legend className="sr-only">{field.label}</legend>
           <div className="flex min-w-0 flex-col gap-0.5">
             <span className="label">{field.label}</span>
-            <span className={`text-[15px] font-semibold ${field.value ? "" : "font-normal text-muted"}`}>{field.value ?? strings.unknown}</span>
+            <span className={`${compact ? "text-[13.5px]" : "text-[15px]"} font-semibold ${field.value ? "" : "font-normal text-muted"}`}>{field.value ?? strings.unknown}</span>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {OPTIONS.map((option) => {
@@ -83,12 +86,12 @@ export function SurveyForm({ lang, incidentId, outputId, fields, nextHref, strin
               return (
                 <label
                   key={option}
-                  htmlFor={id}
-                  className="cursor-pointer rounded-md border px-3 py-1.5 text-[13px] transition-colors focus-within:outline focus-within:outline-2"
+                  htmlFor={`${compact ? "pop-" : ""}${id}`}
+                  className={`cursor-pointer rounded-md border ${compact ? "px-2 py-1 text-[12px]" : "px-3 py-1.5 text-[13px]"} transition-colors focus-within:outline focus-within:outline-2`}
                   style={{ borderColor: checked ? TONE[option] : "var(--line)", color: checked ? TONE[option] : undefined, background: checked ? `color-mix(in srgb, ${TONE[option]} 12%, transparent)` : undefined }}
                 >
                   <input
-                    id={id}
+                    id={`${compact ? "pop-" : ""}${id}`}
                     type="radio"
                     name={field.key}
                     value={option}
@@ -106,7 +109,7 @@ export function SurveyForm({ lang, incidentId, outputId, fields, nextHref, strin
           </div>
         </fieldset>
       ))}
-      <div className="flex flex-wrap items-center gap-3 px-4 py-3.5">
+      <div className={`flex flex-wrap items-center gap-3 ${compact ? "px-3 py-3" : "px-4 py-3.5"}`}>
         <button type="submit" className="btn btn-primary" disabled={state === "sending"}>
           {state === "sending" ? strings.sending : strings.submit}
         </button>

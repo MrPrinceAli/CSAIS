@@ -349,6 +349,15 @@ const id = {
     } as Record<string, string>,
     enter: "Masuk portal lembaga",
   },
+  surveyPopup: {
+    eyebrow: "Survei publik · D2",
+    ask: "Bantu periksa: apakah ringkasan mesin sesuai dengan beritanya?",
+    rate: "Nilai berita ini",
+    other: "Ganti berita lain",
+    close: "Tutup",
+    read: "baca beritanya",
+    thanks: "Terima kasih, penilaian tersimpan.",
+  },
   survey: {
     title: "Survei publik",
     lead: "Periksa apakah kartu hasil mesin ini sesuai dengan beritanya. Nilai tiap kolom berdasarkan artikel di bawah, bukan dugaan apakah kejadiannya benar terjadi.",
@@ -834,6 +843,15 @@ const en: Dict = {
       di_luar_mandat: "Outside this institution's remit",
     },
     enter: "Open the institution portal",
+  },
+  surveyPopup: {
+    eyebrow: "Public survey · D2",
+    ask: "Help check: does the machine summary match the news?",
+    rate: "Review this story",
+    other: "Show another story",
+    close: "Close",
+    read: "read the news",
+    thanks: "Thank you, your review is saved.",
   },
   survey: {
     title: "Public survey",

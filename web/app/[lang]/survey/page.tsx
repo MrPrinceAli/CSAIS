@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getSurveyCandidates, getSurveyCard } from "@/lib/queries";
+import { getSurveyCard } from "@/lib/queries";
+import { pickSurveyIncident, surveyDisplay } from "@/lib/survey-pick";
 import { formatters, incidentTitle } from "@/lib/format";
-import { attackLabel, getDict, isLang, L } from "@/lib/i18n";
-import { submissionCounts, SURVEY_FIELDS } from "@/lib/survey";
+import { getDict, isLang, L } from "@/lib/i18n";
+import { SURVEY_FIELDS } from "@/lib/survey";
 import { SurveyForm, type SurveyFieldView } from "@/components/survey-form";
 
 type Params = { lang: string };
@@ -15,23 +16,6 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   return { title: getDict(isLang(lang) ? lang : "id").survey.title };
 }
 
-function display(field: string, value: string | null, lang: "id" | "en"): string | null {
-  if (!value) return null;
-  if (field === "attack_type") return [...new Set(value.split(",").map((v) => attackLabel(v, lang)))].join(", ");
-  if (field === "location") return value.split(",").map((v) => v.trim().replace(/^./, (c) => c.toUpperCase())).join(", ");
-  return value;
-}
-
-const LEAST_POOL = 30;
-
-/** Kartu yang paling sedikit dinilai didahulukan: acak di antara 30 calon dengan jawaban tersedikit. */
-async function pickCandidate(): Promise<string> {
-  const ids = await getSurveyCandidates();
-  const counts = await submissionCounts(ids);
-  const pool = [...ids].sort((a, b) => (counts.get(a) ?? 0) - (counts.get(b) ?? 0)).slice(0, LEAST_POOL);
-  return pool[Math.floor(Math.random() * pool.length)] ?? "";
-}
-
 /** Survei publik (alur D2): satu kartu inti D1 per halaman, dinilai terhadap beritanya. */
 export default async function SurveyPage({ params, searchParams }: { params: Promise<Params>; searchParams: Promise<Search> }) {
   const { lang } = await params;
@@ -40,10 +24,10 @@ export default async function SurveyPage({ params, searchParams }: { params: Pro
   const t = getDict(lang);
   const f = formatters(lang);
   const requested = typeof id === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(id) ? id : null;
-  const data = await getSurveyCard(requested ?? (await pickCandidate()));
+  const data = await getSurveyCard(requested ?? (await pickSurveyIncident()));
 
   const fields: SurveyFieldView[] = data
-    ? SURVEY_FIELDS.map((key) => ({ key, label: t.flows.rows[key], value: display(key, data.card[key], lang) }))
+    ? SURVEY_FIELDS.map((key) => ({ key, label: t.flows.rows[key], value: surveyDisplay(key, data.card[key], lang) }))
     : [];
 
   return (
