@@ -13,7 +13,7 @@ export function L(lang: Lang, path = ""): string {
 const id = {
   brand: "CSAIS",
   tagline: "Cyber Social Attack Intelligence System",
-  nav: { home: "Beranda", incidents: "Incident", alerts: "Peringatan", findings: "Temuan", survey: "Survei", verify: "Verifikasi", sources: "Sumber", institutions: "Lembaga" },
+  nav: { home: "Beranda", incidents: "Incident", alerts: "Peringatan", findings: "Temuan", survey: "Survei", transparency: "Transparansi", verify: "Verifikasi", sources: "Sumber", institutions: "Lembaga" },
   status: (date: string, version: string) => `Data ${date} · pipeline ${version}`,
   footer: {
     about: "Sistem intelijen serangan siber bersumber berita terbuka. Artikel dibaca setiap hari, dikelompokkan menjadi incident, dan buktinya disiapkan untuk pencatatan di blockchain.",
@@ -245,12 +245,21 @@ const id = {
     summary: "Ringkasan semua incident",
     verifyRecord: "Verifikasi catatan di ledger",
   },
+  transparency: {
+    eyebrow: "Transparansi",
+    lead: "Cara memeriksa bukti setiap incident, dari mana beritanya dikumpulkan, dan seberapa dekat hasil mesin dan publik dengan keputusan lembaga.",
+    portal: "Portal lembaga",
+    tabs: { evidence: "Cek bukti", sources: "Sumber berita", comparison: "Perbandingan D1–D4" },
+  },
   demo: { label: "DATA UJI", hint: "Data contoh untuk pengujian alur, bukan jawaban publik atau keputusan lembaga yang sebenarnya." },
   alerts: {
     title: "Peringatan dan langkah pencegahan",
-    lead: "Status terkini tiap incident: dibantah atau dikonfirmasi lembaga resmi, sudah dicek publik, atau masih peringatan dini dari mesin. Setiap kartu memuat langkah pencegahan dan kanal pelaporan.",
+    lead: "Kelompok yang paling sering menjadi sasaran dan cara melindunginya, lalu status terkini tiap incident: dibantah atau dikonfirmasi lembaga resmi, sudah dicek publik, atau masih peringatan dini dari mesin.",
     group: "Kelompok sasaran",
     allGroups: "Semua",
+    riskTitle: "Kelompok paling berisiko",
+    perIncident: "Peringatan per incident",
+    perIncidentNote: "Status terkini tiap incident beserta langkah pencegahan dan kanal pelaporan; saring per kelompok sasaran.",
     sections: {
       hoax: { title: "Peringatan hoaks", note: "dibantah lembaga resmi; jangan disebarkan" },
       official: { title: "Rekomendasi resmi", note: "dikonfirmasi lembaga resmi" },
@@ -490,7 +499,7 @@ type Dict = typeof id;
 const en: Dict = {
   brand: "CSAIS",
   tagline: "Cyber Social Attack Intelligence System",
-  nav: { home: "Home", incidents: "Incidents", alerts: "Warnings", findings: "Findings", survey: "Survey", verify: "Verify", sources: "Sources", institutions: "Institutions" },
+  nav: { home: "Home", incidents: "Incidents", alerts: "Warnings", findings: "Findings", survey: "Survey", transparency: "Transparency", verify: "Verify", sources: "Sources", institutions: "Institutions" },
   status: (date, version) => `Data ${date} · pipeline ${version}`,
   footer: {
     about: "Cyber-attack intelligence from open news reporting. Articles are read daily, grouped into incidents, and their evidence prepared for on-chain anchoring.",
@@ -722,12 +731,21 @@ const en: Dict = {
     summary: "Summary across incidents",
     verifyRecord: "Verify this record in the ledger",
   },
+  transparency: {
+    eyebrow: "Transparency",
+    lead: "How to check the evidence behind each incident, where the news comes from, and how close the machine and the public come to institution decisions.",
+    portal: "Institution portal",
+    tabs: { evidence: "Check evidence", sources: "News sources", comparison: "Flow comparison D1–D4" },
+  },
   demo: { label: "TEST DATA", hint: "Sample data for testing the flow, not real public answers or institution decisions." },
   alerts: {
     title: "Warnings and preventive steps",
-    lead: "The current status of each incident: refuted or confirmed by an official institution, checked by the public, or still an early warning from the machine. Every card lists preventive steps and where to report.",
+    lead: "The groups targeted most often and how to protect them, then the current status of each incident: refuted or confirmed by an official institution, checked by the public, or still an early warning from the machine.",
     group: "Target group",
     allGroups: "All",
+    riskTitle: "Most targeted groups",
+    perIncident: "Warnings per incident",
+    perIncidentNote: "The current status of each incident with preventive steps and where to report; filter by target group.",
     sections: {
       hoax: { title: "Hoax warnings", note: "refuted by an official institution; do not share" },
       official: { title: "Official advice", note: "confirmed by an official institution" },

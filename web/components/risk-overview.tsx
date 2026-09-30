@@ -1,0 +1,206 @@
+import Link from "next/link";
+import { getRiskGroups, type GroupStat } from "@/lib/queries";
+import { formatters, incidentTitle } from "@/lib/format";
+import { attackLabel, getDict, groupLabel, L, type Lang } from "@/lib/i18n";
+import { SectionTitle, Sparkline } from "@/components/ui";
+import { preventionFor } from "@/lib/prevention";
+
+type Level = "high" | "medium" | "low";
+const LEVEL_COLOR: Record<Level, string> = { high: "var(--crit)", medium: "var(--high)", low: "var(--med)" };
+
+function levelOf(now: number, prev: number): Level {
+  if (now >= 20 || (now >= 8 && now > prev * 1.5)) return "high";
+  if (now >= 5) return "medium";
+  return "low";
+}
+
+/**
+ * Kelompok sasaran berisiko (dulu halaman Temuan): peringkat kelompok 30 hari
+ * vs 30 hari sebelumnya, langkah pencegahan per kelompok, dan peta panas
+ * kelompok x jenis serangan. Dipakai di bagian atas halaman Peringatan.
+ */
+export async function RiskOverview({ lang }: { lang: Lang }) {
+  const t = getDict(lang);
+  const f = formatters(lang);
+  const groups = await getRiskGroups();
+  const totalNow = groups.reduce((acc, g) => acc + g.now, 0);
+  const rising = groups.filter((g) => g.now > g.prev).length;
+  const maxNow = Math.max(...groups.map((g) => g.now), 1);
+
+  // Heatmap: kelompok teratas × jenis serangan teratas
+  const typeTotals = new Map<string, number>();
+  for (const g of groups) for (const [type, n] of Object.entries(g.typesAll)) typeTotals.set(type, (typeTotals.get(type) ?? 0) + n);
+  const topTypes = [...typeTotals.entries()]
+    .filter(([type]) => type !== "unknown")
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([type]) => type);
+  const heatGroups = groups.slice(0, 8);
+  const heatMax = Math.max(1, ...heatGroups.flatMap((g) => topTypes.map((type) => g.typesAll[type] ?? 0)));
+
+  function changeText(g: GroupStat): { text: string; color: string } {
+    if (g.prev === 0) return { text: g.now ? t.findings.change.new : "—", color: "var(--muted)" };
+    const pct = Math.round((100 * (g.now - g.prev)) / g.prev);
+    if (pct > 0) return { text: t.findings.change.up(pct), color: "var(--high)" };
+    if (pct < 0) return { text: t.findings.change.down(Math.abs(pct)), color: "var(--good)" };
+    return { text: t.findings.change.same, color: "var(--muted)" };
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-1">
+        <h2 className="text-[20px] font-semibold">{t.alerts.riskTitle}</h2>
+        <p className="max-w-[90ch] text-[13.5px] text-muted">{t.findings.subtitle(f.num(totalNow), f.num(rising), f.num(groups.length))}</p>
+      </div>
+
+      <section>
+        <SectionTitle aside={t.findings.boardNote}>{t.findings.boardTitle}</SectionTitle>
+        {groups.length ? (
+          <div className="card overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px] border-collapse text-[13px]">
+                <thead>
+                  <tr className="label border-b border-line text-left">
+                    <th className="px-4 py-2.5 font-medium">{t.findings.columns.group}</th>
+                    <th className="px-2 py-2.5 font-medium">{t.findings.columns.level}</th>
+                    <th className="px-2 py-2.5 font-medium">{t.findings.columns.count}</th>
+                    <th className="px-2 py-2.5 font-medium">{t.findings.columns.change}</th>
+                    <th className="px-4 py-2.5 font-medium">{t.findings.columns.trend}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {groups.map((g, i) => {
+                    const level = levelOf(g.now, g.prev);
+                    const change = changeText(g);
+                    return (
+                      <tr key={g.group} className="scan-row row-in border-b border-line align-middle last:border-b-0" style={{ animationDelay: `${Math.min(i, 20) * 45}ms` }}>
+                        <td className="px-4 py-3">
+                          <span className="block font-semibold">{groupLabel(g.group, lang)}</span>
+                          {g.samples[0] ? (
+                            <Link href={L(lang, `/incidents/${g.samples[0].incident_id}`)} className="block max-w-[320px] truncate text-[12px] text-muted no-underline hover:text-accent">
+                              {incidentTitle(g.samples[0].title)}
+                            </Link>
+                          ) : null}
+                        </td>
+                        <td className="px-2 py-3">
+                          <span className="inline-flex items-center gap-2 text-[12.5px] font-semibold" style={{ color: LEVEL_COLOR[level] }}>
+                            <span className={level === "high" ? "led led-crit" : "inline-block h-2 w-2 rounded-full"} style={{ background: LEVEL_COLOR[level] }} aria-hidden="true" />
+                            {t.findings.levels[level]}
+                          </span>
+                        </td>
+                        <td className="px-2 py-3">
+                          <div className="grid grid-cols-[36px_minmax(0,1fr)] items-center gap-2">
+                            <span className="tnum font-mono">{f.num(g.now)}</span>
+                            <span className="block h-1.5 w-full max-w-[140px] overflow-hidden rounded-sm bg-line">
+                              <span className="bar-fill block h-full" style={{ width: `${Math.max(2, (100 * g.now) / maxNow)}%`, background: LEVEL_COLOR[level], "--i": i } as React.CSSProperties} />
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-2 py-3 font-mono text-[12.5px]" style={{ color: change.color }}>
+                          {change.text}
+                        </td>
+                        <td className="px-4 py-3">
+                          <Sparkline values={g.weeks} width={110} height={30} color={LEVEL_COLOR[level]} />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <div className="card p-4 text-[13.5px] text-muted">{t.findings.empty}</div>
+        )}
+        <p className="mt-2 text-[12px] text-muted">{t.findings.rule}</p>
+      </section>
+
+      {groups.some((g) => g.now > 0) ? (
+        <section>
+          <SectionTitle aside={t.findings.prevention.note}>{t.findings.prevention.title}</SectionTitle>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {groups
+              .filter((g) => g.now > 0)
+              .slice(0, 6)
+              .map((g, i) => {
+                const level = levelOf(g.now, g.prev);
+                const modes = g.types.filter((x) => x.t !== "unknown");
+                const plan = preventionFor(g.group, modes.map((x) => x.t), lang);
+                return (
+                  <article key={g.group} className="card lift fade-up flex flex-col gap-3 p-4" style={{ "--i": i, borderTopColor: LEVEL_COLOR[level], borderTopWidth: 2 } as React.CSSProperties}>
+                    <header className="flex items-start justify-between gap-3">
+                      <div className="flex flex-col gap-1">
+                        <h3 className="text-[16px] font-semibold leading-tight">{groupLabel(g.group, lang)}</h3>
+                        <span className="text-[12.5px] text-muted">
+                          {t.findings.prevention.modes}: {modes.slice(0, 2).map((x) => `${attackLabel(x.t, lang)} ${f.num(x.n)}`).join(" · ") || t.common.unknown}
+                        </span>
+                      </div>
+                      <span className="flex flex-none items-center gap-1.5 text-[12.5px] font-semibold" style={{ color: LEVEL_COLOR[level] }}>
+                        <span className="inline-block h-2 w-2 rounded-full" style={{ background: LEVEL_COLOR[level] }} aria-hidden="true" />
+                        {t.findings.levels[level]} · {t.findings.prevention.incidents(f.num(g.now))}
+                      </span>
+                    </header>
+                    <ol className="flex flex-col gap-2 border-t border-line pt-3">
+                      {plan.steps.map((step, k) => (
+                        <li key={step} className="grid grid-cols-[26px_minmax(0,1fr)] gap-2 text-[13.5px] leading-relaxed text-soft">
+                          <span className="font-mono text-[12px] font-semibold" style={{ color: LEVEL_COLOR[level] }}>
+                            0{k + 1}
+                          </span>
+                          <span>{step}</span>
+                        </li>
+                      ))}
+                    </ol>
+                    <div className="mt-auto flex flex-wrap items-center gap-1.5 border-t border-line pt-3 text-[12.5px] text-muted">
+                      <span>{t.findings.prevention.report}</span>
+                      {plan.channels.map((c) => (
+                        <a key={c.url} href={c.url} target="_blank" rel="noreferrer" className="chip chip-good no-underline">
+                          {c.name} ↗
+                        </a>
+                      ))}
+                    </div>
+                  </article>
+                );
+              })}
+          </div>
+        </section>
+      ) : null}
+
+      {heatGroups.length && topTypes.length ? (
+        <section>
+          <SectionTitle aside={t.findings.heatmapNote}>{t.findings.heatmapTitle}</SectionTitle>
+          <div className="card overflow-x-auto p-4">
+            <div className="grid min-w-[720px] gap-px" style={{ gridTemplateColumns: `180px repeat(${topTypes.length}, minmax(0, 1fr))` }}>
+              <span />
+              {topTypes.map((type) => (
+                <span key={type} className="label truncate px-2 pb-2 text-[11px]" title={attackLabel(type, lang)}>
+                  {attackLabel(type, lang)}
+                </span>
+              ))}
+              {heatGroups.map((g, gi) => (
+                <div key={g.group} className="contents">
+                  <span className="truncate pr-3 text-[12.5px] leading-[38px]">{groupLabel(g.group, lang)}</span>
+                  {topTypes.map((type, ti) => {
+                    const n = g.typesAll[type] ?? 0;
+                    const alpha = n ? 0.15 + 0.75 * (n / heatMax) : 0;
+                    return (
+                      <Link
+                        key={type}
+                        href={`${L(lang, "/incidents")}?jenis=${encodeURIComponent(type)}`}
+                        className="heat-cell flex h-[38px] items-center justify-center rounded-sm border border-line font-mono text-[12px] no-underline"
+                        style={{ background: `rgba(242, 85, 90, ${alpha})`, color: n ? "var(--fg)" : "var(--muted)", "--i": gi * topTypes.length + ti } as React.CSSProperties}
+                        title={`${groupLabel(g.group, lang)} · ${attackLabel(type, lang)}: ${n}`}
+                      >
+                        {n || "·"}
+                      </Link>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+    </div>
+  );
+}

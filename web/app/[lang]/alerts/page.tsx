@@ -6,6 +6,7 @@ import { formatters, incidentTitle } from "@/lib/format";
 import { getDict, groupLabel, isLang, L, type Lang } from "@/lib/i18n";
 import prevention from "@/lib/prevention.json";
 import { PreventionPanel } from "@/components/prevention-panel";
+import { RiskOverview } from "@/components/risk-overview";
 import { SectionTitle, TypeChip } from "@/components/ui";
 
 type Params = { lang: string };
@@ -58,6 +59,13 @@ export default async function AlertsPage({ params, searchParams }: { params: Pro
         <h1 className="text-balance text-[28px] font-semibold leading-tight">{a.title}</h1>
         <p className="text-[14px] leading-relaxed text-soft">{a.lead}</p>
       </header>
+
+      <RiskOverview lang={lang} />
+
+      <div className="flex flex-col gap-1 border-t border-line pt-6">
+        <h2 className="text-[20px] font-semibold">{a.perIncident}</h2>
+        <p className="max-w-[78ch] text-[13.5px] text-muted">{a.perIncidentNote}</p>
+      </div>
 
       <nav className="flex flex-wrap items-center gap-1.5" aria-label={a.group}>
         <span className="label mr-1">{a.group}</span>

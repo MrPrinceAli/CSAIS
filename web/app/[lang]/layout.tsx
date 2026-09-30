@@ -31,10 +31,8 @@ const NAV: { key: keyof ReturnType<typeof getDict>["nav"]; path: string }[] = [
   { key: "home", path: "/" },
   { key: "incidents", path: "/incidents" },
   { key: "alerts", path: "/alerts" },
-  { key: "findings", path: "/findings" },
   { key: "survey", path: "/survey" },
-  { key: "verify", path: "/verify" },
-  { key: "sources", path: "/sources" },
+  { key: "transparency", path: "/transparency" },
 ];
 
 export default async function RootLayout({ children, modal, params }: { children: ReactNode; modal: ReactNode; params: Promise<{ lang: string }> }) {
@@ -85,20 +83,20 @@ export default async function RootLayout({ children, modal, params }: { children
             <div className="flex flex-col gap-2">
               <span className="label">{t.footer.columns.product}</span>
               <Link href={L(lang, "/incidents")} className="text-soft no-underline hover:text-fg">{t.nav.incidents}</Link>
-              <Link href={L(lang, "/findings")} className="text-soft no-underline hover:text-fg">{t.nav.findings}</Link>
-              <Link href={L(lang, "/sources")} className="text-soft no-underline hover:text-fg">{t.nav.sources}</Link>
+              <Link href={L(lang, "/alerts")} className="text-soft no-underline hover:text-fg">{t.nav.alerts}</Link>
+              <Link href={L(lang, "/transparency/sources")} className="text-soft no-underline hover:text-fg">{t.nav.sources}</Link>
             </div>
             <div className="flex flex-col gap-2">
               <span className="label">{t.footer.columns.method}</span>
               <Link href={`${L(lang, "/")}#process`} className="text-soft no-underline hover:text-fg">{t.footer.links.pipeline}</Link>
-              <Link href={L(lang, "/verify")} className="text-soft no-underline hover:text-fg">{t.footer.links.evidence}</Link>
+              <Link href={L(lang, "/transparency")} className="text-soft no-underline hover:text-fg">{t.footer.links.evidence}</Link>
               <Link href={`${L(lang, "/incidents")}#confidence`} className="text-soft no-underline hover:text-fg">{t.footer.links.confidence}</Link>
             </div>
             <div className="flex flex-col gap-2">
               <span className="label">{t.footer.columns.access}</span>
-              <Link href={`${L(lang, "/verify")}#lembaga`} className="text-soft no-underline hover:text-fg">{t.nav.institutions}</Link>
+              <Link href={`${L(lang, "/transparency")}#lembaga`} className="text-soft no-underline hover:text-fg">{t.nav.institutions}</Link>
               <Link href={L(lang, "/survey")} className="text-soft no-underline hover:text-fg">{t.footer.links.survey}</Link>
-              <Link href={L(lang, "/comparison")} className="text-soft no-underline hover:text-fg">{t.footer.links.comparison}</Link>
+              <Link href={L(lang, "/transparency/comparison")} className="text-soft no-underline hover:text-fg">{t.footer.links.comparison}</Link>
               <span className="text-muted">{t.footer.links.api}</span>
             </div>
           </div>
