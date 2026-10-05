@@ -1,4 +1,49 @@
-# CSAIS - Cyber Social Attack Intelligence System
+<div align="center">
+
+<img src="docs/logo.svg" alt="Logo CSAIS" width="120" />
+
+# CSAIS
+
+### Cyber Social Attack Intelligence System
+
+Pipeline intelijen serangan siber berbasis rekayasa sosial: berita Google News + lembaga resmi →
+deteksi, ekstraksi, klaster incident, indeks kepercayaan, dan verifikasi on-chain.
+
+[![CI](https://github.com/MrPrinceAli/CSAIS/actions/workflows/ci.yml/badge.svg)](https://github.com/MrPrinceAli/CSAIS/actions/workflows/ci.yml)
+[![Daily pipeline](https://github.com/MrPrinceAli/CSAIS/actions/workflows/daily.yml/badge.svg)](https://github.com/MrPrinceAli/CSAIS/actions/workflows/daily.yml)
+[![License: MIT](https://img.shields.io/github/license/MrPrinceAli/CSAIS?color=4f8cff)](LICENSE)
+[![Live](https://img.shields.io/badge/live-csais.vercel.app-000000?logo=vercel&logoColor=white)](https://csais.vercel.app)
+[![Last commit](https://img.shields.io/github/last-commit/MrPrinceAli/CSAIS)](https://github.com/MrPrinceAli/CSAIS/commits/main)
+[![PRs welcome](https://img.shields.io/badge/PR-welcome-4f8cff)](CONTRIBUTING.md)
+
+[![Python](https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white)](requirements.txt)
+[![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white)](web/)
+[![SQLite](https://img.shields.io/badge/SQLite-Turso-4FF8D2?logo=turso&logoColor=black)](csais/publish.py)
+[![Solidity](https://img.shields.io/badge/Solidity-Foundry-363636?logo=solidity&logoColor=white)](chain/)
+[![GitHub Actions](https://img.shields.io/badge/runs_on-GitHub_Actions-2088FF?logo=githubactions&logoColor=white)](.github/workflows/daily.yml)
+
+[**Demo langsung**](https://csais.vercel.app) · [**Struktur**](#struktur-proyek) · [**Alur D1 - D4**](#alur-d1---d4) · [**Berkontribusi**](CONTRIBUTING.md)
+
+</div>
+
+---
+
+<details>
+<summary><b>Daftar isi</b></summary>
+
+- [Struktur proyek](#struktur-proyek)
+- [Alur D1 - D4](#alur-d1---d4)
+- [Perintah lokal: LLM dan blockchain](#perintah-lokal-llm-dan-blockchain)
+- [Persiapan](#persiapan)
+- [Menjalankan](#menjalankan)
+- [Identitas data dan ekspor](#identitas-data-dan-ekspor)
+- [Evaluasi](#evaluasi)
+- [Menjalankan di cloud (gratis)](#menjalankan-di-cloud-gratis)
+- [Aplikasi web (folder `web/`)](#aplikasi-web-folder-web)
+- [Pengembangan](#pengembangan)
+- [Melihat hasil](#melihat-hasil)
+
+</details>
 
 Pipeline pengumpulan dan pengolahan berita serangan siber (khususnya
 rekayasa sosial) dari Google News, ditambah halaman lembaga resmi (BSSN,
@@ -345,3 +390,8 @@ sqlite3 -header -column database/csais.db \
 Tabel utama: `articles`, `v02_relevance`, `v03_information_extraction`,
 `v04_entities`, `v04_entity_mentions`, `v05_incidents`,
 `v05_incident_documents`, `v06_evidence`, `v06_source_relations`.
+
+## Lisensi
+
+Dirilis di bawah [MIT License](LICENSE). Kontribusi dipersilakan — lihat [CONTRIBUTING.md](CONTRIBUTING.md),
+[Kode Etik](CODE_OF_CONDUCT.md), dan [kebijakan keamanan](SECURITY.md).

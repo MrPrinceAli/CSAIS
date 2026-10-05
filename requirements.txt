@@ -1,5 +1,7 @@
 feedparser==6.0.14
 googlenewsdecoder==0.2.1
+# googlenewsdecoder memakai selectolax.parser (backend Modest) yang dihapus di selectolax 1.0
+selectolax==0.4.13
 langdetect==1.0.9
 requests==2.34.2
 trafilatura==2.2.0
