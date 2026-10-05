@@ -22,7 +22,7 @@ deteksi, ekstraksi, klaster incident, indeks kepercayaan, dan verifikasi on-chai
 [![Solidity](https://img.shields.io/badge/Solidity-Foundry-363636?logo=solidity&logoColor=white)](chain/)
 [![GitHub Actions](https://img.shields.io/badge/runs_on-GitHub_Actions-2088FF?logo=githubactions&logoColor=white)](.github/workflows/daily.yml)
 
-[**Demo langsung**](https://csais.vercel.app) · [**Struktur**](#struktur-proyek) · [**Alur D1 - D4**](#alur-d1---d4) · [**Berkontribusi**](CONTRIBUTING.md)
+[**Demo langsung**](https://csais.vercel.app) · [**Fitur**](#fitur-utama) · [**Tampilan**](#tampilan) · [**Struktur**](#struktur-proyek) · [**Alur D1 - D4**](#alur-d1---d4) · [**Berkontribusi**](CONTRIBUTING.md)
 
 </div>
 
@@ -31,6 +31,8 @@ deteksi, ekstraksi, klaster incident, indeks kepercayaan, dan verifikasi on-chai
 <details>
 <summary><b>Daftar isi</b></summary>
 
+- [Fitur utama](#fitur-utama)
+- [Tampilan](#tampilan)
 - [Struktur proyek](#struktur-proyek)
 - [Alur D1 - D4](#alur-d1---d4)
 - [Perintah lokal: LLM dan blockchain](#perintah-lokal-llm-dan-blockchain)
@@ -52,6 +54,49 @@ Seluruh hasil disimpan di database SQLite `database/csais.db`. Pipeline
 berjalan di terminal (dan setiap hari di GitHub Actions); hasilnya
 diterbitkan ke Turso dan ditampilkan oleh aplikasi web di folder `web/`
 (https://csais.vercel.app).
+
+## Fitur utama
+
+- **Crawl berita harian otomatis** dari Google News dan situs lembaga resmi (BSSN, Komdigi, OJK, Polri), berjalan
+  gratis di GitHub Actions setiap pukul 04.00 WIB.
+- **Pipeline V0.1 - V0.7**: deteksi relevansi, ekstraksi jenis serangan/korban/pelaku, penyatuan entitas,
+  pengelompokan artikel menjadi incident, korelasi bukti, dan indeks kepercayaan per incident.
+- **Dashboard incident** dengan globe interaktif, filter periode/jenis serangan/negara/bahasa, dan grafik harian.
+- **Peringatan dan pencegahan**: kelompok paling berisiko, tren 8 pekan, langkah pencegahan, dan kanal pelaporan.
+- **Bukti yang bisa diperiksa ulang**: setiap artikel di-hash SHA-256, dikumpulkan ke batch Merkle, dan akarnya
+  dijangkarkan ke blockchain; siapa pun bisa mengecek lewat halaman verifikasi.
+- **Verifikasi empat alur (D1 - D4)**: hasil mesin, survei publik tanpa login, keputusan lembaga yang
+  ditandatangani EIP-712 lewat portal lembaga, dan catatan resmi.
+- **Dwibahasa** (Indonesia / English) dan LLM lokal opsional (LM Studio) sebagai pelengkap ekstraksi.
+
+## Tampilan
+
+Semua tangkapan layar diambil dari [csais.vercel.app](https://csais.vercel.app) dengan data asli.
+
+![Beranda: pemberitaan serangan siber disusun menjadi incident yang dapat diverifikasi](docs/screenshots/home.jpg)
+
+| Dashboard incident: globe, filter, dan liputan terluas | Detail incident: indeks kepercayaan, pencegahan, kronologi sumber |
+|---|---|
+| ![](docs/screenshots/incidents.jpg) | ![](docs/screenshots/incident-detail.jpg) |
+
+| Peringatan: kelompok paling berisiko dan trennya | Verifikasi bukti: cek artikel lewat hash SHA-256 |
+|---|---|
+| ![](docs/screenshots/alerts.jpg) | ![](docs/screenshots/verify.jpg) |
+
+| Registri sumber berita | Perbandingan alur D1 - D4 |
+|---|---|
+| ![](docs/screenshots/sources.jpg) | ![](docs/screenshots/comparison.jpg) |
+
+| Survei publik (D2), tanpa login | Portal lembaga (D3), keputusan bertanda tangan |
+|---|---|
+| ![](docs/screenshots/survey.jpg) | ![](docs/screenshots/portal.jpg) |
+
+<details>
+<summary>Atestasi lembaga BSSN, OJK, Komdigi, dan Siber Polri</summary>
+
+![](docs/screenshots/institutions.jpg)
+
+</details>
 
 ## Struktur proyek
 
