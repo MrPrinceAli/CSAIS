@@ -69,7 +69,7 @@ jobs:
 
       - name: Pulihkan database dari cache
         id: db-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: database/csais.db
           key: csais-db-${{ github.run_id }}
@@ -136,7 +136,7 @@ jobs:
 
       - name: Simpan database ke cache
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: database/csais.db
           key: csais-db-${{ github.run_id }}
