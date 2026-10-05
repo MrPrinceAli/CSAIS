@@ -16,7 +16,7 @@ deteksi, ekstraksi, klaster incident, indeks kepercayaan, dan verifikasi on-chai
 [![Last commit](https://img.shields.io/github/last-commit/MrPrinceAli/CSAIS)](https://github.com/MrPrinceAli/CSAIS/commits/main)
 [![PRs welcome](https://img.shields.io/badge/PR-welcome-4f8cff)](CONTRIBUTING.md)
 
-[![Python](https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white)](requirements.txt)
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](requirements.txt)
 [![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white)](web/)
 [![SQLite](https://img.shields.io/badge/SQLite-Turso-4FF8D2?logo=turso&logoColor=black)](csais/publish.py)
 [![Solidity](https://img.shields.io/badge/Solidity-Foundry-363636?logo=solidity&logoColor=white)](chain/)
