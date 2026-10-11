@@ -72,6 +72,7 @@ type Strings = {
   ruleBased: string;
   localCases: string;
   recommendation: string;
+  showAllProvinces: string;
 };
 
 const FLOWS = ["D1", "D2", "D3", "D4"] as const;
@@ -295,7 +296,8 @@ export function LiteracyMapView({
 }) {
   const [audience, setAudience] = useState("");
   const [topic, setTopic] = useState("");
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(null); // pop-up perbandingan (dari daftar)
+  const [focus, setFocus] = useState<string | null>(null); // saringan daftar (dari klik peta)
   const [hover, setHover] = useState<{ code: string; x: number; y: number; w: number } | null>(null);
   const [view, setView] = useState<View>(HOME);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -384,6 +386,9 @@ export function LiteracyMapView({
   const order = listOrder;
   const byCode = Object.fromEntries(stats.map((s) => [s.code, s]));
   const toggle = (code: string) => setSelected((prev) => (prev === code ? null : code));
+  // klik peta = saring daftar ke provinsi itu; klik provinsi yang sama lagi = lepas saringan
+  const toggleFocus = (code: string) => setFocus((prev) => (prev === code ? null : code));
+  const listed = focus ? order.filter((code) => code === focus) : order;
   // indikator per provinsi = jumlah rekomendasi (alur D1 - D4 yang punya saran; minimal 1 dari profil wilayah)
   const recCount = (s: ProvinceStat) => Math.max(1, s.ai?.flows.length ?? 0);
   const countLabel = (s: ProvinceStat) => `${recCount(s)} ${strings.recommendation}`;
@@ -457,8 +462,8 @@ export function LiteracyMapView({
                   key={s.code}
                   d={s.d}
                   fill={fill(s)}
-                  stroke={s.code === current?.code ? "var(--fg)" : "var(--bg)"}
-                  strokeWidth={s.code === current?.code ? 1.8 : 0.6}
+                  stroke={s.code === focus ? "var(--fg)" : "var(--bg)"}
+                  strokeWidth={s.code === focus ? 1.8 : 0.6}
                   filter={glowing.has(s.code) ? "url(#lm-glow)" : undefined}
                   className="cursor-pointer outline-none transition-[fill] focus-visible:stroke-[var(--accent)]"
                   tabIndex={0}
@@ -470,12 +475,12 @@ export function LiteracyMapView({
                   onMouseLeave={() => setHover(null)}
                   onClick={() => {
                     if (drag.current?.moved) return; // akhir geser peta, bukan klik
-                    toggle(s.code); // klik provinsi yang sama lagi = lepas pilihan
+                    toggleFocus(s.code);
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
-                      toggle(s.code);
+                      toggleFocus(s.code);
                     }
                   }}
                 />
@@ -536,21 +541,30 @@ export function LiteracyMapView({
           <div className="border-b border-line px-4 py-2.5">
             <span className="label text-accent">{strings.listTitle}</span>
             <p className="text-[11.5px] text-muted">{strings.listHint}</p>
+            {focus ? (
+              <button type="button" onClick={() => setFocus(null)} className="chip chip-accent mt-2 text-[11.5px]">
+                {byCode[focus]?.name} ✕ <span className="text-muted">{strings.showAllProvinces}</span>
+              </button>
+            ) : null}
           </div>
-          <ul className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-            {order.map((code) => {
+          <ul className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2.5">
+            {listed.map((code) => {
               const s = byCode[code];
               return (
                 <li key={code}>
                   <button
                     type="button"
                     onClick={() => toggle(code)}
-                    className={`flex w-full flex-col gap-1 border-b border-line px-4 py-2.5 text-left transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] ${selected === code ? "bg-[color-mix(in_srgb,var(--accent)_12%,transparent)]" : ""}`}
+                    className={`group flex w-full flex-col gap-1.5 rounded-lg border px-3.5 py-3 text-left shadow-[inset_3px_0_0_var(--accent)] transition-[border-color,background-color,box-shadow] hover:border-[color-mix(in_srgb,var(--accent)_70%,var(--line))] hover:bg-[color-mix(in_srgb,var(--accent)_7%,var(--surface))] hover:shadow-[inset_3px_0_0_var(--accent),0_0_0_1px_color-mix(in_srgb,var(--accent)_35%,transparent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${
+                      selected === code || focus === code
+                        ? "border-[color-mix(in_srgb,var(--accent)_75%,var(--line))] bg-[color-mix(in_srgb,var(--accent)_10%,var(--surface))]"
+                        : "border-line-2 bg-[var(--surface)]"
+                    }`}
                   >
-                    <span className="flex items-baseline justify-between gap-2">
-                      <span className="flex items-baseline gap-2">
-                        <span className="text-[13.5px] font-semibold text-fg">{s.name}</span>
-                        <span className="font-mono text-[11px] text-muted">{countLabel(s)}</span>
+                    <span className="flex items-start justify-between gap-2">
+                      <span className="flex min-w-0 flex-col">
+                        <span className="text-[13.5px] font-semibold leading-tight text-fg">{s.name}</span>
+                        <span className="font-mono text-[11px] text-accent">{countLabel(s)}</span>
                       </span>
                       <span className="flex gap-1">
                         {(s.ai?.flows ?? []).map((flow) => (
