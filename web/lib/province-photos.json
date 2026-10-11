@@ -1,0 +1,271 @@
+{
+ "_comment": "Foto ikonik per provinsi (public/provinces/<kode>.jpg) dari Wikimedia Commons untuk kepala pop-up Peta Literasi; kredit wajib ditampilkan.",
+ "provinces": {
+  "11": {
+   "label": "Masjid Raya Baiturrahman, Banda Aceh",
+   "title": "Meuseujid Raya Baiturrahman .jpg",
+   "author": "Si_Gam",
+   "license": "CC BY-SA 3.0",
+   "url": "https://commons.wikimedia.org/wiki/File:Meuseujid_Raya_Baiturrahman_.jpg"
+  },
+  "12": {
+   "label": "Danau Toba",
+   "title": "PEMANDANGAN DANAU TOBA DARI AJIBATA.jpg",
+   "author": "ButetSinaga",
+   "license": "CC BY-SA 4.0",
+   "url": "https://commons.wikimedia.org/wiki/File:PEMANDANGAN_DANAU_TOBA_DARI_AJIBATA.jpg"
+  },
+  "13": {
+   "label": "Jam Gadang, Bukittinggi",
+   "title": "Jam Gadang di Bukittinggi.jpg",
+   "author": "Herusutimbul",
+   "license": "CC BY-SA 4.0",
+   "url": "https://commons.wikimedia.org/wiki/File:Jam_Gadang_di_Bukittinggi.jpg"
+  },
+  "14": {
+   "label": "Masjid Agung An-Nur, Pekanbaru",
+   "title": "Kite flying in front of Masjid Agung An-Nur.JPG",
+   "author": "D.W. Fisher-Freberg",
+   "license": "CC BY-SA 3.0",
+   "url": "https://commons.wikimedia.org/wiki/File:Kite_flying_in_front_of_Masjid_Agung_An-Nur.JPG"
+  },
+  "15": {
+   "label": "Jembatan Gentala Arasy, Jambi",
+   "title": "Jembatan Gentala Arasy - Kota Jambi, JA (12 Agustus 2023).jpg",
+   "author": "Firzafp",
+   "license": "CC BY-SA 4.0",
+   "url": "https://commons.wikimedia.org/wiki/File:Jembatan_Gentala_Arasy_-_Kota_Jambi,_JA_(12_Agustus_2023).jpg"
+  },
+  "16": {
+   "label": "Jembatan Ampera, Palembang",
+   "title": "Jembatan Ampera awak.JPG",
+   "author": "Badan Usaha Milik Negara",
+   "license": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:Jembatan_Ampera_awak.JPG"
+  },
+  "17": {
+   "label": "Benteng Marlborough, Bengkulu",
+   "title": "Cannon at Fort Marlborough, Bengkulu 2015-04-19 04.jpg",
+   "author": "Crisco 1492",
+   "license": "CC BY-SA 4.0",
+   "url": "https://commons.wikimedia.org/wiki/File:Cannon_at_Fort_Marlborough,_Bengkulu_2015-04-19_04.jpg"
+  },
+  "18": {
+   "label": "Teluk Kiluan, Tanggamus",
+   "title": "Landscape of coconut island in Kiluan Bay.jpg",
+   "author": "Hanrizky",
+   "license": "CC BY-SA 4.0",
+   "url": "https://commons.wikimedia.org/wiki/File:Landscape_of_coconut_island_in_Kiluan_Bay.jpg"
+  },
+  "19": {
+   "label": "Pantai Tanjung Tinggi, Belitung",
+   "title": "Pantai Tanjung Tinggi Belitung 01.jpg",
+   "author": "Raflinoer32",
+   "license": "CC BY-SA 4.0",
+   "url": "https://commons.wikimedia.org/wiki/File:Pantai_Tanjung_Tinggi_Belitung_01.jpg"
+  },
+  "21": {
+   "label": "Jembatan Barelang, Batam",
+   "title": "Jembatan Barelang-2.jpg",
+   "author": "ISKANDAR SANOESI",
+   "license": "CC BY-SA 2.0",
+   "url": "https://commons.wikimedia.org/wiki/File:Jembatan_Barelang-2.jpg"
+  },
+  "31": {
+   "label": "Monumen Nasional, Jakarta",
+   "title": "Monumen Nasional, Jakarta, Indonesia.jpg",
+   "author": "Ramayoni",
+   "license": "CC BY-SA 4.0",
+   "url": "https://commons.wikimedia.org/wiki/File:Monumen_Nasional,_Jakarta,_Indonesia.jpg"
+  },
+  "32": {
+   "label": "Gedung Sate, Bandung",
+   "title": "Gedung Sate Oktober 2024 - Rahmatdenas.jpg",
+   "author": "Rahmatdenas",
+   "license": "CC BY-SA 4.0",
+   "url": "https://commons.wikimedia.org/wiki/File:Gedung_Sate_Oktober_2024_-_Rahmatdenas.jpg"
+  },
+  "33": {
+   "label": "Candi Borobudur, Magelang",
+   "title": "Borobudur-Nothwest-view.jpg",
+   "author": "Gunawan Kartapranata",
+   "license": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:Borobudur-Nothwest-view.jpg"
+  },
+  "34": {
+   "label": "Tugu Yogyakarta",
+   "title": "Jogja - Tugu Monument (2025) - img 06.jpg",
+   "author": "Chainwit.",
+   "license": "CC BY 4.0",
+   "url": "https://commons.wikimedia.org/wiki/File:Jogja_-_Tugu_Monument_(2025)_-_img_06.jpg"
+  },
+  "35": {
+   "label": "Jembatan Suramadu",
+   "title": "Suramadu Bridge 3.JPG",
+   "author": "Sakurai Midori",
+   "license": "CC BY 3.0",
+   "url": "https://commons.wikimedia.org/wiki/File:Suramadu_Bridge_3.JPG"
+  },
+  "36": {
+   "label": "Masjid Agung Banten, Serang",
+   "title": "Banten Masjid Agung Banten.jpg",
+   "author": "Finance Ministry of the Republic of Indonesia",
+   "license": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:Banten_Masjid_Agung_Banten.jpg"
+  },
+  "51": {
+   "label": "Pura Ulun Danu Bratan, Tabanan",
+   "title": "Brantan Bali Pura-Ulun-Danu-Bratan-01.jpg",
+   "author": "CEphoto, Uwe Aranas",
+   "license": "CC BY-SA 3.0",
+   "url": "https://commons.wikimedia.org/wiki/File:Brantan_Bali_Pura-Ulun-Danu-Bratan-01.jpg"
+  },
+  "52": {
+   "label": "Gili Trawangan, Lombok",
+   "title": "Gili Islands, Brigantine, Bali Sea, Indonesia.jpg",
+   "author": "Vyacheslav Argenberg",
+   "license": "CC BY 4.0",
+   "url": "https://commons.wikimedia.org/wiki/File:Gili_Islands,_Brigantine,_Bali_Sea,_Indonesia.jpg"
+  },
+  "53": {
+   "label": "Pulau Padar, Labuan Bajo",
+   "title": "Pulau Padar 1.jpg",
+   "author": "YUS JULIADI",
+   "license": "CC BY-SA 4.0",
+   "url": "https://commons.wikimedia.org/wiki/File:Pulau_Padar_1.jpg"
+  },
+  "61": {
+   "label": "Tugu Khatulistiwa, Pontianak",
+   "title": "Tugu Khatulistiwa Pontianak 2024 03.jpg",
+   "author": "Zhilal Darma",
+   "license": "CC BY-SA 4.0",
+   "url": "https://commons.wikimedia.org/wiki/File:Tugu_Khatulistiwa_Pontianak_2024_03.jpg"
+  },
+  "62": {
+   "label": "Jembatan Kahayan, Palangka Raya",
+   "title": "Jembatan Kahayan Palangka Raya Kalteng.jpg",
+   "author": "Raflinoer32",
+   "license": "CC BY-SA 4.0",
+   "url": "https://commons.wikimedia.org/wiki/File:Jembatan_Kahayan_Palangka_Raya_Kalteng.jpg"
+  },
+  "63": {
+   "label": "Pasar Terapung Lok Baintan, Banjar",
+   "title": "Pasar Terapung Lok Baintan (1).jpg",
+   "author": "Marwan Mohamad",
+   "license": "CC BY-SA 4.0",
+   "url": "https://commons.wikimedia.org/wiki/File:Pasar_Terapung_Lok_Baintan_(1).jpg"
+  },
+  "64": {
+   "label": "Masjid Islamic Center, Samarinda",
+   "title": "Masjid Islamic Center Samarinda (3).jpg",
+   "author": "Sri Wahyuni Nur Indah Sari",
+   "license": "CC BY-SA 4.0",
+   "url": "https://commons.wikimedia.org/wiki/File:Masjid_Islamic_Center_Samarinda_(3).jpg"
+  },
+  "65": {
+   "label": "Pantai Amal, Tarakan",
+   "title": "Pantai Amal.JPG",
+   "author": "Ezagren (bicara / talk)",
+   "license": "CC BY-SA 4.0",
+   "url": "https://commons.wikimedia.org/wiki/File:Pantai_Amal.JPG"
+  },
+  "71": {
+   "label": "Pulau Bunaken, Manado",
+   "title": "Sunset at Bunaken Island, Sulawesi, 2016.jpg",
+   "author": "Niek van Son",
+   "license": "CC BY 2.0",
+   "url": "https://commons.wikimedia.org/wiki/File:Sunset_at_Bunaken_Island,_Sulawesi,_2016.jpg"
+  },
+  "72": {
+   "label": "Teluk Palu",
+   "title": "Teluk Palu, Sulawesi Tengah.jpg",
+   "author": "a_rabin",
+   "license": "CC BY 2.0",
+   "url": "https://commons.wikimedia.org/wiki/File:Teluk_Palu,_Sulawesi_Tengah.jpg"
+  },
+  "73": {
+   "label": "Pantai Losari, Makassar",
+   "title": "Pemandangan pantai Losari, Makassar Di minggu pagi di hari kartini, 21 april 2019 , dari teras Swissbel Hotel.jpg",
+   "author": "Ahmad Risaldy",
+   "license": "CC BY-SA 4.0",
+   "url": "https://commons.wikimedia.org/wiki/File:Pemandangan_pantai_Losari,_Makassar_Di_minggu_pagi_di_hari_kartini,_21_april_2019_,_dari_teras_Swissbel_Hotel.jpg"
+  },
+  "74": {
+   "label": "Wakatobi",
+   "title": "Wakatobi beach 2006.jpg",
+   "author": "Jenny from Taipei",
+   "license": "CC BY 2.0",
+   "url": "https://commons.wikimedia.org/wiki/File:Wakatobi_beach_2006.jpg"
+  },
+  "75": {
+   "label": "Benteng Otanaha, Gorontalo",
+   "title": "Benteng Otanaha.jpg",
+   "author": "Hendrik Saleh",
+   "license": "CC BY-SA 4.0",
+   "url": "https://commons.wikimedia.org/wiki/File:Benteng_Otanaha.jpg"
+  },
+  "76": {
+   "label": "Perahu Sandeq, Majene",
+   "title": "Sandeq boats in Majene, West Sulawesi, Indonesia.jpg",
+   "author": "User:Lfvalle1",
+   "license": "CC BY-SA 3.0",
+   "url": "https://commons.wikimedia.org/wiki/File:Sandeq_boats_in_Majene,_West_Sulawesi,_Indonesia.jpg"
+  },
+  "81": {
+   "label": "Teluk Ambon",
+   "title": "USNS Mercy off the coast of Ambon, Indonesia.jpg",
+   "author": "807th Medical Command (Deployment Support) from Salt Lake City (Fort Douglas), U",
+   "license": "CC BY 2.0",
+   "url": "https://commons.wikimedia.org/wiki/File:USNS_Mercy_off_the_coast_of_Ambon,_Indonesia.jpg"
+  },
+  "82": {
+   "label": "Gunung Gamalama, Ternate",
+   "title": "Ternate, Maluku Islands, Indonesia 2.jpg",
+   "author": "Eustaquio Santimano",
+   "license": "CC BY 2.0",
+   "url": "https://commons.wikimedia.org/wiki/File:Ternate,_Maluku_Islands,_Indonesia_2.jpg"
+  },
+  "91": {
+   "label": "Jembatan Youtefa, Jayapura",
+   "title": "Jembatan Youtefa.jpg",
+   "author": "Dimas H (WMID)",
+   "license": "CC BY-SA 4.0",
+   "url": "https://commons.wikimedia.org/wiki/File:Jembatan_Youtefa.jpg"
+  },
+  "92": {
+   "label": "Teluk Doreri, Manokwari",
+   "title": "City of Manokwari.jpg",
+   "author": "David Worabay",
+   "license": "CC BY-SA 3.0",
+   "url": "https://commons.wikimedia.org/wiki/File:City_of_Manokwari.jpg"
+  },
+  "93": {
+   "label": "Tugu Nol Kilometer, Merauke",
+   "title": "Taman 0 Kilometer Merauke - Sabang.jpg",
+   "author": "Marwan Mohamad",
+   "license": "CC BY-SA 4.0",
+   "url": "https://commons.wikimedia.org/wiki/File:Taman_0_Kilometer_Merauke_-_Sabang.jpg"
+  },
+  "94": {
+   "label": "Rumah tradisional, Nabire",
+   "title": "RUMAH TRADISIONAL EMAWA, NABIRE, PAPUA.jpg",
+   "author": "Ganjarmustika1904",
+   "license": "CC BY-SA 4.0",
+   "url": "https://commons.wikimedia.org/wiki/File:RUMAH_TRADISIONAL_EMAWA,_NABIRE,_PAPUA.jpg"
+  },
+  "95": {
+   "label": "Lembah Baliem, Wamena",
+   "title": "20170904 Papouasie Baliem valley 8.jpg",
+   "author": "Lasthib",
+   "license": "CC BY-SA 4.0",
+   "url": "https://commons.wikimedia.org/wiki/File:20170904_Papouasie_Baliem_valley_8.jpg"
+  },
+  "96": {
+   "label": "Piaynemo, Raja Ampat",
+   "title": "Piaynemo, Raja Ampat (39660320633).jpg",
+   "author": "peter harris",
+   "license": "CC0",
+   "url": "https://commons.wikimedia.org/wiki/File:Piaynemo,_Raja_Ampat_(39660320633).jpg"
+  }
+ }
+}
