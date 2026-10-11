@@ -8,12 +8,8 @@ import { preventionFor } from "@/lib/prevention";
 type Level = "high" | "medium" | "low";
 const LEVEL_COLOR: Record<Level, string> = { high: "var(--crit)", medium: "var(--high)", low: "var(--med)" };
 
-// Tiga peringkat teratas bergaya medali: emas, perak, perunggu
-const MEDALS = [
-  { fill: "#f5c451", edge: "#b8862b" },
-  { fill: "#d5dbe3", edge: "#8d96a3" },
-  { fill: "#e09a63", edge: "#9c5c2e" },
-];
+// Peringkat 1-3 diberi rona emas, perak, perunggu yang lembut; sisanya abu-abu
+const RANK_TONE = ["#e8c872", "#d3dae3", "#d9a07a"];
 
 function levelOf(now: number, prev: number): Level {
   if (now >= 20 || (now >= 8 && now > prev * 1.5)) return "high";
@@ -36,7 +32,7 @@ export async function RiskOverview({ lang }: { lang: Lang }) {
   const shown = groups.filter((g) => g.now > 0).slice(0, 6);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div id="kelompok-berisiko" className="flex scroll-mt-16 flex-col gap-6">
       <div className="flex flex-col gap-1">
         <h2 className="text-[20px] font-semibold">{t.alerts.riskTitle}</h2>
         <p className="max-w-[90ch] text-[13.5px] text-muted">{t.findings.subtitle(f.num(totalNow), f.num(rising), f.num(groups.length))}</p>
@@ -53,31 +49,21 @@ export async function RiskOverview({ lang }: { lang: Lang }) {
                 return (
                   <article key={g.group} className="card lift fade-up relative isolate flex flex-col gap-3 overflow-hidden p-4" style={{ "--i": i, borderTopColor: LEVEL_COLOR[level], borderTopWidth: 2 } as React.CSSProperties}>
                     <GroupPhoto group={g.group} color={LEVEL_COLOR[level]} />
-                    {i < MEDALS.length ? (
+                    <div
+                      className="absolute right-4 top-3.5 flex flex-col items-end leading-none"
+                      title={t.findings.prevention.rank(i + 1)}
+                      aria-label={t.findings.prevention.rank(i + 1)}
+                    >
+                      <span className="text-[9px] font-semibold uppercase tracking-[0.22em] text-soft [text-shadow:0_1px_6px_rgba(0,0,0,0.95)]">{t.findings.prevention.rankLabel}</span>
                       <span
-                        className="tnum absolute right-3 top-3 flex h-11 w-11 flex-col items-center justify-center rounded-full font-mono font-bold leading-none"
-                        style={{
-                          color: "#14110a",
-                          background: `radial-gradient(circle at 32% 28%, #ffffffcc 0%, ${MEDALS[i].fill} 38%, ${MEDALS[i].edge} 100%)`,
-                          boxShadow: `0 0 0 2px ${MEDALS[i].edge}, 0 0 18px ${MEDALS[i].fill}88`,
-                        }}
-                        title={t.findings.prevention.rank(i + 1)}
-                        aria-label={t.findings.prevention.rank(i + 1)}
+                        className="tnum mt-1 font-mono text-[30px] font-extralight tracking-tight [text-shadow:0_1px_10px_rgba(0,0,0,0.85)]"
+                        style={{ color: RANK_TONE[i] ?? "var(--soft)" }}
                       >
-                        <span className="text-[9px] tracking-wider opacity-70">#</span>
-                        <span className="text-[17px]">{i + 1}</span>
+                        {String(i + 1).padStart(2, "0")}
                       </span>
-                    ) : (
-                      <span
-                        className="tnum absolute right-3 top-3 flex h-8 min-w-8 items-center justify-center rounded-md border px-1.5 font-mono text-[14px] font-semibold"
-                        style={{ color: "var(--soft)", borderColor: "var(--line-2)", background: "color-mix(in srgb, var(--surface) 85%, transparent)" }}
-                        title={t.findings.prevention.rank(i + 1)}
-                        aria-label={t.findings.prevention.rank(i + 1)}
-                      >
-                        #{i + 1}
-                      </span>
-                    )}
-                    <header className="flex flex-col gap-1 pr-14 [text-shadow:0_1px_8px_rgba(0,0,0,0.7)]">
+                      <span className="mt-1.5 h-[2px] w-5 rounded-full" style={{ background: RANK_TONE[i] ?? "var(--line-2)" }} aria-hidden="true" />
+                    </div>
+                    <header className="flex flex-col gap-1 pr-16 [text-shadow:0_1px_8px_rgba(0,0,0,0.7)]">
                       <h3 className="text-[16px] font-semibold leading-tight">{groupLabel(g.group, lang)}</h3>
                       <span className="flex items-center gap-1.5 text-[12.5px] font-semibold" style={{ color: LEVEL_COLOR[level] }}>
                         <span className="inline-block h-2 w-2 rounded-full" style={{ background: LEVEL_COLOR[level] }} aria-hidden="true" />
