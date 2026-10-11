@@ -1201,3 +1201,17 @@ export async function getGlobalSpotlight(days = 14, limit = 6): Promise<GlobalSp
     [since, limit],
   );
 }
+
+export type RecentCase = { incident_id: string; title: string | null; attack_type: string | null; location: string | null; document_count: number };
+
+/** Incident ``days`` hari terakhir yang paling banyak diberitakan (contoh kasus per profil wilayah). */
+export async function getRecentCases(days = 90, limit = 400): Promise<RecentCase[]> {
+  const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+  return query<RecentCase>(
+    `SELECT i.incident_id, a.title, i.attack_type, i.location, i.document_count
+     FROM v05_incidents i LEFT JOIN articles a ON a.article_id = i.anchor_article_id
+     WHERE i.last_published_date >= ? AND i.document_count >= 2 AND i.attack_type IS NOT NULL
+     ORDER BY i.document_count DESC LIMIT ?`,
+    [since, limit],
+  );
+}

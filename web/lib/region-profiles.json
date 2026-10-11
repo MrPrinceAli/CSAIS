@@ -1,0 +1,416 @@
+{
+  "_comment": "Profil wilayah untuk rekomendasi literasi per provinsi di Peta Literasi, termasuk provinsi yang belum punya incident lokal. Disusun tim CSAIS dari ciri umum tiap provinsi (kota pelajar, daerah asal pekerja migran, wisata, industri, perbatasan, ...); bukan hasil pipeline, silakan ditinjau dan diubah. types = jenis serangan untuk mencari contoh kasus terbaru yang cocok.",
+  "traits": {
+    "kota_pelajar": {
+      "label": {
+        "id": "Kota pelajar",
+        "en": "Student hub"
+      },
+      "reason": {
+        "id": "Banyak siswa dan mahasiswa, termasuk perantau: sasaran pinjol ilegal, lowongan kerja palsu, dan pembajakan akun.",
+        "en": "Many school and university students, including newcomers: targets of illegal lending apps, fake jobs, and account takeover."
+      },
+      "audiences": [
+        "pelajar_sma",
+        "mahasiswa",
+        "guru"
+      ],
+      "topics": [
+        "keamanan_akun",
+        "data_pribadi",
+        "lowongan_palsu"
+      ],
+      "types": [
+        "online_scam",
+        "job_scam",
+        "credential_attack",
+        "data_breach"
+      ]
+    },
+    "asal_pmi": {
+      "label": {
+        "id": "Daerah asal pekerja migran",
+        "en": "Migrant worker origin"
+      },
+      "reason": {
+        "id": "Banyak warga bekerja ke luar negeri: penipuan lowongan kerja luar negeri dan perekrutan ke sindikat penipuan daring.",
+        "en": "Many residents work abroad: fake overseas job offers and recruitment into online scam compounds."
+      },
+      "audiences": [
+        "pekerja_migran",
+        "pencari_kerja",
+        "perangkat_desa"
+      ],
+      "topics": [
+        "lowongan_palsu",
+        "rekayasa_sosial",
+        "lapor_insiden"
+      ],
+      "types": [
+        "job_scam",
+        "online_scam",
+        "social_engineering"
+      ]
+    },
+    "pariwisata": {
+      "label": {
+        "id": "Daerah wisata",
+        "en": "Tourism region"
+      },
+      "reason": {
+        "id": "Usaha wisata dan tamunya jadi sasaran pemesanan hotel dan tiket palsu serta pembajakan akun bisnis.",
+        "en": "Tourism businesses and visitors face fake hotel and ticket bookings and hijacked business accounts."
+      },
+      "audiences": [
+        "pelaku_umkm",
+        "pengguna_medsos"
+      ],
+      "topics": [
+        "transaksi_aman",
+        "kenali_phishing",
+        "keamanan_akun"
+      ],
+      "types": [
+        "online_scam",
+        "phishing",
+        "malicious_link"
+      ]
+    },
+    "industri": {
+      "label": {
+        "id": "Kawasan industri dan pertambangan",
+        "en": "Industrial and mining area"
+      },
+      "reason": {
+        "id": "Banyak perusahaan dan pabrik: ransomware, surel tagihan palsu, dan kebocoran data karyawan.",
+        "en": "Many companies and plants: ransomware, fake invoice emails, and employee data leaks."
+      },
+      "audiences": [
+        "staf_ti",
+        "pimpinan",
+        "staf_umum"
+      ],
+      "topics": [
+        "cadangan_data",
+        "kenali_phishing",
+        "pembaruan_sistem"
+      ],
+      "types": [
+        "ransomware",
+        "phishing",
+        "data_breach",
+        "network_intrusion"
+      ]
+    },
+    "pusat_keuangan": {
+      "label": {
+        "id": "Pusat bisnis dan keuangan",
+        "en": "Business and finance hub"
+      },
+      "reason": {
+        "id": "Pusat kantor pusat bank dan perusahaan: penipuan atas nama bank, surel palsu ke bagian keuangan, dan kebocoran data nasabah.",
+        "en": "Home to bank and corporate headquarters: bank impersonation, fake emails to finance teams, and customer data leaks."
+      },
+      "audiences": [
+        "staf_keuangan",
+        "nasabah_bank",
+        "pimpinan"
+      ],
+      "topics": [
+        "kenali_phishing",
+        "rekayasa_sosial",
+        "data_pribadi"
+      ],
+      "types": [
+        "phishing",
+        "data_breach",
+        "credential_attack",
+        "online_scam"
+      ]
+    },
+    "pesisir": {
+      "label": {
+        "id": "Wilayah pesisir dan kepulauan",
+        "en": "Coastal and island region"
+      },
+      "reason": {
+        "id": "Nelayan dan warga pulau sering jadi sasaran tawaran bantuan atau undian palsu lewat pesan dan telepon.",
+        "en": "Fishers and island residents are often targeted by fake aid or prize offers by message and phone."
+      },
+      "audiences": [
+        "petani_nelayan",
+        "perangkat_desa"
+      ],
+      "topics": [
+        "rekayasa_sosial",
+        "transaksi_aman",
+        "cek_fakta"
+      ],
+      "types": [
+        "online_scam",
+        "social_engineering"
+      ]
+    },
+    "pertanian": {
+      "label": {
+        "id": "Daerah pertanian dan perkebunan",
+        "en": "Farming region"
+      },
+      "reason": {
+        "id": "Petani dan perangkat desa jadi sasaran bansos dan pupuk subsidi palsu serta pembajakan WhatsApp.",
+        "en": "Farmers and village officials face fake aid and subsidy schemes and WhatsApp hijacking."
+      },
+      "audiences": [
+        "petani_nelayan",
+        "perangkat_desa",
+        "lansia"
+      ],
+      "topics": [
+        "rekayasa_sosial",
+        "cek_fakta",
+        "keamanan_akun"
+      ],
+      "types": [
+        "online_scam",
+        "social_engineering"
+      ]
+    },
+    "perbatasan": {
+      "label": {
+        "id": "Wilayah perbatasan",
+        "en": "Border region"
+      },
+      "reason": {
+        "id": "Jalur kerja lintas negara: perekrutan ke sindikat penipuan dan judi daring di negara tetangga.",
+        "en": "Cross-border work routes: recruitment into scam and online gambling syndicates in neighbouring countries."
+      },
+      "audiences": [
+        "pekerja_migran",
+        "pencari_kerja",
+        "pengguna_medsos"
+      ],
+      "topics": [
+        "lowongan_palsu",
+        "rekayasa_sosial",
+        "lapor_insiden"
+      ],
+      "types": [
+        "job_scam",
+        "online_scam"
+      ]
+    },
+    "umkm_daring": {
+      "label": {
+        "id": "Sentra UMKM dan perdagangan",
+        "en": "Small business and trade centre"
+      },
+      "reason": {
+        "id": "Banyak pedagang daring: pesanan dan bukti transfer palsu, kurir palsu, dan APK berbahaya.",
+        "en": "Many online sellers: fake orders and transfer receipts, fake couriers, and malicious APKs."
+      },
+      "audiences": [
+        "pelaku_umkm",
+        "ibu_rumah_tangga"
+      ],
+      "topics": [
+        "transaksi_aman",
+        "aplikasi_resmi",
+        "belanja_aman"
+      ],
+      "types": [
+        "online_scam",
+        "malware",
+        "mobile_attack"
+      ]
+    },
+    "layanan_publik": {
+      "label": {
+        "id": "Layanan publik dan pemerintahan daerah",
+        "en": "Public services and local government"
+      },
+      "reason": {
+        "id": "Situs dan akun pemerintah daerah sering diretas (judi daring, deface) dan data warga bocor.",
+        "en": "Local government sites and accounts are often hacked (gambling spam, defacement) and resident data leaks."
+      },
+      "audiences": [
+        "asn_layanan",
+        "staf_ti",
+        "perangkat_desa"
+      ],
+      "topics": [
+        "pembaruan_sistem",
+        "kata_sandi",
+        "data_pribadi"
+      ],
+      "types": [
+        "website_defacement",
+        "data_breach",
+        "vulnerability_exploitation"
+      ]
+    }
+  },
+  "provinces": {
+    "11": [
+      "pertanian",
+      "pesisir",
+      "layanan_publik"
+    ],
+    "12": [
+      "pertanian",
+      "umkm_daring",
+      "asal_pmi"
+    ],
+    "13": [
+      "kota_pelajar",
+      "umkm_daring"
+    ],
+    "14": [
+      "industri",
+      "pertanian"
+    ],
+    "15": [
+      "pertanian",
+      "layanan_publik"
+    ],
+    "16": [
+      "pertanian",
+      "industri"
+    ],
+    "17": [
+      "pertanian",
+      "pesisir"
+    ],
+    "18": [
+      "asal_pmi",
+      "pertanian"
+    ],
+    "19": [
+      "pesisir",
+      "industri"
+    ],
+    "21": [
+      "perbatasan",
+      "industri",
+      "asal_pmi"
+    ],
+    "31": [
+      "pusat_keuangan",
+      "umkm_daring",
+      "layanan_publik"
+    ],
+    "32": [
+      "asal_pmi",
+      "industri",
+      "kota_pelajar"
+    ],
+    "33": [
+      "asal_pmi",
+      "umkm_daring",
+      "industri"
+    ],
+    "34": [
+      "kota_pelajar",
+      "pariwisata",
+      "umkm_daring"
+    ],
+    "35": [
+      "asal_pmi",
+      "kota_pelajar",
+      "umkm_daring"
+    ],
+    "36": [
+      "industri",
+      "umkm_daring"
+    ],
+    "51": [
+      "pariwisata",
+      "umkm_daring"
+    ],
+    "52": [
+      "asal_pmi",
+      "pariwisata"
+    ],
+    "53": [
+      "asal_pmi",
+      "perbatasan",
+      "pertanian"
+    ],
+    "61": [
+      "perbatasan",
+      "pertanian"
+    ],
+    "62": [
+      "pertanian",
+      "industri"
+    ],
+    "63": [
+      "industri",
+      "pertanian"
+    ],
+    "64": [
+      "industri",
+      "layanan_publik"
+    ],
+    "65": [
+      "perbatasan",
+      "industri"
+    ],
+    "71": [
+      "pariwisata",
+      "pesisir"
+    ],
+    "72": [
+      "industri",
+      "pertanian"
+    ],
+    "73": [
+      "kota_pelajar",
+      "pesisir",
+      "umkm_daring"
+    ],
+    "74": [
+      "industri",
+      "pesisir"
+    ],
+    "75": [
+      "pertanian",
+      "layanan_publik"
+    ],
+    "76": [
+      "pertanian",
+      "pesisir"
+    ],
+    "81": [
+      "pesisir",
+      "layanan_publik"
+    ],
+    "82": [
+      "industri",
+      "pesisir"
+    ],
+    "91": [
+      "perbatasan",
+      "layanan_publik"
+    ],
+    "92": [
+      "industri",
+      "pesisir"
+    ],
+    "93": [
+      "perbatasan",
+      "pertanian"
+    ],
+    "94": [
+      "industri",
+      "layanan_publik"
+    ],
+    "95": [
+      "layanan_publik",
+      "pertanian"
+    ],
+    "96": [
+      "pariwisata",
+      "pesisir"
+    ]
+  }
+}

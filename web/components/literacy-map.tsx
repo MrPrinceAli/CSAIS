@@ -8,12 +8,18 @@
 import Link from "next/link";
 import { geoMercator, geoPath } from "d3-geo";
 import type { FeatureCollection, MultiPolygon } from "geojson";
-import { getLiteracyRows } from "@/lib/queries";
+import { getLiteracyRows, getRecentCases, type RecentCase } from "@/lib/queries";
+import profiles from "@/lib/region-profiles.json";
 import { formatters, incidentTitle } from "@/lib/format";
 import { attackLabel, getDict, L, type Lang } from "@/lib/i18n";
 import { audienceText, topicText } from "@/lib/prevention";
 import provinces from "@/lib/indonesia-provinces.json";
+import { COUNTRY } from "@/lib/geo";
 import { LiteracyMapView, type ProvinceStat } from "@/components/literacy-map-view";
+
+type Trait = { label: Record<Lang, string>; reason: Record<Lang, string>; audiences: string[]; topics: string[]; types: string[] };
+const TRAITS = profiles.traits as Record<string, Trait>;
+const PROVINCE_TRAITS = profiles.provinces as Record<string, string[]>;
 
 const WIDTH = 1100;
 const HEIGHT = 430;
@@ -28,7 +34,14 @@ export async function LiteracyMap({ lang, period, base }: { lang: Lang; period: 
   const t = getDict(lang);
   const m = t.literacyMap;
   const f = formatters(lang);
-  const rows = await getLiteracyRows(period);
+  const [rows, recent] = await Promise.all([getLiteracyRows(period), getRecentCases(Math.max(period || 365, 30))]);
+  // Contoh kasus per ciri wilayah: incident terbaru paling ramai dengan jenis serangan yang cocok
+  const caseFor = (trait: Trait, used: Set<string>): RecentCase | null =>
+    recent.find((r) => !used.has(r.incident_id) && (r.attack_type ?? "").split(",").some((t) => trait.types.includes(t.trim()))) ?? null;
+  const placeOf = (location: string | null) => {
+    const first = (location ?? "").split(",")[0].trim().toLowerCase();
+    return first ? (COUNTRY[first]?.label ?? first.replace(/^./, (c) => c.toUpperCase())) : m.global;
+  };
 
   // Agregasi per provinsi: satu incident dihitung sekali per provinsi
   type Acc = { name: string; ids: Set<string>; audiences: Counted; topics: Counted; types: Counted; cities: Counted; samples: ProvinceStat["samples"] };
@@ -74,7 +87,26 @@ export async function LiteracyMap({ lang, period, base }: { lang: Lang; period: 
   const stats: ProvinceStat[] = collection.features.map((feature) => {
     const code = feature.properties.code;
     const p = acc.get(code);
+    const used = new Set<string>();
+    const traits = (PROVINCE_TRAITS[code] ?? []).map((key) => {
+      const trait = TRAITS[key];
+      const example = caseFor(trait, used);
+      if (example) used.add(example.incident_id);
+      return {
+        label: trait.label[lang],
+        reason: trait.reason[lang],
+        example: example ? { id: example.incident_id, title: incidentTitle(example.title), place: placeOf(example.location) } : null,
+      };
+    });
+    // Rekomendasi: sasaran/materi dari kasus lokal lebih dulu, lalu dari profil wilayah
+    const recommend = (local: Counted, key: "audiences" | "topics", text: (k: string, l: Lang) => string | null) =>
+      [...new Set([...top(local, 2).map(([k]) => k), ...(PROVINCE_TRAITS[code] ?? []).flatMap((t) => TRAITS[t][key].slice(0, 2))])]
+        .slice(0, 5)
+        .map((k) => text(k, lang) ?? k);
     return {
+      traits,
+      recAudiences: recommend(p?.audiences ?? new Map(), "audiences", audienceText),
+      recTopics: recommend(p?.topics ?? new Map(), "topics", topicText),
       code,
       name: feature.properties.name,
       d: path(feature) ?? "",
@@ -157,6 +189,14 @@ export async function LiteracyMap({ lang, period, base }: { lang: Lang; period: 
             tiers: t.flows.tiers,
             empty: m.empty,
             detail: m.detail,
+            recommend: m.recommend,
+            noLocal: m.noLocal,
+            profile: m.profile,
+            example: m.example,
+            zoomIn: m.zoomIn,
+            zoomOut: m.zoomOut,
+            zoomReset: m.zoomReset,
+            zoomHint: m.zoomHint,
           }}
         />
         <p className="text-[10.5px] leading-snug text-muted">{m.source}</p>
