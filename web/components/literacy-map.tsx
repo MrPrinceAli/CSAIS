@@ -8,7 +8,8 @@
 import Link from "next/link";
 import { geoMercator, geoPath } from "d3-geo";
 import type { FeatureCollection, MultiPolygon } from "geojson";
-import { getAiRegions, getLiteracyRows, getRecentCases, type RecentCase } from "@/lib/queries";
+import { getAiRegions, getAiStatus, getLiteracyRows, getRecentCases, type RecentCase } from "@/lib/queries";
+import { AiEngineBadge } from "@/components/ai-engine-badge";
 import profiles from "@/lib/region-profiles.json";
 import { formatters, incidentTitle } from "@/lib/format";
 import { attackLabel, getDict, L, type Lang } from "@/lib/i18n";
@@ -44,7 +45,7 @@ export async function LiteracyMap({ lang, period, base }: { lang: Lang; period: 
   const t = getDict(lang);
   const m = t.literacyMap;
   const f = formatters(lang);
-  const [rows, recent, aiRegions] = await Promise.all([getLiteracyRows(period), getRecentCases(Math.max(period || 365, 30)), getAiRegions()]);
+  const [rows, recent, aiRegions, aiStatus] = await Promise.all([getLiteracyRows(period), getRecentCases(Math.max(period || 365, 30)), getAiRegions(), getAiStatus()]);
   // Contoh kasus per ciri wilayah: incident terbaru paling ramai dengan jenis serangan yang cocok
   const caseFor = (trait: Trait, used: Set<string>): RecentCase | null =>
     recent.find((r) => !used.has(r.incident_id) && (r.attack_type ?? "").split(",").some((t) => trait.types.includes(t.trim()))) ?? null;
@@ -61,7 +62,15 @@ export async function LiteracyMap({ lang, period, base }: { lang: Lang; period: 
   const nationalTopic: Counted = new Map();
   const counted = new Set<string>();
   for (const row of rows) {
-    const p = acc.get(row.province_code) ?? { name: row.province, ids: new Set(), audiences: new Map(), topics: new Map(), types: new Map(), cities: new Map(), samples: [] as ProvinceStat["samples"] };
+    const p = acc.get(row.province_code) ?? {
+      name: row.province,
+      ids: new Set(),
+      audiences: new Map(),
+      topics: new Map(),
+      types: new Map(),
+      cities: new Map(),
+      samples: [] as ProvinceStat["samples"],
+    };
     acc.set(row.province_code, p);
     const cityKey = `${row.province_code}|${row.incident_id}|${row.kabkota}`;
     if (row.kabkota && !seen.has(cityKey)) {
@@ -76,7 +85,13 @@ export async function LiteracyMap({ lang, period, base }: { lang: Lang; period: 
     } catch {}
     for (const key of plan.audience ?? []) bump(p.audiences, key);
     for (const key of plan.topics ?? []) bump(p.topics, key);
-    for (const type of new Set((row.attack_type ?? "").split(",").map((v) => v.trim()).filter((v) => v && v !== "unknown"))) bump(p.types, type);
+    for (const type of new Set(
+      (row.attack_type ?? "")
+        .split(",")
+        .map((v) => v.trim())
+        .filter((v) => v && v !== "unknown"),
+    ))
+      bump(p.types, type);
     if (p.samples.length < 3) p.samples.push({ id: row.incident_id, title: incidentTitle(row.title), date: f.date(row.anchor_published_date), tier: row.tier });
     if (!counted.has(row.incident_id)) {
       counted.add(row.incident_id);
@@ -110,9 +125,7 @@ export async function LiteracyMap({ lang, period, base }: { lang: Lang; period: 
     });
     // Rekomendasi: sasaran/materi dari kasus lokal lebih dulu, lalu dari profil wilayah
     const recommend = (local: Counted, key: "audiences" | "topics", text: (k: string, l: Lang) => string | null) =>
-      [...new Set([...top(local, 2).map(([k]) => k), ...(PROVINCE_TRAITS[code] ?? []).flatMap((t) => TRAITS[t][key].slice(0, 2))])]
-        .slice(0, 5)
-        .map((k) => text(k, lang) ?? k);
+      [...new Set([...top(local, 2).map(([k]) => k), ...(PROVINCE_TRAITS[code] ?? []).flatMap((t) => TRAITS[t][key].slice(0, 2))])].slice(0, 5).map((k) => text(k, lang) ?? k);
     return {
       ai: aiRegions[code] ?? null,
       traits,
@@ -132,8 +145,7 @@ export async function LiteracyMap({ lang, period, base }: { lang: Lang; period: 
       samples: p?.samples ?? [],
     };
   });
-  const options = (map: Counted, text: (key: string, lang: Lang) => string | null) =>
-    top(map, 40).map(([key, n]) => ({ key, label: text(key, lang) ?? key, n }));
+  const options = (map: Counted, text: (key: string, lang: Lang) => string | null) => top(map, 40).map(([key, n]) => ({ key, label: text(key, lang) ?? key, n }));
 
   const affected = stats.filter((s) => s.n > 0).length;
   const kpis = [
@@ -156,18 +168,30 @@ export async function LiteracyMap({ lang, period, base }: { lang: Lang; period: 
               {m.lead(f.num(counted.size))} <span className="text-muted">({m.note})</span>
             </p>
           </div>
-          <nav className="flex flex-wrap items-center gap-1.5" aria-label={m.period}>
-            <span className="label mr-1">{m.period}</span>
-            {PERIODS.map((p) => (
-              <Link key={p} href={`${base}${p === 90 ? "" : `?periode=${p}`}`} scroll={false} className={`chip no-underline ${period === p ? "chip-accent" : ""}`} aria-current={period === p ? "true" : undefined}>
-                {m.periods[String(p)]}
-              </Link>
-            ))}
-          </nav>
+          <div className="flex flex-col items-end gap-2">
+            {aiStatus ? <AiEngineBadge status={aiStatus} lang={lang} /> : null}
+            <nav className="flex flex-wrap items-center gap-1.5" aria-label={m.period}>
+              <span className="label mr-1">{m.period}</span>
+              {PERIODS.map((p) => (
+                <Link
+                  key={p}
+                  href={`${base}${p === 90 ? "" : `?periode=${p}`}`}
+                  scroll={false}
+                  className={`chip no-underline ${period === p ? "chip-accent" : ""}`}
+                  aria-current={period === p ? "true" : undefined}
+                >
+                  {m.periods[String(p)]}
+                </Link>
+              ))}
+            </nav>
+          </div>
         </div>
         <dl className="grid grid-cols-2 gap-2 lg:grid-cols-4">
           {kpis.map((k) => (
-            <div key={k.label} className="flex min-w-0 items-baseline gap-2 rounded-lg border border-line bg-[color-mix(in_srgb,var(--bg)_55%,transparent)] px-3 py-2 backdrop-blur-sm">
+            <div
+              key={k.label}
+              className="flex min-w-0 items-baseline gap-2 rounded-lg border border-line bg-[color-mix(in_srgb,var(--bg)_55%,transparent)] px-3 py-2 backdrop-blur-sm"
+            >
               <dt className="label shrink-0">{k.label}</dt>
               <dd className="truncate text-[15px] font-semibold text-fg" title={k.value}>
                 {k.value}
@@ -209,7 +233,16 @@ export async function LiteracyMap({ lang, period, base }: { lang: Lang; period: 
             zoomOut: m.zoomOut,
             zoomReset: m.zoomReset,
             zoomHint: m.zoomHint,
-            ai: { badge: t.ai.badge, region: t.ai.region, targets: t.ai.targets, topics: t.ai.topics, steps: t.ai.steps, key: t.ai.key, age: lang === "en" ? "age" : "usia", note: t.ai.note("{model}") },
+            ai: {
+              badge: t.ai.badge,
+              region: t.ai.region,
+              targets: t.ai.targets,
+              topics: t.ai.topics,
+              steps: t.ai.steps,
+              key: t.ai.key,
+              age: lang === "en" ? "age" : "usia",
+              note: t.ai.note("{model}"),
+            },
             listTitle: m.listTitle,
             listHint: m.listHint,
             close: m.close,

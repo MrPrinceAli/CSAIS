@@ -278,6 +278,12 @@ const id = {
     stepsCount: (n: string) => `${n} langkah pencegahan`,
     unavailable: "Status peringatan belum tersedia. Terbit setelah run pipeline harian berikutnya.",
   },
+  aiEngine: {
+    title: (m: string) => `Saran literasi dan preventif disusun model ${m}`,
+    live: "aktif",
+    processing: (incidents: string, provinces: string) => `Menganalisis ${incidents} incident · ${provinces} provinsi`,
+    outputs: (n: string) => `${n} keluaran`,
+  },
   ai: {
     badge: "Saran AI",
     model: (m: string) => `Disusun model ${m}`,
@@ -892,6 +898,12 @@ const en: Dict = {
     showLess: "Show fewer",
     stepsCount: (n) => `${n} preventive steps`,
     unavailable: "Warning status is not available yet. It is published after the next daily pipeline run.",
+  },
+  aiEngine: {
+    title: (m) => `Literacy and preventive advice written by ${m}`,
+    live: "live",
+    processing: (incidents, provinces) => `Analysing ${incidents} incidents · ${provinces} provinces`,
+    outputs: (n) => `${n} outputs`,
   },
   ai: {
     badge: "AI advice",

@@ -1302,3 +1302,19 @@ export async function getAiRegionFlows(code: string): Promise<AiFlowAdvice[]> {
     return advice ? [{ flow: r.flow, model: r.model, created_at: r.created_at, advice }] : [];
   });
 }
+
+export type AiStatus = { model: string; incidents: number; provinces: number; flows: number; updated: string };
+
+/** Ringkasan tahap AI terakhir untuk lencana mesin AI di Peta Literasi; null bila belum pernah berjalan. */
+export async function getAiStatus(): Promise<AiStatus | null> {
+  if (!(await hasTable("ai_prevention")) || !(await hasTable("ai_region_literacy"))) return null;
+  const row = await queryOne<{ model: string | null; incidents: number; flows: number; provinces: number; updated: string | null }>(
+    `SELECT (SELECT model FROM ai_region_literacy ORDER BY created_at DESC LIMIT 1) AS model,
+            (SELECT COUNT(DISTINCT incident_id) FROM ai_prevention WHERE incident_id IN (SELECT incident_id FROM ai_top)) AS incidents,
+            (SELECT COUNT(*) FROM ai_prevention) + (SELECT COUNT(*) FROM ai_region_literacy) AS flows,
+            (SELECT COUNT(DISTINCT province_code) FROM ai_region_literacy) AS provinces,
+            (SELECT MAX(created_at) FROM (SELECT created_at FROM ai_prevention UNION ALL SELECT created_at FROM ai_region_literacy)) AS updated`,
+  );
+  if (!row?.model || !row.updated) return null;
+  return { model: row.model, incidents: Number(row.incidents), provinces: Number(row.provinces), flows: Number(row.flows), updated: row.updated };
+}
