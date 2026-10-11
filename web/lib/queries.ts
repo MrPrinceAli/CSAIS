@@ -1117,3 +1117,38 @@ export async function getRelatedIncidents(id: string, limit = 5): Promise<Relate
     [id, limit],
   );
 }
+
+// --- Peta Literasi (halaman Peringatan) ---
+export type LiteracyRow = {
+  incident_id: string;
+  province_code: string;
+  province: string;
+  kabkota: string | null;
+  attack_type: string | null;
+  anchor_published_date: string | null;
+  title: string | null;
+  tier: string | null;
+  prevention: string | null;
+};
+
+/**
+ * Incident Indonesia yang menyebut provinsi (csais/regions.py), dengan sasaran
+ * dan materi literasi terkini dari incident_tiers; ``days`` = 0 berarti semua waktu.
+ * Satu baris per incident, provinsi, dan kabupaten/kota yang disebut.
+ */
+export async function getLiteracyRows(days: number): Promise<LiteracyRow[]> {
+  if (!(await hasTable("incident_regions"))) return [];
+  const withTiers = await hasTable("incident_tiers");
+  const since = days ? new Date(Date.now() - days * 86400000).toISOString().slice(0, 10) : "0000";
+  return query<LiteracyRow>(
+    `SELECT r.incident_id, r.province_code, r.province, r.kabkota, i.attack_type, i.anchor_published_date, a.title,
+            ${withTiers ? "it.tier, it.prevention" : "NULL AS tier, NULL AS prevention"}
+     FROM incident_regions r
+     JOIN v05_incidents i ON i.incident_id = r.incident_id
+     LEFT JOIN articles a ON a.article_id = i.anchor_article_id
+     ${withTiers ? "LEFT JOIN incident_tiers it ON it.incident_id = r.incident_id" : ""}
+     WHERE i.anchor_published_date >= ?
+     ORDER BY i.anchor_published_date DESC`,
+    [since],
+  );
+}

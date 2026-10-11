@@ -37,7 +37,7 @@ case "${1:-start}" in
       CSAIS_WEB_URL="http://localhost:$PORT" PORTAL_PASSWORDS="$TEST_PASSWORDS"
     rm -f "$SURVEY"
     python3 -c "from csais import flows; from csais.db import get_connection; print('Keluaran demo lama dihapus:', flows.purge_demo_outputs(get_connection()))"
-    python3 -c "from csais import flows; flows.run()"
+    python3 -c "from csais import flows, regions; regions.run(); flows.run()"
     python3 main.py --seed-demo
     DEMO_OVERLAP=1 python3 main.py --seed-demo
     python3 -c "

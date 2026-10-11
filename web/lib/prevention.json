@@ -256,9 +256,13 @@
     }
   ],
   "audiences": {
+    "pelajar_smp": {
+      "id": "Pelajar SMP dan MTs",
+      "en": "Junior high school students"
+    },
     "pelajar_sma": {
-      "id": "Pelajar SMP, SMA, dan SMK",
-      "en": "Middle and high school students"
+      "id": "Pelajar SMA dan SMK",
+      "en": "Senior high and vocational school students"
     },
     "mahasiswa": {
       "id": "Mahasiswa",
@@ -323,6 +327,30 @@
     "lansia": {
       "id": "Lansia dan keluarga pendampingnya",
       "en": "Older adults and their caregivers"
+    },
+    "pengurus_ormas": {
+      "id": "Pengurus ormas dan komunitas",
+      "en": "Community and civil society organisers"
+    },
+    "tokoh_agama": {
+      "id": "Tokoh agama dan pengurus rumah ibadah",
+      "en": "Religious leaders and place-of-worship staff"
+    },
+    "perangkat_desa": {
+      "id": "Perangkat desa dan kelurahan",
+      "en": "Village and ward officials"
+    },
+    "pekerja_migran": {
+      "id": "Pekerja migran dan calon pekerja migran",
+      "en": "Migrant workers and prospective migrants"
+    },
+    "petani_nelayan": {
+      "id": "Petani, peternak, dan nelayan",
+      "en": "Farmers, herders, and fishers"
+    },
+    "pengemudi_ojol": {
+      "id": "Pengemudi ojek dan taksi daring",
+      "en": "Ride-hailing drivers"
     }
   },
   "audience_by_group": {

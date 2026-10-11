@@ -8,10 +8,11 @@ import prevention from "@/lib/prevention.json";
 import { tipText } from "@/lib/prevention";
 import { PreventionPanel } from "@/components/prevention-panel";
 import { RiskOverview } from "@/components/risk-overview";
+import { LiteracyMap, PERIODS, type Period } from "@/components/literacy-map";
 import { DemoChip, SectionTitle, TierBadge, TypeChip } from "@/components/ui";
 
 type Params = { lang: string };
-type Search = { kelompok?: string; bagian?: string };
+type Search = { kelompok?: string; bagian?: string; periode?: string };
 
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { lang } = await params;
@@ -95,7 +96,8 @@ export default async function AlertsPage({ params, searchParams }: { params: Pro
   if (!isLang(lang)) notFound();
   const t = getDict(lang);
   const a = t.alerts;
-  const { kelompok, bagian } = await searchParams;
+  const { kelompok, bagian, periode } = await searchParams;
+  const period = (PERIODS as readonly number[]).includes(Number(periode)) && periode !== undefined ? (Number(periode) as Period) : 90;
   const group = kelompok && GROUPS.includes(kelompok) ? kelompok : undefined;
   const open = SECTIONS.includes(bagian as Section) ? (bagian as Section) : undefined;
   const available = await hasTable("incident_tiers");
@@ -113,6 +115,10 @@ export default async function AlertsPage({ params, searchParams }: { params: Pro
       </header>
 
       <RiskOverview lang={lang} />
+
+      <div className="border-t border-line pt-6">
+        <LiteracyMap lang={lang} period={period} base={base} />
+      </div>
 
       <div className="flex flex-col gap-1 border-t border-line pt-6">
         <h2 className="text-[20px] font-semibold">{a.perIncident}</h2>

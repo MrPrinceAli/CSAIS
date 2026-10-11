@@ -8,6 +8,12 @@ kode Python supaya bisa diubah tanpa menyentuh kode program.
 |----------------------------|---------------------------------------|
 | `relevance_keywords.json`  | `csais/v02_relevance_detection.py`    |
 | `extraction_keywords.json` | `csais/v03_information_extraction.py` |
+| `wilayah.json`             | `csais/regions.py` (Peta Literasi)    |
+
+`wilayah.json` bukan daftar kata kunci: isinya kode dan nama resmi 38 provinsi
+dan 514 kabupaten/kota (Kepmendagri 2025, dari github.com/cahyadsn/wilayah,
+MIT). Singkatan provinsi dan nama yang butuh kata penanda wilayah diatur di
+`csais/regions.py`.
 
 Kedua file dibaca sekali saat modul diimpor. Perubahan berlaku pada proses
 pipeline berikutnya. Artikel yang sudah dianalisis tidak otomatis dihitung

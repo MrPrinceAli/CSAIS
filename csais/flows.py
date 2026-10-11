@@ -46,8 +46,9 @@ _HASHED = FIELDS + ("field_status", "status", "tier", "prevention", "basis", "so
 
 
 # --- Pencegahan ---
-def prevention_for(group, types):
-    """Kunci langkah dan kanal pelaporan; harus sama dengan preventionKeys di web."""
+def prevention_for(group, types, communities=()):
+    """Kunci langkah dan kanal pelaporan (harus sama dengan preventionKeys di web),
+    plus sasaran dan materi literasi."""
     by_type = PREVENTION["by_type"]
     alias = PREVENTION["alias"]
     steps = []
@@ -74,18 +75,23 @@ def prevention_for(group, types):
     if any(t in PREVENTION["link_types"] for t in types):
         channels.append("konten")
     channels.append("patrol")
-    return {"steps": steps, "channels": channels, **literacy_for(group, types)}
+    return {"steps": steps, "channels": channels, **literacy_for(group, types, communities=communities)}
 
 
 LITERACY_MAX = 3  # sasaran literasi dan materi per incident
 
 
-def literacy_for(group, types, hoax=False):
-    """Sasaran literasi (siapa yang perlu diedukasi) dan materinya, dari kelompok
-    sasaran dan jenis serangan; untuk hoaks, materinya cek fakta dan pelaporan."""
+def literacy_for(group, types, hoax=False, communities=()):
+    """Sasaran literasi (siapa yang perlu diedukasi) dan materinya; untuk hoaks,
+    materinya cek fakta dan pelaporan.
+
+    Sasaran paling spesifik lebih dulu: kelompok masyarakat yang disebut berita
+    (``communities`` dari csais/regions.py, mis. pelajar SMP, ormas), lalu dari
+    kelompok sasaran V0.3, lalu dari jenis serangan."""
     alias = PREVENTION["alias"]
     known = [alias.get(t, t) for t in types]
-    audience = list(PREVENTION["audience_by_group"].get(group, []))[:2]
+    audience = [c for c in communities if c in PREVENTION["audiences"]][:2]
+    audience += list(PREVENTION["audience_by_group"].get(group, []))[:2]
     for attack_type in known:
         audience.extend(PREVENTION["audience_by_type"].get(attack_type, []))
     audience = list(dict.fromkeys(audience))[:LITERACY_MAX] or ["pengguna_medsos"]
@@ -231,7 +237,10 @@ def main_groups(conn):
 
 def d1_rows(conn):
     """Keluaran D1 per incident dari V0.5, V0.3, dan V0.7."""
+    from csais.regions import communities_by_incident
+
     groups = main_groups(conn)
+    communities = communities_by_incident(conn)
     trust = {}
     if _has_table(conn, "v07_trust"):
         cursor = conn.execute(
@@ -258,7 +267,7 @@ def d1_rows(conn):
             "target_group": group,
             "status": level or NO_SCORE,
             "tier": "peringatan_dini",
-            "prevention": prevention_for(group or "", types),
+            "prevention": prevention_for(group or "", types, communities.get(incident_id, ())),
             "basis": {
                 "trust_score": score,
                 "documents": trust_docs if trust_docs is not None else docs,
