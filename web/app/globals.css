@@ -850,3 +850,14 @@ body:has(.im-root) { overflow: hidden; }
     radial-gradient(rgba(230, 237, 243, 0.06) 1px, transparent 1.3px) 0 0 / 18px 18px,
     var(--surface);
 }
+
+/* Latar budaya pop-up Peta Literasi (components/province-culture.tsx) */
+@keyframes culture-drift { from { transform: translate(0, 0); } to { transform: translate(-24px, 24px); } }
+@keyframes culture-float { 0%, 100% { transform: translateY(0); opacity: 0.25; } 50% { transform: translateY(-10px); opacity: 0.9; } }
+@keyframes culture-rise { from { transform: translateY(14px); opacity: 0; } to { transform: translateY(0); opacity: 0.5; } }
+.culture-drift { animation: culture-drift 14s linear infinite; }
+.culture-float { animation: culture-float 5s ease-in-out infinite; transform-box: fill-box; }
+.culture-rise { animation: culture-rise 0.9s ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .culture-drift, .culture-float, .culture-rise { animation: none; }
+}

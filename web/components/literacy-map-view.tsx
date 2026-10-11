@@ -8,6 +8,7 @@
  */
 import Link from "next/link";
 import type { AiAdvice } from "@/lib/queries";
+import { cultureOf, ProvinceCulture } from "@/components/province-culture";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 export type Item = { label: string; n: number };
@@ -73,6 +74,7 @@ type Strings = {
   localCases: string;
   recommendation: string;
   showAllProvinces: string;
+  lang: "id" | "en";
 };
 
 const FLOWS = ["D1", "D2", "D3", "D4"] as const;
@@ -133,8 +135,9 @@ function ProvinceModal({ stat, onClose, strings, incidentHref }: { stat: Provinc
         className="flex max-h-[92svh] w-full max-w-[1280px] flex-col overflow-hidden rounded-2xl border border-line bg-[var(--surface)] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-5 py-3.5">
-          <div className="flex min-w-0 flex-col gap-1">
+        <header className="relative isolate flex min-h-[132px] flex-wrap items-start justify-between gap-3 overflow-hidden border-b border-line px-5 py-4">
+          <ProvinceCulture code={stat.code} />
+          <div className="relative flex min-w-0 flex-col gap-1 [text-shadow:0_1px_10px_rgba(0,0,0,0.8)]">
             <span className="label text-accent">{strings.compareTitle}</span>
             <h3 className="text-[22px] font-semibold leading-tight">{stat.name}</h3>
             <span className="text-[12px] text-muted">
@@ -142,7 +145,12 @@ function ProvinceModal({ stat, onClose, strings, incidentHref }: { stat: Provinc
               {stat.n > 0 ? ` · ${stat.n} ${strings.incidents}` : ""} · {stat.traits.map((t) => t.label).join(" · ")}
             </span>
           </div>
-          <button type="button" onClick={onClose} className="btn btn-ghost text-[13px]" aria-label={strings.close}>
+          {cultureOf(stat.code) ? (
+            <span className="relative order-last w-full text-[11.5px] font-semibold tracking-wide" style={{ color: cultureOf(stat.code)?.accent }}>
+              ✦ {cultureOf(stat.code)?.label[strings.lang]}
+            </span>
+          ) : null}
+          <button type="button" onClick={onClose} className="btn btn-ghost relative bg-[color-mix(in_srgb,var(--bg)_70%,transparent)] text-[13px] backdrop-blur-sm" aria-label={strings.close}>
             ✕ {strings.close}
           </button>
         </header>

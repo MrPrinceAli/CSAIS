@@ -221,6 +221,7 @@ export async function LiteracyMap({ lang, period, base }: { lang: Lang; period: 
             localCases: m.localCases,
             recommendation: m.recommendation,
             showAllProvinces: m.showAllProvinces,
+            lang,
           }}
         />
         <p className="text-[10.5px] leading-snug text-muted">{m.source}</p>

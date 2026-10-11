@@ -1,0 +1,347 @@
+{
+ "_comment": "Ikon budaya dan motif per provinsi untuk latar pop-up Peta Literasi (components/province-culture.tsx). Ilustrasi vektor sederhana, bukan gambar resmi; silakan ditinjau.",
+ "provinces": {
+  "11": {
+   "landmark": "domes",
+   "pattern": "songket",
+   "accent": "#3fb68b",
+   "label": {
+    "id": "Masjid Raya Baiturrahman · motif Pintu Aceh",
+    "en": "Baiturrahman Grand Mosque · Pintu Aceh motif"
+   }
+  },
+  "12": {
+   "landmark": "bolon",
+   "pattern": "ulos",
+   "accent": "#d0533f",
+   "label": {
+    "id": "Rumah Bolon · kain Ulos",
+    "en": "Rumah Bolon · Ulos cloth"
+   }
+  },
+  "13": {
+   "landmark": "gadang",
+   "pattern": "songket",
+   "accent": "#d6a640",
+   "label": {
+    "id": "Rumah Gadang · songket Minang",
+    "en": "Rumah Gadang · Minang songket"
+   }
+  },
+  "14": {
+   "landmark": "panggung",
+   "pattern": "songket",
+   "accent": "#e0b84a",
+   "label": {
+    "id": "Rumah Lancang Kuning · tenun Siak",
+    "en": "Lancang Kuning house · Siak weaving"
+   }
+  },
+  "15": {
+   "landmark": "panggung",
+   "pattern": "kawung",
+   "accent": "#c98a3b",
+   "label": {
+    "id": "Rumah Kajang Leko · batik Jambi",
+    "en": "Kajang Leko house · Jambi batik"
+   }
+  },
+  "16": {
+   "landmark": "limas",
+   "pattern": "songket",
+   "accent": "#d4a63a",
+   "label": {
+    "id": "Rumah Limas · songket Palembang",
+    "en": "Limas house · Palembang songket"
+   }
+  },
+  "17": {
+   "landmark": "limas",
+   "pattern": "songket",
+   "accent": "#c7783d",
+   "label": {
+    "id": "Rumah Bubungan Lima · batik Besurek",
+    "en": "Bubungan Lima house · Besurek batik"
+   }
+  },
+  "18": {
+   "landmark": "siger",
+   "pattern": "songket",
+   "accent": "#e2b13c",
+   "label": {
+    "id": "Siger · kain Tapis",
+    "en": "Siger crown · Tapis cloth"
+   }
+  },
+  "19": {
+   "landmark": "limas",
+   "pattern": "waves",
+   "accent": "#3aa0c8",
+   "label": {
+    "id": "Rumah Limas Bangka · pesisir timah",
+    "en": "Bangka Limas house · tin coast"
+   }
+  },
+  "21": {
+   "landmark": "panggung",
+   "pattern": "waves",
+   "accent": "#2fb7c9",
+   "label": {
+    "id": "Rumah Belah Bubung · laut kepulauan",
+    "en": "Belah Bubung house · island seas"
+   }
+  },
+  "31": {
+   "landmark": "monas",
+   "pattern": "kawung",
+   "accent": "#e0b84a",
+   "label": {
+    "id": "Monas · batik Betawi",
+    "en": "National Monument · Betawi batik"
+   }
+  },
+  "32": {
+   "landmark": "sate",
+   "pattern": "megamendung",
+   "accent": "#3f8fd6",
+   "label": {
+    "id": "Gedung Sate · mega mendung",
+    "en": "Gedung Sate · Mega Mendung"
+   }
+  },
+  "33": {
+   "landmark": "stupa",
+   "pattern": "parang",
+   "accent": "#b9935a",
+   "label": {
+    "id": "Candi Borobudur · batik parang",
+    "en": "Borobudur · Parang batik"
+   }
+  },
+  "34": {
+   "landmark": "joglo",
+   "pattern": "kawung",
+   "accent": "#c9a24a",
+   "label": {
+    "id": "Joglo Keraton · batik kawung",
+    "en": "Kraton Joglo · Kawung batik"
+   }
+  },
+  "35": {
+   "landmark": "joglo",
+   "pattern": "parang",
+   "accent": "#c06a3a",
+   "label": {
+    "id": "Rumah Joglo Jawa Timuran · batik Madura",
+    "en": "East Javan Joglo · Madura batik"
+   }
+  },
+  "36": {
+   "landmark": "mosque",
+   "pattern": "kawung",
+   "accent": "#4aa77a",
+   "label": {
+    "id": "Masjid Agung Banten · batik Banten",
+    "en": "Great Mosque of Banten · Banten batik"
+   }
+  },
+  "51": {
+   "landmark": "bentar",
+   "pattern": "poleng",
+   "accent": "#e0a43a",
+   "label": {
+    "id": "Candi Bentar · kain poleng",
+    "en": "Candi Bentar gate · Poleng cloth"
+   }
+  },
+  "52": {
+   "landmark": "lumbung",
+   "pattern": "ikat",
+   "accent": "#c98a3b",
+   "label": {
+    "id": "Lumbung Sasak · tenun Sasak",
+    "en": "Sasak rice barn · Sasak weaving"
+   }
+  },
+  "53": {
+   "landmark": "cone",
+   "pattern": "ikat",
+   "accent": "#c7553e",
+   "label": {
+    "id": "Mbaru Niang · tenun ikat",
+    "en": "Mbaru Niang · Ikat weaving"
+   }
+  },
+  "61": {
+   "landmark": "betang",
+   "pattern": "dayak",
+   "accent": "#d9b13f",
+   "label": {
+    "id": "Rumah Radakng · motif Dayak",
+    "en": "Radakng longhouse · Dayak motif"
+   }
+  },
+  "62": {
+   "landmark": "betang",
+   "pattern": "dayak",
+   "accent": "#e0a43a",
+   "label": {
+    "id": "Rumah Betang · motif Dayak",
+    "en": "Betang longhouse · Dayak motif"
+   }
+  },
+  "63": {
+   "landmark": "bubungan",
+   "pattern": "sasirangan",
+   "accent": "#d0533f",
+   "label": {
+    "id": "Rumah Bubungan Tinggi · kain sasirangan",
+    "en": "Bubungan Tinggi house · Sasirangan cloth"
+   }
+  },
+  "64": {
+   "landmark": "betang",
+   "pattern": "dayak",
+   "accent": "#3fb68b",
+   "label": {
+    "id": "Rumah Lamin · motif Dayak",
+    "en": "Lamin longhouse · Dayak motif"
+   }
+  },
+  "65": {
+   "landmark": "betang",
+   "pattern": "dayak",
+   "accent": "#2fb7c9",
+   "label": {
+    "id": "Rumah Baloy · motif Dayak",
+    "en": "Baloy house · Dayak motif"
+   }
+  },
+  "71": {
+   "landmark": "panggung",
+   "pattern": "waves",
+   "accent": "#2fb7c9",
+   "label": {
+    "id": "Rumah Walewangko · laut Bunaken",
+    "en": "Walewangko house · Bunaken sea"
+   }
+  },
+  "72": {
+   "landmark": "limas",
+   "pattern": "ikat",
+   "accent": "#c98a3b",
+   "label": {
+    "id": "Rumah Tambi · tenun Donggala",
+    "en": "Tambi house · Donggala weaving"
+   }
+  },
+  "73": {
+   "landmark": "tongkonan",
+   "pattern": "toraja",
+   "accent": "#c7553e",
+   "label": {
+    "id": "Tongkonan · ukiran Toraja",
+    "en": "Tongkonan · Toraja carving"
+   }
+  },
+  "74": {
+   "landmark": "panggung",
+   "pattern": "ikat",
+   "accent": "#3fb68b",
+   "label": {
+    "id": "Banua Tada · tenun Buton",
+    "en": "Banua Tada house · Buton weaving"
+   }
+  },
+  "75": {
+   "landmark": "panggung",
+   "pattern": "songket",
+   "accent": "#d6a640",
+   "label": {
+    "id": "Rumah Dulohupa · sulaman Karawo",
+    "en": "Dulohupa house · Karawo embroidery"
+   }
+  },
+  "76": {
+   "landmark": "panggung",
+   "pattern": "waves",
+   "accent": "#3aa0c8",
+   "label": {
+    "id": "Rumah Boyang · perahu Sandeq",
+    "en": "Boyang house · Sandeq boat"
+   }
+  },
+  "81": {
+   "landmark": "panggung",
+   "pattern": "waves",
+   "accent": "#2fb7c9",
+   "label": {
+    "id": "Rumah Baileo · laut Banda",
+    "en": "Baileo house · Banda sea"
+   }
+  },
+  "82": {
+   "landmark": "mosque",
+   "pattern": "waves",
+   "accent": "#d6a640",
+   "label": {
+    "id": "Masjid Sultan Ternate · laut Maluku",
+    "en": "Ternate Sultan Mosque · Moluccan sea"
+   }
+  },
+  "91": {
+   "landmark": "honai",
+   "pattern": "papua",
+   "accent": "#c7783d",
+   "label": {
+    "id": "Honai · ukiran Papua",
+    "en": "Honai hut · Papuan carving"
+   }
+  },
+  "92": {
+   "landmark": "panggung",
+   "pattern": "papua",
+   "accent": "#3fb68b",
+   "label": {
+    "id": "Rumah Kaki Seribu · burung cendrawasih",
+    "en": "Thousand-legged house · bird of paradise"
+   }
+  },
+  "93": {
+   "landmark": "honai",
+   "pattern": "papua",
+   "accent": "#c7553e",
+   "label": {
+    "id": "Rumah Jew · ukiran Asmat",
+    "en": "Jew house · Asmat carving"
+   }
+  },
+  "94": {
+   "landmark": "honai",
+   "pattern": "papua",
+   "accent": "#d9b13f",
+   "label": {
+    "id": "Honai · cendrawasih",
+    "en": "Honai hut · bird of paradise"
+   }
+  },
+  "95": {
+   "landmark": "honai",
+   "pattern": "papua",
+   "accent": "#c98a3b",
+   "label": {
+    "id": "Honai Lembah Baliem",
+    "en": "Honai of the Baliem Valley"
+   }
+  },
+  "96": {
+   "landmark": "panggung",
+   "pattern": "waves",
+   "accent": "#2fb7c9",
+   "label": {
+    "id": "Rumah Kaki Seribu · Raja Ampat",
+    "en": "Thousand-legged house · Raja Ampat"
+   }
+  }
+ }
+}
