@@ -11,7 +11,7 @@ import { PreventionPanel } from "@/components/prevention-panel";
 import { HashGrid, IncidentCard, SectionTitle, SeverityText, SourceLogo, TierBadge, TrustRing, TypeChip } from "@/components/ui";
 
 /** Jumlah artikel kronologi yang langsung terlihat; sisanya di balik "Lihat semua". */
-const VISIBLE = 10;
+const VISIBLE = 4; // artikel kronologi yang tampil sebelum "Lihat semua"
 
 type FieldConfidence = Record<string, number>;
 
