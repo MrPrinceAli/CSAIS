@@ -95,7 +95,7 @@ PUBLISH_TABLES = {
     "incident_platforms": ("SELECT * FROM incident_platforms", ["incident_id", "platform"]),
     "ai_top": ("SELECT * FROM ai_top", []),
     "ai_prevention": ("SELECT * FROM ai_prevention", ["incident_id"]),
-    "ai_region_literacy": ("SELECT * FROM ai_region_literacy", []),
+    "ai_region_literacy": ("SELECT * FROM ai_region_literacy", ["province_code"]),
 }
 
 

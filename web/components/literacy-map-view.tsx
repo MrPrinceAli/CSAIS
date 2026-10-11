@@ -25,7 +25,7 @@ export type ProvinceStat = {
   cities: Item[];
   samples: { id: string; title: string; date: string; tier: string | null }[];
   traits: { label: string; reason: string; example: { id: string; title: string; place: string } | null }[];
-  ai: (AiAdvice & { model: string }) | null;
+  ai: { audience: string; message: string; flows: string[]; model: string } | null;
   recAudiences: string[];
   recTopics: string[];
 };
@@ -61,8 +61,164 @@ type Strings = {
   zoomOut: string;
   zoomReset: string;
   zoomHint: string;
-  ai: { badge: string; region: string; targets: string; topics: string; steps: string; key: string; age: string };
+  ai: { badge: string; region: string; targets: string; topics: string; steps: string; key: string; age: string; note: string };
+  listTitle: string;
+  listHint: string;
+  close: string;
+  loading: string;
+  compareTitle: string;
+  flowNames: Record<string, string>;
+  noFlow: Record<string, string>;
+  ruleBased: string;
+  localCases: string;
+  recommendation: string;
 };
+
+const FLOWS = ["D1", "D2", "D3", "D4"] as const;
+const FLOW_TONE: Record<string, string> = { D1: "var(--accent)", D2: "var(--med)", D3: "var(--chain)", D4: "var(--good)" };
+
+type FlowAdvice = { flow: string; model: string; advice: AiAdvice };
+
+/** Pop-up satu provinsi: profil wilayah dan rekomendasi AI D1 - D4 berdampingan (dimuat dari /api/literacy/[kode]). */
+function ProvinceModal({ stat, onClose, strings, incidentHref }: { stat: ProvinceStat; onClose: () => void; strings: Strings; incidentHref: string }) {
+  const [flows, setFlows] = useState<FlowAdvice[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetch(`/api/literacy/${stat.code}`)
+      .then((r) => r.json())
+      .then((data: { flows?: FlowAdvice[] }) => alive && setFlows(data.flows ?? []))
+      .catch(() => alive && setFlows([]));
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => {
+      alive = false;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [stat.code, onClose]);
+  const byFlow = Object.fromEntries((flows ?? []).map((f) => [f.flow, f.advice]));
+  const model = flows?.[0]?.model;
+
+  const advice = (a: AiAdvice) => (
+    <div className="flex flex-col gap-2 text-[12.5px]">
+      {a.ringkasan ? <p className="leading-snug text-soft">{a.ringkasan}</p> : null}
+      <span className="label">{strings.ai.targets}</span>
+      <ul className="flex flex-col gap-1">
+        {a.sasaran.map((t) => (
+          <li key={t.kelompok} className="rounded-md border border-line px-2 py-1">
+            <span className="block font-semibold leading-snug text-fg">{t.kelompok}</span>
+            {t.usia || t.wilayah ? <span className="block text-[11px] text-accent">{[t.usia && `${strings.ai.age} ${t.usia}`, t.wilayah].filter(Boolean).join(" · ")}</span> : null}
+          </li>
+        ))}
+      </ul>
+      <span className="label">{strings.ai.topics}</span>
+      <ol className="flex list-decimal flex-col gap-0.5 pl-4 text-soft">
+        {a.materi.map((m) => (
+          <li key={m}>{m}</li>
+        ))}
+      </ol>
+      <span className="label">{strings.ai.steps}</span>
+      <ul className="flex list-disc flex-col gap-0.5 pl-4 text-soft">
+        {a.langkah.map((m) => (
+          <li key={m}>{m}</li>
+        ))}
+      </ul>
+      {a.pesan_kunci ? <p className="border-l-2 border-chain pl-2 font-semibold leading-snug text-fg">“{a.pesan_kunci}”</p> : null}
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={stat.name} onClick={onClose}>
+      <div
+        className="flex max-h-[92svh] w-full max-w-[1280px] flex-col overflow-hidden rounded-2xl border border-line bg-[var(--surface)] shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-5 py-3.5">
+          <div className="flex min-w-0 flex-col gap-1">
+            <span className="label text-accent">{strings.compareTitle}</span>
+            <h3 className="text-[22px] font-semibold leading-tight">{stat.name}</h3>
+            <span className="text-[12px] text-muted">
+              {Math.max(1, stat.ai?.flows.length ?? 0)} {strings.recommendation}
+              {stat.n > 0 ? ` · ${stat.n} ${strings.incidents}` : ""} · {stat.traits.map((t) => t.label).join(" · ")}
+            </span>
+          </div>
+          <button type="button" onClick={onClose} className="btn btn-ghost text-[13px]" aria-label={strings.close}>
+            ✕ {strings.close}
+          </button>
+        </header>
+        <div className="flex min-h-0 flex-col gap-4 overflow-y-auto px-5 py-4">
+          {flows === null ? (
+            <p className="text-[13px] text-muted">{strings.loading}</p>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {FLOWS.map((flow) => (
+                <section key={flow} className="flex flex-col gap-2 rounded-xl border border-line p-3" style={{ borderTop: `2px solid ${FLOW_TONE[flow]}` }}>
+                  <span className="font-mono text-[12px] font-semibold" style={{ color: FLOW_TONE[flow] }}>
+                    {flow} · <span className="font-sans text-fg">{strings.flowNames[flow]}</span>
+                  </span>
+                  {byFlow[flow] ? (
+                    advice(byFlow[flow])
+                  ) : flow === "D1" ? (
+                    <div className="flex flex-col gap-1.5 text-[12.5px]">
+                      <span className="text-[11.5px] text-muted">{strings.ruleBased}</span>
+                      <span className="text-soft">{stat.recAudiences.join(", ")}</span>
+                      <ol className="flex list-decimal flex-col gap-0.5 pl-4 text-soft">
+                        {stat.recTopics.map((t) => (
+                          <li key={t}>{t}</li>
+                        ))}
+                      </ol>
+                    </div>
+                  ) : (
+                    <p className="text-[12px] leading-snug text-muted">{strings.noFlow[flow]}</p>
+                  )}
+                </section>
+              ))}
+            </div>
+          )}
+          <div className="grid gap-4 border-t border-line pt-3 md:grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <span className="label">{strings.profile}</span>
+              {stat.traits.map((trait) => (
+                <p key={trait.label} className="text-[12px] leading-snug text-soft">
+                  <span className="font-semibold text-fg">{trait.label}.</span> {trait.reason}
+                  {trait.example ? (
+                    <>
+                      {" "}
+                      <span className="text-muted">
+                        {strings.example} ({trait.example.place}):{" "}
+                      </span>
+                      <Link href={`${incidentHref}${trait.example.id}`} className="text-accent no-underline hover:underline">
+                        {trait.example.title}
+                      </Link>
+                    </>
+                  ) : null}
+                </p>
+              ))}
+            </div>
+            <div className="flex flex-col gap-2">
+              <span className="label">{strings.localCases}</span>
+              {stat.samples.length ? (
+                <ul className="flex flex-col gap-1.5">
+                  {stat.samples.map((s) => (
+                    <li key={s.id} className="text-[12px]">
+                      <Link href={`${incidentHref}${s.id}`} className="font-semibold text-fg no-underline hover:text-accent">
+                        {s.title}
+                      </Link>{" "}
+                      <span className="text-muted">{s.date}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-[12px] text-muted">{strings.noLocal}</p>
+              )}
+              {stat.cities.length ? <p className="text-[11.5px] text-muted">{stat.cities.map((c) => `${c.label.replace(/^(Kabupaten|Kota) /, "")} (${c.n})`).join(", ")}</p> : null}
+            </div>
+          </div>
+          {model ? <p className="text-[11px] text-muted">✦ {strings.ai.note.replace("{model}", model)}</p> : null}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 type View = { k: number; x: number; y: number };
 const HOME: View = { k: 1, x: 0, y: 0 };
@@ -126,6 +282,7 @@ export function LiteracyMapView({
   topicOptions,
   incidentHref,
   strings,
+  listOrder,
 }: {
   width: number;
   height: number;
@@ -134,12 +291,12 @@ export function LiteracyMapView({
   topicOptions: Option[];
   incidentHref: string;
   strings: Strings;
+  listOrder: string[]; // urutan acak daftar provinsi, diacak di server per permintaan
 }) {
   const [audience, setAudience] = useState("");
   const [topic, setTopic] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   const [hover, setHover] = useState<{ code: string; x: number; y: number; w: number } | null>(null);
-  const [showTable, setShowTable] = useState(false);
   const [view, setView] = useState<View>(HOME);
   const svgRef = useRef<SVGSVGElement>(null);
   const drag = useRef<{ x: number; y: number; view: View; moved: boolean } | null>(null);
@@ -186,25 +343,10 @@ export function LiteracyMapView({
     return c < 0 ? NO_DATA : ramp[c];
   };
   const ranked = [...stats].filter((s) => valueOf(s) > 0).sort((a, b) => valueOf(b) - valueOf(a) || a.name.localeCompare(b.name));
-  const current = stats.find((s) => s.code === (selected ?? ranked[0]?.code ?? stats[0]?.code)) ?? null;
+  const current = selected ? (stats.find((s) => s.code === selected) ?? null) : null;
   const labelled = ranked.slice(0, LABELS);
   const glowing = new Set(stats.filter((s) => classOf(valueOf(s), breaks) >= breaks.length - 2 && valueOf(s) > 0).map((s) => s.code));
   const hovered = hover ? stats.find((s) => s.code === hover.code) : null;
-
-  const list = (title: string, items: Item[]) =>
-    items.length ? (
-      <div className="flex flex-col gap-1.5">
-        <span className="label">{title}</span>
-        <ul className="flex flex-col gap-1">
-          {items.map((item) => (
-            <li key={item.label} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 text-[13px]">
-              <span className="text-soft">{item.label}</span>
-              <span className="tnum font-mono text-[12px] text-muted">{item.n}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    ) : null;
 
   const select = (id: string, label: string, value: string, onChange: (v: string) => void, options: Option[]) => (
     <label htmlFor={id} className="flex min-w-0 items-center gap-2 text-[12px] text-muted">
@@ -239,144 +381,12 @@ export function LiteracyMapView({
     </div>
   );
 
-  const chips = (items: string[]) => (
-    <span className="flex flex-wrap gap-1">
-      {items.map((item) => (
-        <span key={item} className="chip py-1 text-[11.5px]">
-          {item}
-        </span>
-      ))}
-    </span>
-  );
-
-  const details = current ? (
-    <>
-      <header className="flex items-baseline justify-between gap-2">
-        <h3 className="text-[18px] font-semibold leading-tight">{current.name}</h3>
-        <span className="tnum whitespace-nowrap font-mono text-[12.5px] text-accent">
-          {valueOf(current)} {strings.incidents}
-        </span>
-      </header>
-      {current.n === 0 ? <p className="text-[12px] leading-snug text-muted">{strings.noLocal}</p> : null}
-      {current.ai ? (
-        <div className="flex flex-col gap-2 rounded-lg border border-[color-mix(in_srgb,var(--chain)_45%,var(--line))] bg-[color-mix(in_srgb,var(--chain)_7%,transparent)] p-3">
-          <span className="flex items-center justify-between gap-2">
-            <span className="label text-chain">{strings.ai.region}</span>
-            <span className="chip py-0.5 text-[10.5px] text-chain" title={current.ai.model}>
-              ✦ {strings.ai.badge}
-            </span>
-          </span>
-          {current.ai.ringkasan ? <p className="text-[12.5px] leading-snug text-soft">{current.ai.ringkasan}</p> : null}
-          <span className="text-[11.5px] text-muted">{strings.ai.targets}</span>
-          <ul className="flex flex-col gap-1">
-            {current.ai.sasaran.map((t) => (
-              <li key={t.kelompok} className="rounded-md border border-line px-2 py-1 text-[12px]">
-                <span className="block font-semibold leading-snug text-fg">{t.kelompok}</span>
-                {t.usia || t.wilayah ? (
-                  <span className="block text-[11px] text-accent">{[t.usia && `${strings.ai.age} ${t.usia}`, t.wilayah].filter(Boolean).join(" · ")}</span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-          <span className="mt-1 text-[11.5px] text-muted">{strings.ai.topics}</span>
-          <ol className="flex list-decimal flex-col gap-0.5 pl-4 text-[12.5px] text-soft">
-            {current.ai.materi.map((m) => (
-              <li key={m}>{m}</li>
-            ))}
-          </ol>
-          {current.ai.pesan_kunci ? <p className="border-l-2 border-chain pl-2 text-[12.5px] font-semibold leading-snug text-fg">“{current.ai.pesan_kunci}”</p> : null}
-        </div>
-      ) : (
-        <div className="flex flex-col gap-2 rounded-lg border border-[color-mix(in_srgb,var(--accent)_35%,var(--line))] bg-[color-mix(in_srgb,var(--accent)_7%,transparent)] p-3">
-          <span className="label text-accent">{strings.recommend}</span>
-          <span className="text-[11.5px] text-muted">{strings.topAudience}</span>
-          {chips(current.recAudiences)}
-          <span className="mt-1 text-[11.5px] text-muted">{strings.topTopics}</span>
-          <ol className="flex list-decimal flex-col gap-0.5 pl-4 text-[12.5px] text-soft">
-            {current.recTopics.map((topic) => (
-              <li key={topic}>{topic}</li>
-            ))}
-          </ol>
-        </div>
-      )}
-      {current.traits.length ? (
-        <div className="flex flex-col gap-2">
-          <span className="label">{strings.profile}</span>
-          <ul className="flex flex-col gap-2.5">
-            {current.traits.map((trait) => (
-              <li key={trait.label} className="flex flex-col gap-0.5">
-                <span className="text-[12.5px] font-semibold text-fg">{trait.label}</span>
-                <span className="text-[12px] leading-snug text-soft">{trait.reason}</span>
-                {trait.example ? (
-                  <span className="text-[11.5px] leading-snug text-muted">
-                    {strings.example} ({trait.example.place}):{" "}
-                    <Link href={`${incidentHref}${trait.example.id}`} className="text-accent no-underline hover:underline">
-                      {trait.example.title}
-                    </Link>
-                  </span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-      {current.n > 0 ? (
-        <>
-          {list(strings.topTypes, current.types)}
-          {current.cities.length ? (
-            <div className="flex flex-col gap-1.5">
-              <span className="label">{strings.cities}</span>
-              {chips(current.cities.map((c) => `${c.label.replace(/^(Kabupaten|Kota) /, "")} ${c.n}`))}
-            </div>
-          ) : null}
-          {current.samples.length ? (
-            <div className="flex flex-col gap-1.5 border-t border-line pt-2.5">
-              <span className="label">{strings.samples}</span>
-              <ul className="flex flex-col gap-1.5">
-                {current.samples.slice(0, 2).map((s) => (
-                  <li key={s.id} className="flex flex-col gap-0.5">
-                    <Link href={`${incidentHref}${s.id}`} className="line-clamp-2 text-[12.5px] font-semibold leading-snug text-fg no-underline hover:text-accent">
-                      {s.title}
-                    </Link>
-                    <span className="text-[11px] text-muted">
-                      {s.date}
-                      {s.tier ? ` · ${strings.tiers[s.tier] ?? s.tier}` : ""}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-        </>
-      ) : null}
-    </>
-  ) : (
-    <p className="text-[13px] text-muted">{strings.empty}</p>
-  );
-
-  const table = (
-    <ol className="flex flex-col">
-      {ranked.map((s, i) => (
-        <li key={s.code}>
-          <button
-            type="button"
-            onClick={() => {
-              setSelected(s.code);
-              setShowTable(false);
-            }}
-            className="grid w-full grid-cols-[22px_minmax(0,1fr)_auto] items-baseline gap-2 border-b border-line py-1.5 text-left text-[12.5px] last:border-0 hover:text-accent"
-          >
-            <span className="tnum font-mono text-[11px] text-muted">{i + 1}</span>
-            <span className="min-w-0">
-              <span className="block font-semibold text-fg">{s.name}</span>
-              <span className="block truncate text-[11.5px] text-muted">{s.audiences[0]?.label ?? "–"}</span>
-            </span>
-            <span className="tnum font-mono">{valueOf(s)}</span>
-          </button>
-        </li>
-      ))}
-    </ol>
-  );
+  const order = listOrder;
+  const byCode = Object.fromEntries(stats.map((s) => [s.code, s]));
+  const toggle = (code: string) => setSelected((prev) => (prev === code ? null : code));
+  // indikator per provinsi = jumlah rekomendasi (alur D1 - D4 yang punya saran; minimal 1 dari profil wilayah)
+  const recCount = (s: ProvinceStat) => Math.max(1, s.ai?.flows.length ?? 0);
+  const countLabel = (s: ProvinceStat) => `${recCount(s)} ${strings.recommendation}`;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2" id="peta-literasi">
@@ -452,7 +462,7 @@ export function LiteracyMapView({
                   filter={glowing.has(s.code) ? "url(#lm-glow)" : undefined}
                   className="cursor-pointer outline-none transition-[fill] focus-visible:stroke-[var(--accent)]"
                   tabIndex={0}
-                  aria-label={`${s.name}: ${valueOf(s)} ${strings.incidents}`}
+                  aria-label={`${s.name}: ${countLabel(s)}`}
                   onMouseMove={(e) => {
                     const box = (e.currentTarget.ownerSVGElement as SVGSVGElement).getBoundingClientRect();
                     setHover({ code: s.code, x: e.clientX - box.left, y: e.clientY - box.top, w: box.width });
@@ -460,14 +470,12 @@ export function LiteracyMapView({
                   onMouseLeave={() => setHover(null)}
                   onClick={() => {
                     if (drag.current?.moved) return; // akhir geser peta, bukan klik
-                    setSelected(s.code);
-                    setShowTable(false);
+                    toggle(s.code); // klik provinsi yang sama lagi = lepas pilihan
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
-                      setSelected(s.code);
-                      setShowTable(false);
+                      toggle(s.code);
                     }
                   }}
                 />
@@ -515,30 +523,53 @@ export function LiteracyMapView({
               style={hover.x > hover.w * 0.6 ? { right: `calc(100% - ${hover.x - 14}px)`, top: hover.y + 14 } : { left: hover.x + 14, top: hover.y + 14 }}
             >
               <span className="block font-semibold text-fg">{hovered.name}</span>
-              <span className="text-soft">{`${valueOf(hovered)} ${strings.incidents}`}</span>
+              <span className="text-soft">
+                {countLabel(hovered)}
+                {hovered.n > 0 ? ` · ${hovered.n} ${strings.incidents}` : ""}
+              </span>
               {hovered.audiences[0] ? <span className="block text-muted">{hovered.audiences[0].label}</span> : null}
             </div>
           ) : null}
         </div>
 
         <aside className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-line bg-[color-mix(in_srgb,var(--bg)_62%,transparent)] backdrop-blur-sm">
-          <div className="flex border-b border-line text-[12px]" role="tablist">
-            {([false, true] as const).map((tab) => (
-              <button
-                key={String(tab)}
-                type="button"
-                role="tab"
-                aria-selected={showTable === tab}
-                onClick={() => setShowTable(tab)}
-                className={`flex-1 px-3 py-2 ${showTable === tab ? "border-b-2 border-accent text-fg" : "text-muted hover:text-fg"}`}
-              >
-                {tab ? `${strings.table} (${ranked.length})` : strings.detail}
-              </button>
-            ))}
+          <div className="border-b border-line px-4 py-2.5">
+            <span className="label text-accent">{strings.listTitle}</span>
+            <p className="text-[11.5px] text-muted">{strings.listHint}</p>
           </div>
-          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">{showTable ? table : details}</div>
+          <ul className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+            {order.map((code) => {
+              const s = byCode[code];
+              return (
+                <li key={code}>
+                  <button
+                    type="button"
+                    onClick={() => toggle(code)}
+                    className={`flex w-full flex-col gap-1 border-b border-line px-4 py-2.5 text-left transition-colors hover:bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] ${selected === code ? "bg-[color-mix(in_srgb,var(--accent)_12%,transparent)]" : ""}`}
+                  >
+                    <span className="flex items-baseline justify-between gap-2">
+                      <span className="flex items-baseline gap-2">
+                        <span className="text-[13.5px] font-semibold text-fg">{s.name}</span>
+                        <span className="font-mono text-[11px] text-muted">{countLabel(s)}</span>
+                      </span>
+                      <span className="flex gap-1">
+                        {(s.ai?.flows ?? []).map((flow) => (
+                          <span key={flow} className="rounded px-1 font-mono text-[10px] font-semibold" style={{ color: FLOW_TONE[flow], border: `1px solid ${FLOW_TONE[flow]}` }}>
+                            {flow}
+                          </span>
+                        ))}
+                      </span>
+                    </span>
+                    <span className="line-clamp-2 text-[12px] leading-snug text-soft">{s.ai?.audience || s.recAudiences.slice(0, 2).join(", ")}</span>
+                    {s.ai?.message ? <span className="line-clamp-1 text-[11.5px] italic text-muted">“{s.ai.message}”</span> : null}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
         </aside>
       </div>
+      {current ? <ProvinceModal key={current.code} stat={current} onClose={() => setSelected(null)} strings={strings} incidentHref={incidentHref} /> : null}
     </div>
   );
 }

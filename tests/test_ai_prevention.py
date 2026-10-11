@@ -72,9 +72,9 @@ def test_run_ai_only_top_incidents_and_caches(temp_conn, monkeypatch):
     # masukan sama, belum basi: tidak ada permintaan baru
     again = FakeModel()
     assert ai_prevention.run_ai(temp_conn, again, "model-x", now="2026-10-12T00:00:00+00:00") == (0, 0)
-    # model lain: saran incident ditulis ulang, provinsi tidak (belum basi)
+    # model lain: saran incident dan provinsi ditulis ulang
     other = FakeModel()
-    assert ai_prevention.run_ai(temp_conn, other, "model-y", now="2026-10-12T00:00:00+00:00")[0] == 4
+    assert ai_prevention.run_ai(temp_conn, other, "model-y", now="2026-10-12T00:00:00+00:00")[0] == 4 + 38
     # provinsi basi setelah REGION_MAX_AGE_DAYS hari
     late = FakeModel()
     assert ai_prevention.run_ai(temp_conn, late, "model-y", now="2026-10-20T00:00:00+00:00")[0] == 38
@@ -96,3 +96,16 @@ def test_store_top_ranking_without_ai(temp_conn, monkeypatch):
     ai_prevention.store_top(temp_conn)
     assert temp_conn.execute("SELECT incident_id FROM ai_top ORDER BY rank").fetchall() == [("INC-A",), ("INC-B",)]
     assert temp_conn.execute("SELECT COUNT(*) FROM ai_prevention").fetchone() == (0,)
+
+
+def test_province_inputs_per_flow(temp_conn):
+    _setup(temp_conn)
+    temp_conn.execute("UPDATE v05_incidents SET last_published_date = '2026-10-10'")
+    temp_conn.execute("CREATE TABLE incident_regions (incident_id TEXT, province_code TEXT, province TEXT, kabkota_code TEXT, kabkota TEXT, mentions INTEGER)")
+    temp_conn.execute("INSERT INTO incident_regions VALUES ('INC-A', '35', 'Jawa Timur', NULL, NULL, 1)")
+    inputs = ai_prevention._province_inputs(temp_conn, ["Judul besar"], ai_prevention._latest_outputs(temp_conn))
+    assert {flow for code, flow in inputs if code == "35"} == {"D1", "D2", "D3", "D4"}
+    assert {flow for code, flow in inputs if code == "11"} == {"D1"}  # tanpa kasus lokal: hanya D1
+    d3 = inputs[("35", "D3")][0]["keputusan_lembaga_kasus_lokal"][0]
+    assert d3["status"] == "dikonfirmasi" and d3["lembaga"] == "OJK"
+    assert inputs[("35", "D2")][1] != inputs[("35", "D3")][1]

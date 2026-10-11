@@ -30,6 +30,16 @@ type Counted = Map<string, number>;
 const bump = (map: Counted, key: string | null | undefined) => key && map.set(key, (map.get(key) ?? 0) + 1);
 const top = (map: Counted, n = 5) => [...map.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, n);
 
+/** Urutan acak daftar provinsi (diacak di server per permintaan, jadi hidrasi tetap cocok). */
+function shuffle<T>(items: T[]): T[] {
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
 export async function LiteracyMap({ lang, period, base }: { lang: Lang; period: Period; base: string }) {
   const t = getDict(lang);
   const m = t.literacyMap;
@@ -166,6 +176,7 @@ export async function LiteracyMap({ lang, period, base }: { lang: Lang; period: 
           ))}
         </dl>
         <LiteracyMapView
+          listOrder={shuffle(stats.map((s) => s.code))}
           width={WIDTH}
           height={HEIGHT}
           stats={stats}
@@ -198,7 +209,17 @@ export async function LiteracyMap({ lang, period, base }: { lang: Lang; period: 
             zoomOut: m.zoomOut,
             zoomReset: m.zoomReset,
             zoomHint: m.zoomHint,
-            ai: { badge: t.ai.badge, region: t.ai.region, targets: t.ai.targets, topics: t.ai.topics, steps: t.ai.steps, key: t.ai.key, age: lang === "en" ? "age" : "usia" },
+            ai: { badge: t.ai.badge, region: t.ai.region, targets: t.ai.targets, topics: t.ai.topics, steps: t.ai.steps, key: t.ai.key, age: lang === "en" ? "age" : "usia", note: t.ai.note("{model}") },
+            listTitle: m.listTitle,
+            listHint: m.listHint,
+            close: m.close,
+            loading: m.loading,
+            compareTitle: m.compareTitle,
+            flowNames: t.flows.names,
+            noFlow: m.noFlow,
+            ruleBased: m.ruleBased,
+            localCases: m.localCases,
+            recommendation: m.recommendation,
           }}
         />
         <p className="text-[10.5px] leading-snug text-muted">{m.source}</p>

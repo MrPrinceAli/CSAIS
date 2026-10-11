@@ -1273,14 +1273,32 @@ export async function getAiTop(): Promise<AiTopRow[]> {
   return rows.map((r) => ({ ...r, advice: parseAdvice(r.output) }));
 }
 
-/** Saran AI per provinsi untuk Peta Literasi: kode provinsi -> saran. */
-export async function getAiRegions(): Promise<Record<string, AiAdvice & { model: string }>> {
+/** Ringkasan saran AI per provinsi untuk daftar Peta Literasi (alur D1) dan alur yang tersedia. */
+export async function getAiRegions(): Promise<Record<string, { audience: string; message: string; flows: string[]; model: string }>> {
   if (!(await hasTable("ai_region_literacy"))) return {};
-  const rows = await query<{ province_code: string; model: string; output: string }>("SELECT province_code, model, output FROM ai_region_literacy");
-  const out: Record<string, AiAdvice & { model: string }> = {};
+  const rows = await query<{ province_code: string; flow: string; model: string; output: string }>("SELECT province_code, flow, model, output FROM ai_region_literacy ORDER BY flow");
+  const out: Record<string, { audience: string; message: string; flows: string[]; model: string }> = {};
   for (const r of rows) {
-    const advice = parseAdvice(r.output);
-    if (advice) out[r.province_code] = { ...advice, model: r.model };
+    const entry = (out[r.province_code] ??= { audience: "", message: "", flows: [], model: r.model });
+    entry.flows.push(r.flow);
+    if (r.flow === "D1") {
+      const advice = parseAdvice(r.output);
+      entry.audience = advice?.sasaran[0]?.kelompok ?? "";
+      entry.message = advice?.pesan_kunci ?? "";
+    }
   }
   return out;
+}
+
+/** Saran AI satu provinsi per alur (pop-up perbandingan D1 - D4). */
+export async function getAiRegionFlows(code: string): Promise<AiFlowAdvice[]> {
+  if (!(await hasTable("ai_region_literacy"))) return [];
+  const rows = await query<{ flow: AiFlowAdvice["flow"]; model: string; created_at: string; output: string }>(
+    "SELECT flow, model, created_at, output FROM ai_region_literacy WHERE province_code = ? ORDER BY flow",
+    [code],
+  );
+  return rows.flatMap((r) => {
+    const advice = parseAdvice(r.output);
+    return advice ? [{ flow: r.flow, model: r.model, created_at: r.created_at, advice }] : [];
+  });
 }

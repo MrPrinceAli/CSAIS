@@ -14,8 +14,10 @@ berbeda sesuai alurnya, sehingga keluarannya bisa dibandingkan:
 Biaya dibatasi: hanya incident TOP_N terbesar (artikel + 2 x sumber dalam
 TOP_DAYS hari terakhir data) yang diproses, dan saran hanya ditulis ulang bila
 masukannya berubah (``input_hash``). Selain itu setiap provinsi di Peta
-Literasi mendapat saran wilayah dari profilnya, kasus lokal, dan incident
-terbesar; ditulis ulang bila kasus lokal berubah atau sudah REGION_MAX_AGE_DAYS.
+Literasi mendapat saran wilayah per alur: D1 dari profil wilayah, kasus lokal,
+dan incident terbesar; D2 - D4 menambahkan hasil survei, keputusan lembaga,
+atau catatan resmi untuk kasus lokal provinsi itu (hanya bila ada). Ditulis
+ulang bila masukannya berubah, modelnya berganti, atau sudah REGION_MAX_AGE_DAYS.
 
 Pengaturan (.env / rahasia GitHub Actions), API apa pun yang kompatibel OpenAI:
   AI_BASE_URL   mis. https://api.openai.com/v1, https://api.anthropic.com/v1,
@@ -24,6 +26,7 @@ Pengaturan (.env / rahasia GitHub Actions), API apa pun yang kompatibel OpenAI:
   AI_API_KEY    kunci API (rahasia)
   AI_MODEL      nama model di penyedia itu
   AI_MAX_CALLS  batas permintaan per run (default 100)
+  AI_WORKERS    permintaan yang berjalan bersamaan (default 6)
 Tanpa AI_API_KEY/AI_MODEL tahap ini dilewati.
 
 Tabel: ``ai_top`` (peringkat incident terbesar saat ini), ``ai_prevention``
@@ -34,6 +37,7 @@ import hashlib
 import json
 import os
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 from csais import flows
@@ -47,6 +51,7 @@ TOP_N = 10
 TOP_DAYS = 14
 REGION_MAX_AGE_DAYS = 7
 DEFAULT_MAX_CALLS = 100
+DEFAULT_WORKERS = 6
 FLOWS = ("D1", "D2", "D3", "D4")
 
 # Fakta yang boleh dipakai model untuk rentang usia; selain ini usia dikosongkan
@@ -75,7 +80,16 @@ Aturan:
 - Kanal pelaporan hanya dari daftar ini: {"; ".join(CHANNELS)}.
 - Ikuti sudut pandang alur: D1 = hasil mesin dari berita; D2 = pendapat publik dari survei; D3 = keputusan lembaga; D4 = catatan resmi lembaga.
   Bila publik atau lembaga menyatakan informasinya tidak benar (hoaks), fokuskan saran pada cek fakta dan jangan menyebarkan.
-Jawab hanya dengan JSON sesuai skema."""
+Jawab HANYA dengan satu objek JSON dengan kunci PERSIS seperti ini (tanpa kunci lain, tanpa teks di luar JSON):
+{{
+  "ringkasan": "1-2 kalimat: apa yang terjadi dan mengapa relevan untuk masyarakat Indonesia",
+  "sasaran": [{{"kelompok": "kelompok spesifik", "usia": "", "wilayah": "", "alasan": "mengapa kelompok ini"}}],
+  "materi": ["materi literasi 1", "materi literasi 2"],
+  "langkah": ["langkah pencegahan 1", "langkah pencegahan 2"],
+  "kanal": ["kanal pelaporan dari daftar"],
+  "pesan_kunci": "satu kalimat pendek yang mudah diingat"
+}}
+Maksimal 3 sasaran, 4 materi, 5 langkah, 3 kanal."""
 
 _STRINGS = {"type": "array", "items": {"type": "string"}}
 OUTPUT_SCHEMA = {
@@ -121,6 +135,7 @@ def settings():
         "api_key": os.environ.get("AI_API_KEY") or "",
         "model": os.environ.get("AI_MODEL") or "",
         "max_calls": int(os.environ.get("AI_MAX_CALLS") or DEFAULT_MAX_CALLS),
+        "workers": int(os.environ.get("AI_WORKERS") or DEFAULT_WORKERS),
     }
 
 
@@ -142,10 +157,14 @@ def create_tables(conn):
             model TEXT NOT NULL, prompt_version TEXT NOT NULL, output TEXT NOT NULL,
             created_at TEXT NOT NULL, PRIMARY KEY (incident_id, flow)
         )""")
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(ai_region_literacy)")}
+    if columns and "flow" not in columns:
+        conn.execute("DROP TABLE ai_region_literacy")  # versi lama satu saran per provinsi; dibuat ulang per alur
     conn.execute("""
         CREATE TABLE IF NOT EXISTS ai_region_literacy (
-            province_code TEXT PRIMARY KEY, province TEXT NOT NULL, input_hash TEXT NOT NULL,
-            model TEXT NOT NULL, prompt_version TEXT NOT NULL, output TEXT NOT NULL, created_at TEXT NOT NULL
+            province_code TEXT NOT NULL, flow TEXT NOT NULL, province TEXT NOT NULL, input_hash TEXT NOT NULL,
+            model TEXT NOT NULL, prompt_version TEXT NOT NULL, output TEXT NOT NULL, created_at TEXT NOT NULL,
+            PRIMARY KEY (province_code, flow)
         )""")
     conn.execute("""
         CREATE TABLE IF NOT EXISTS ai_top (
@@ -301,8 +320,45 @@ def _latest_outputs(conn):
 
 
 # --- Panggilan model ---
+# Kunci lain yang kadang dipakai model, dipetakan ke skema tetap
+ALIASES = {
+    "ringkasan": ("relevansi_indonesia", "ringkasan_incident", "summary"),
+    "sasaran": ("sasaran_literasi", "target", "kelompok_sasaran"),
+    "materi": ("materi_literasi", "topik", "topics"),
+    "langkah": ("langkah_pencegahan", "saran_preventif", "langkah_penanganan", "steps"),
+    "kanal": ("kanal_pelaporan", "channels"),
+    "pesan_kunci": ("pesan", "key_message"),
+}
+
+
+def _normalise(raw):
+    raw = dict(raw)
+    for key, aliases in ALIASES.items():
+        if raw.get(key):
+            continue
+        for alias in aliases:
+            if raw.get(alias):
+                raw[key] = raw[alias]
+                break
+    if isinstance(raw.get("sasaran"), dict):
+        raw["sasaran"] = [raw["sasaran"]]
+    targets = []
+    for item in raw.get("sasaran") or []:
+        if isinstance(item, str):
+            item = {"kelompok": item}
+        if isinstance(item, dict):
+            item = {**item, "usia": item.get("usia") or item.get("rentang_usia") or "", "alasan": item.get("alasan") or item.get("konteks") or ""}
+        targets.append(item)
+    raw["sasaran"] = targets
+    for key in ("materi", "langkah", "kanal"):
+        if isinstance(raw.get(key), str):
+            raw[key] = [raw[key]]
+    return raw
+
+
 def clean_output(raw):
     """Rapikan jawaban model ke skema tetap (tipe dan batas jumlah item)."""
+    raw = _normalise(raw)
     out = {"ringkasan": str(raw.get("ringkasan") or "").strip(), "pesan_kunci": str(raw.get("pesan_kunci") or "").strip()}
     targets = []
     for item in raw.get("sasaran") or []:
@@ -320,16 +376,48 @@ def generate(client, task, payload, max_tokens=1200):
     return clean_output(raw)
 
 
-def _province_inputs(conn, top_titles):
-    """{kode provinsi: (masukan, hash)} dari profil wilayah, kasus lokal 90 hari, dan incident terbesar."""
+REGION_VIEW = {
+    "D1": "D1 (mesin): rekomendasi dari profil wilayah dan berita kasus lokal saja.",
+    "D2": "D2 (publik): rekomendasi yang memperhitungkan penilaian publik di survei atas kasus lokal (koreksi dan pendapat apakah benar terjadi).",
+    "D3": "D3 (lembaga): rekomendasi yang memperhitungkan keputusan lembaga resmi atas kasus lokal, alasan, dan imbauannya.",
+    "D4": "D4 (catatan resmi): rekomendasi resmi berdasarkan catatan lembaga yang sudah dikonfirmasi atau dibantah untuk kasus lokal.",
+}
+
+
+def _flow_evidence(flow, row, title):
+    """Ringkasan keluaran satu alur untuk satu kasus lokal (masukan saran provinsi)."""
+    basis = _loads(row.get("basis"))
+    if flow == "D2":
+        return {
+            "judul": title,
+            "penilaian_kartu": row.get("status"),
+            "pendapat_benar_terjadi": basis.get("verdict") or "belum_pasti",
+            "koreksi_publik": {k: v.get("value") for k, v in (basis.get("corrections") or {}).items()},
+            "jumlah_responden": basis.get("respondents"),
+        }
+    plan = _loads(row.get("prevention"))
+    return {
+        "judul": title,
+        "lembaga": basis.get("institution"),
+        "status": row.get("status"),
+        "alasan": row.get("reason"),
+        "imbauan": plan.get("text"),
+        "sasaran_dipilih": plan.get("audience") or [],
+    }
+
+
+def _province_inputs(conn, top_titles, latest=None):
+    """{(kode provinsi, alur): (masukan, hash)}: D1 dari profil wilayah, kasus lokal 90 hari,
+    dan incident terbesar; D2 - D4 bila kasus lokalnya punya keluaran alur itu."""
     from csais.regions import WILAYAH, province_name
 
+    latest = latest or {flow: {} for flow in FLOWS}
     with open(os.path.join(PROJECT_ROOT, "web", "lib", "region-profiles.json"), encoding="utf-8") as fh:
         profiles = json.load(fh)
     local = {}
     if _has(conn, "incident_regions"):
-        latest = conn.execute("SELECT MAX(last_published_date) FROM v05_incidents").fetchone()[0] or "0000"
-        since = (datetime.fromisoformat(latest[:10]) - timedelta(days=90)).date().isoformat() if latest != "0000" else "0000"
+        newest = conn.execute("SELECT MAX(last_published_date) FROM v05_incidents").fetchone()[0]
+        since = (datetime.fromisoformat(newest[:10]) - timedelta(days=90)).date().isoformat() if newest else "0000"
         for code, incident_id, title, attack_type, docs in conn.execute(
             f"""SELECT DISTINCT r.province_code, r.incident_id, {_article(conn, 'title')}, i.attack_type, i.document_count
                FROM incident_regions r JOIN v05_incidents i ON i.incident_id = r.incident_id
@@ -339,19 +427,25 @@ def _province_inputs(conn, top_titles):
         ):
             local.setdefault(code, []).append((incident_id, {"judul": title, "jenis": attack_type, "artikel": docs}))
     result = {}
+    keys = {"D2": "survei_publik_kasus_lokal", "D3": "keputusan_lembaga_kasus_lokal", "D4": "catatan_resmi_kasus_lokal"}
     for code in WILAYAH["provinsi"]:
         traits = [
             {"ciri": profiles["traits"][t]["label"]["id"], "alasan": profiles["traits"][t]["reason"]["id"]}
             for t in profiles["provinces"].get(code, [])
         ]
-        cases = local.get(code, [])[:6]
-        payload = {
+        cases = local.get(code, [])
+        base = {
             "provinsi": province_name(code),
             "profil_wilayah": traits,
-            "kasus_lokal_90_hari": [case for _, case in cases],
+            "kasus_lokal_90_hari": [case for _, case in cases[:6]],
             "incident_terbesar_nasional_dan_global": top_titles,
         }
-        result[code] = (payload, _hash({"v": PROMPT_VERSION, "traits": traits, "local": [i for i, _ in cases]}))
+        result[(code, "D1")] = (base, _hash({"v": PROMPT_VERSION, "traits": traits, "local": [i for i, _ in cases[:6]]}))
+        for flow, key in keys.items():
+            evidence = [_flow_evidence(flow, latest[flow][iid], case["judul"]) for iid, case in cases if iid in latest[flow]][:6]
+            if evidence:
+                payload = {**base, key: evidence}
+                result[(code, flow)] = (payload, _hash({"v": PROMPT_VERSION, "flow": flow, "traits": traits, "evidence": evidence}))
     return result
 
 
@@ -365,66 +459,72 @@ def store_top(conn, now=None):
     return top
 
 
-def run_ai(conn, client, model, max_calls=DEFAULT_MAX_CALLS, now=None, log=print):
-    """Perbarui peringkat dan saran AI; kembalikan (permintaan dibuat, gagal)."""
+def run_ai(conn, client, model, max_calls=DEFAULT_MAX_CALLS, now=None, log=print, workers=1):
+    """Perbarui peringkat dan saran AI; kembalikan (permintaan dibuat, gagal).
+
+    Pekerjaan dikumpulkan dulu (hanya yang masukannya berubah, paling banyak
+    ``max_calls``), dijalankan ``workers`` sekaligus, lalu ditulis ke database
+    di utas utama."""
     now = now or get_timestamp()
     top = store_top(conn, now)
     latest = _latest_outputs(conn)
     known = {(r[0], r[1]): r[2] for r in conn.execute("SELECT incident_id, flow, input_hash FROM ai_prevention")}
-    calls = failed = 0
-
-    def call(task, payload):
-        nonlocal calls, failed
-        calls += 1
-        try:
-            return generate(client, task, payload)
-        except (LLMError, ValueError, KeyError) as error:
-            failed += 1
-            log(f"   ⚠️ AI gagal: {str(error)[:160]}")
-            return None
-
+    jobs = []  # (jenis, kunci, masukan, hash, tugas)
     for incident_id, _score in top:
         for flow, payload in flow_inputs(conn, incident_id, latest).items():
             digest = _hash({"v": PROMPT_VERSION, "model": model, "flow": flow, "input": payload})
-            if known.get((incident_id, flow)) == digest:
-                continue
-            if calls >= max_calls:
-                log(f"   batas {max_calls} permintaan tercapai; sisanya run berikutnya")
-                return calls, failed
-            output = call(f"Sudut pandang alur: {FLOW_VIEW[flow]}", payload)
-            if output is not None:
-                conn.execute(
-                    "INSERT OR REPLACE INTO ai_prevention VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (incident_id, flow, digest, model, PROMPT_VERSION, json.dumps(output, ensure_ascii=False), now),
-                )
-                conn.commit()
+            if known.get((incident_id, flow)) != digest:
+                jobs.append(("flow", (incident_id, flow), payload, digest, f"Sudut pandang alur: {FLOW_VIEW[flow]}"))
 
     titles = [r[0] for r in conn.execute(
         f"SELECT {_article(conn, 'title')} FROM ai_top t JOIN v05_incidents i ON i.incident_id = t.incident_id "
         f"LEFT JOIN articles a ON a.article_id = i.anchor_article_id ORDER BY t.rank LIMIT {TOP_N}"
     )]
-    stored = {r[0]: (r[1], r[2]) for r in conn.execute("SELECT province_code, input_hash, created_at FROM ai_region_literacy")}
+    stored = {(r[0], r[1]): (r[2], r[3], r[4]) for r in conn.execute("SELECT province_code, flow, input_hash, created_at, model FROM ai_region_literacy")}
     stale_before = (datetime.fromisoformat(now.replace("Z", "+00:00")) - timedelta(days=REGION_MAX_AGE_DAYS)).isoformat()
-    for code, (payload, digest) in _province_inputs(conn, titles).items():
-        previous = stored.get(code)
-        if previous and previous[0] == digest and previous[1] >= stale_before:
+    region_task = (
+        "Tulis rekomendasi literasi untuk satu PROVINSI di Indonesia: siapa yang paling perlu diedukasi di provinsi ini "
+        "(spesifik kelompok dan konteks lokalnya), materi, langkah, dan pesan kunci. Gunakan profil wilayah, kasus lokal, "
+        "dan incident terbesar yang modusnya bisa terjadi di provinsi ini. Isi 'wilayah' dengan kabupaten/kota bila relevan."
+    )
+    for key, (payload, digest) in _province_inputs(conn, titles, latest).items():
+        previous = stored.get(key)
+        # tulis ulang bila masukannya berubah, sudah basi, atau modelnya berganti
+        if not (previous and previous[0] == digest and previous[1] >= stale_before and previous[2] == model):
+            jobs.append(("region", key, payload, digest, f"{region_task}\nSudut pandang alur: {REGION_VIEW[key[1]]}"))
+
+    if len(jobs) > max_calls:
+        log(f"   {len(jobs)} pekerjaan, batas {max_calls} per run; sisanya run berikutnya")
+        jobs = jobs[:max_calls]
+
+    def work(job):
+        try:
+            return generate(client, job[4], job[2]), None
+        except (LLMError, ValueError, KeyError, OSError) as error:
+            return None, error
+
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+        results = list(pool.map(work, jobs))
+
+    failed = 0
+    for (kind, key, payload, digest, _task), (output, error) in zip(jobs, results):
+        if output is None or not (output["sasaran"] or output["langkah"]):
+            failed += 1
+            log(f"   ⚠️ AI gagal ({kind} {key}): {str(error or 'jawaban kosong')[:160]}")
             continue
-        if calls >= max_calls:
-            log(f"   batas {max_calls} permintaan tercapai; provinsi lain run berikutnya")
-            break
-        task = (
-            "Tulis rekomendasi literasi untuk satu PROVINSI di Indonesia: siapa yang paling perlu diedukasi di provinsi ini "
-            "(spesifik kelompok dan konteks lokalnya), materi, langkah, dan pesan kunci. Gunakan profil wilayah, kasus lokal, "
-            "dan incident terbesar yang modusnya bisa terjadi di provinsi ini. Isi 'wilayah' dengan kabupaten/kota bila relevan."
-        )
-        output = call(task, payload)
-        if output is not None:
+        text = json.dumps(output, ensure_ascii=False)
+        if kind == "flow":
             conn.execute(
-                "INSERT OR REPLACE INTO ai_region_literacy VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (code, payload["provinsi"], digest, model, PROMPT_VERSION, json.dumps(output, ensure_ascii=False), now),
+                "INSERT OR REPLACE INTO ai_prevention VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (key[0], key[1], digest, model, PROMPT_VERSION, text, now),
             )
-            conn.commit()
-    return calls, failed
+        else:
+            conn.execute(
+                "INSERT OR REPLACE INTO ai_region_literacy VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (key[0], key[1], payload["provinsi"], digest, model, PROMPT_VERSION, text, now),
+            )
+    conn.commit()
+    return len(jobs), failed
 
 
 def run():
@@ -445,11 +545,11 @@ def run():
     started_at = get_timestamp()
     conn = get_connection()
     try:
-        calls, failed = run_ai(conn, make_client(), config["model"], config["max_calls"])
+        calls, failed = run_ai(conn, make_client(), config["model"], config["max_calls"], workers=config["workers"])
         record_run(conn, "ai_prevention", started_at, calls - failed, notes=f"model={config['model']}")
         top = conn.execute("SELECT COUNT(*) FROM ai_top").fetchone()[0]
         flows_done = conn.execute("SELECT COUNT(*) FROM ai_prevention WHERE incident_id IN (SELECT incident_id FROM ai_top)").fetchone()[0]
-        regions = conn.execute("SELECT COUNT(*) FROM ai_region_literacy").fetchone()[0]
+        regions = conn.execute("SELECT COUNT(DISTINCT province_code) FROM ai_region_literacy").fetchone()[0]
     finally:
         conn.close()
     print(f"Model                : {config['model']}")
