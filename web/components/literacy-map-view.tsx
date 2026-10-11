@@ -47,13 +47,12 @@ type Strings = {
   };
   tiers: Record<string, string>;
   empty: string;
-  showAll: string;
+  detail: string;
 };
 
 // Gradasi biru satu warna, gelap = sedikit, terang = banyak (lolos validasi kontras tema gelap)
 const RAMP = ["#184f95", "#256abf", "#3987e5", "#6da7ec", "#b7d3f6"];
 const NO_DATA = "#1c2836";
-const TABLE_ROWS = 10;
 const LABELS = 5; // provinsi teratas yang diberi label nama dan angka
 
 /** Batas kelas: 5 kelas dari 1 sampai nilai terbesar, tanpa batas ganda. */
@@ -121,12 +120,8 @@ export function LiteracyMapView({
   const [audience, setAudience] = useState("");
   const [topic, setTopic] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
-  const [hover, setHover] = useState<{
-    code: string;
-    x: number;
-    y: number;
-  } | null>(null);
-  const [allRows, setAllRows] = useState(false);
+  const [hover, setHover] = useState<{ code: string; x: number; y: number; w: number } | null>(null);
+  const [showTable, setShowTable] = useState(false);
 
   const valueOf = useMemo(() => (s: ProvinceStat) => (audience ? (s.byAudience[audience] ?? 0) : topic ? (s.byTopic[topic] ?? 0) : s.n), [audience, topic]);
   const max = Math.max(0, ...stats.map(valueOf));
@@ -158,9 +153,9 @@ export function LiteracyMapView({
     ) : null;
 
   const select = (id: string, label: string, value: string, onChange: (v: string) => void, options: Option[]) => (
-    <label htmlFor={id} className="flex min-w-0 flex-col gap-1 text-[12px] text-muted">
-      {label}
-      <select id={id} value={value} onChange={(e) => onChange(e.target.value)} className="field max-w-[340px] text-[13px]">
+    <label htmlFor={id} className="flex min-w-0 items-center gap-2 text-[12px] text-muted">
+      <span className="whitespace-nowrap">{label}</span>
+      <select id={id} value={value} onChange={(e) => onChange(e.target.value)} className="field max-w-[260px] py-1 text-[12.5px]">
         <option value="">{strings.all}</option>
         {options.map((o) => (
           <option key={o.key} value={o.key}>
@@ -171,34 +166,127 @@ export function LiteracyMapView({
     </label>
   );
 
+  const legend = (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted">
+      <span>{strings.legend}</span>
+      <span className="flex items-center gap-1.5">
+        <span className="inline-block h-2.5 w-3.5 rounded-sm border border-line" style={{ background: NO_DATA }} aria-hidden="true" />
+        {strings.none}
+      </span>
+      {breaks.map((b, i) => (
+        <span key={b} className="flex items-center gap-1.5">
+          <span className="inline-block h-2.5 w-3.5 rounded-sm" style={{ background: ramp[i] }} aria-hidden="true" />
+          <span className="tnum font-mono">
+            {b}
+            {i === breaks.length - 1 ? "+" : breaks[i + 1] - 1 > b ? `–${breaks[i + 1] - 1}` : ""}
+          </span>
+        </span>
+      ))}
+    </div>
+  );
+
+  const details =
+    current && valueOf(current) > 0 ? (
+      <>
+        <header className="flex items-baseline justify-between gap-2">
+          <h3 className="text-[18px] font-semibold leading-tight">{current.name}</h3>
+          <span className="tnum whitespace-nowrap font-mono text-[12.5px] text-accent">
+            {current.n} {strings.incidents}
+          </span>
+        </header>
+        {list(strings.topAudience, current.audiences.slice(0, 4))}
+        {list(strings.topTopics, current.topics.slice(0, 4))}
+        {list(strings.topTypes, current.types)}
+        {current.cities.length ? (
+          <div className="flex flex-col gap-1.5">
+            <span className="label">{strings.cities}</span>
+            <span className="flex flex-wrap gap-1">
+              {current.cities.map((c) => (
+                <span key={c.label} className="chip py-1 text-[11.5px]">
+                  {c.label.replace(/^(Kabupaten|Kota) /, "")} <span className="font-mono text-muted">{c.n}</span>
+                </span>
+              ))}
+            </span>
+          </div>
+        ) : null}
+        {current.samples.length ? (
+          <div className="flex flex-col gap-1.5 border-t border-line pt-2.5">
+            <span className="label">{strings.samples}</span>
+            <ul className="flex flex-col gap-1.5">
+              {current.samples.slice(0, 2).map((s) => (
+                <li key={s.id} className="flex flex-col gap-0.5">
+                  <Link href={`${incidentHref}${s.id}`} className="line-clamp-2 text-[12.5px] font-semibold leading-snug text-fg no-underline hover:text-accent">
+                    {s.title}
+                  </Link>
+                  <span className="text-[11px] text-muted">
+                    {s.date}
+                    {s.tier ? ` · ${strings.tiers[s.tier] ?? s.tier}` : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </>
+    ) : (
+      <p className="text-[13px] text-muted">{ranked.length ? strings.pick : strings.empty}</p>
+    );
+
+  const table = (
+    <ol className="flex flex-col">
+      {ranked.map((s, i) => (
+        <li key={s.code}>
+          <button
+            type="button"
+            onClick={() => {
+              setSelected(s.code);
+              setShowTable(false);
+            }}
+            className="grid w-full grid-cols-[22px_minmax(0,1fr)_auto] items-baseline gap-2 border-b border-line py-1.5 text-left text-[12.5px] last:border-0 hover:text-accent"
+          >
+            <span className="tnum font-mono text-[11px] text-muted">{i + 1}</span>
+            <span className="min-w-0">
+              <span className="block font-semibold text-fg">{s.name}</span>
+              <span className="block truncate text-[11.5px] text-muted">{s.audiences[0]?.label ?? "–"}</span>
+            </span>
+            <span className="tnum font-mono">{valueOf(s)}</span>
+          </button>
+        </li>
+      ))}
+    </ol>
+  );
+
   return (
-    <div className="flex flex-col gap-4" id="peta-literasi">
-      <div className="flex flex-wrap items-end gap-3">
-        {select(
-          "lm-audience",
-          strings.audience,
-          audience,
-          (v) => {
-            setAudience(v);
-            setTopic("");
-          },
-          audienceOptions,
-        )}
-        {select(
-          "lm-topic",
-          strings.topic,
-          topic,
-          (v) => {
-            setTopic(v);
-            setAudience("");
-          },
-          topicOptions,
-        )}
+    <div className="flex min-h-0 flex-1 flex-col gap-2" id="peta-literasi">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <div className="flex flex-wrap items-center gap-3">
+          {select(
+            "lm-audience",
+            strings.audience,
+            audience,
+            (v) => {
+              setAudience(v);
+              setTopic("");
+            },
+            audienceOptions,
+          )}
+          {select(
+            "lm-topic",
+            strings.topic,
+            topic,
+            (v) => {
+              setTopic(v);
+              setAudience("");
+            },
+            topicOptions,
+          )}
+        </div>
+        {legend}
       </div>
 
-      <div className="flex flex-col gap-4">
-        <div className="relative">
-          <svg viewBox={`0 0 ${width} ${height}`} className="block h-auto w-full" role="img" aria-label={strings.table}>
+      <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_330px]">
+        <div className="relative min-h-0">
+          <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet" className="block h-auto w-full lg:h-full" role="img" aria-label={strings.table}>
             <defs>
               <filter id="lm-glow" x="-20%" y="-20%" width="140%" height="140%">
                 <feGaussianBlur stdDeviation="7" result="blur" />
@@ -218,21 +306,21 @@ export function LiteracyMapView({
                 filter={glowing.has(s.code) ? "url(#lm-glow)" : undefined}
                 className="cursor-pointer outline-none transition-[fill] focus-visible:stroke-[var(--accent)]"
                 tabIndex={0}
-                aria-label={`${s.name}: ${`${valueOf(s)} ${strings.incidents}`}`}
+                aria-label={`${s.name}: ${valueOf(s)} ${strings.incidents}`}
                 onMouseMove={(e) => {
                   const box = (e.currentTarget.ownerSVGElement as SVGSVGElement).getBoundingClientRect();
-                  setHover({
-                    code: s.code,
-                    x: e.clientX - box.left,
-                    y: e.clientY - box.top,
-                  });
+                  setHover({ code: s.code, x: e.clientX - box.left, y: e.clientY - box.top, w: box.width });
                 }}
                 onMouseLeave={() => setHover(null)}
-                onClick={() => setSelected(s.code)}
+                onClick={() => {
+                  setSelected(s.code);
+                  setShowTable(false);
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
                     setSelected(s.code);
+                    setShowTable(false);
                   }
                 }}
               />
@@ -255,133 +343,33 @@ export function LiteracyMapView({
           {hovered && hover ? (
             <div
               className="pointer-events-none absolute z-10 rounded-md border border-line bg-[var(--nav)] px-2.5 py-1.5 text-[12px] shadow-lg"
-              style={
-                hover.x > 520
-                  ? {
-                      right: `calc(100% - ${hover.x - 14}px)`,
-                      top: hover.y + 14,
-                    }
-                  : { left: hover.x + 14, top: hover.y + 14 }
-              }
+              style={hover.x > hover.w * 0.6 ? { right: `calc(100% - ${hover.x - 14}px)`, top: hover.y + 14 } : { left: hover.x + 14, top: hover.y + 14 }}
             >
               <span className="block font-semibold text-fg">{hovered.name}</span>
               <span className="text-soft">{`${valueOf(hovered)} ${strings.incidents}`}</span>
               {hovered.audiences[0] ? <span className="block text-muted">{hovered.audiences[0].label}</span> : null}
             </div>
           ) : null}
-          <div className="flex flex-wrap items-center gap-3 px-2 pb-1 pt-2 text-[11.5px] text-muted">
-            <span>{strings.legend}</span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block h-3 w-4 rounded-sm border border-line" style={{ background: NO_DATA }} aria-hidden="true" />
-              {strings.none}
-            </span>
-            {breaks.map((b, i) => (
-              <span key={b} className="flex items-center gap-1.5">
-                <span className="inline-block h-3 w-4 rounded-sm" style={{ background: ramp[i] }} aria-hidden="true" />
-                <span className="tnum font-mono">
-                  {b}
-                  {i === breaks.length - 1 ? "+" : breaks[i + 1] - 1 > b ? `–${breaks[i + 1] - 1}` : ""}
-                </span>
-              </span>
+        </div>
+
+        <aside className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-line bg-[color-mix(in_srgb,var(--bg)_62%,transparent)] backdrop-blur-sm">
+          <div className="flex border-b border-line text-[12px]" role="tablist">
+            {([false, true] as const).map((tab) => (
+              <button
+                key={String(tab)}
+                type="button"
+                role="tab"
+                aria-selected={showTable === tab}
+                onClick={() => setShowTable(tab)}
+                className={`flex-1 px-3 py-2 ${showTable === tab ? "border-b-2 border-accent text-fg" : "text-muted hover:text-fg"}`}
+              >
+                {tab ? `${strings.table} (${ranked.length})` : strings.detail}
+              </button>
             ))}
           </div>
-        </div>
-
-        <aside className="grid gap-5 rounded-xl border border-line bg-[color-mix(in_srgb,var(--bg)_60%,transparent)] p-5 backdrop-blur-sm md:grid-cols-2 xl:grid-cols-4">
-          {current && valueOf(current) > 0 ? (
-            <>
-              <header className="flex flex-col gap-0.5 md:col-span-2 xl:col-span-4">
-                <h3 className="text-[20px] font-semibold">{current.name}</h3>
-                <span className="text-[12.5px] text-muted">
-                  {current.n} {strings.incidents}
-                </span>
-              </header>
-              {list(strings.topAudience, current.audiences)}
-              {list(strings.topTopics, current.topics)}
-              <div className="flex flex-col gap-4">
-                {list(strings.topTypes, current.types)}
-                {current.cities.length ? (
-                  <div className="flex flex-col gap-1.5">
-                    <span className="label">{strings.cities}</span>
-                    <span className="flex flex-wrap gap-1.5">
-                      {current.cities.map((c) => (
-                        <span key={c.label} className="chip">
-                          {c.label} <span className="font-mono text-muted">{c.n}</span>
-                        </span>
-                      ))}
-                    </span>
-                  </div>
-                ) : null}
-              </div>
-              {current.samples.length ? (
-                <div className="flex flex-col gap-1.5">
-                  <span className="label">{strings.samples}</span>
-                  <ul className="flex flex-col gap-2">
-                    {current.samples.map((s) => (
-                      <li key={s.id} className="flex flex-col gap-0.5">
-                        <Link href={`${incidentHref}${s.id}`} className="line-clamp-2 text-[13px] font-semibold leading-snug text-fg no-underline hover:text-accent">
-                          {s.title}
-                        </Link>
-                        <span className="text-[11.5px] text-muted">
-                          {s.date}
-                          {s.tier ? ` · ${strings.tiers[s.tier] ?? s.tier}` : ""}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-            </>
-          ) : (
-            <p className="text-[13px] text-muted">{ranked.length ? strings.pick : strings.empty}</p>
-          )}
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">{showTable ? table : details}</div>
         </aside>
       </div>
-
-      {ranked.length ? (
-        <div className="overflow-x-auto rounded-xl border border-line bg-[color-mix(in_srgb,var(--bg)_55%,transparent)]">
-          <table className="w-full min-w-[640px] border-collapse text-[13px]">
-            <caption className="label px-3 pt-3 text-left">{strings.table}</caption>
-            <thead>
-              <tr className="label border-b border-line text-left">
-                <th className="px-3 py-2 font-medium">{strings.cols.province}</th>
-                <th className="px-3 py-2 font-medium">{strings.cols.incidents}</th>
-                <th className="px-3 py-2 font-medium">{strings.cols.audience}</th>
-                <th className="px-3 py-2 font-medium">{strings.cols.topic}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(allRows ? ranked : ranked.slice(0, TABLE_ROWS)).map((s) => (
-                <tr key={s.code} className={`border-b border-line last:border-0 ${s.code === current?.code ? "bg-[color-mix(in_srgb,var(--accent)_8%,transparent)]" : ""}`}>
-                  <td className="px-3 py-2">
-                    <button type="button" className="text-left font-semibold text-fg hover:text-accent" onClick={() => setSelected(s.code)}>
-                      {s.name}
-                    </button>
-                  </td>
-                  <td className="tnum px-3 py-2 font-mono">{valueOf(s)}</td>
-                  <td className="px-3 py-2 text-soft">
-                    {s.audiences
-                      .slice(0, 2)
-                      .map((a) => a.label)
-                      .join(", ") || "–"}
-                  </td>
-                  <td className="px-3 py-2 text-soft">
-                    {s.topics
-                      .slice(0, 2)
-                      .map((a) => a.label)
-                      .join(", ") || "–"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {!allRows && ranked.length > TABLE_ROWS ? (
-            <button type="button" className="btn btn-ghost m-3 text-[13px]" onClick={() => setAllRows(true)}>
-              {strings.showAll} ({ranked.length})
-            </button>
-          ) : null}
-        </div>
-      ) : null}
     </div>
   );
 }

@@ -839,6 +839,9 @@ body:has(.im-root) { overflow: hidden; }
   background: linear-gradient(0deg, color-mix(in srgb, var(--surface) 96%, transparent) 20%, color-mix(in srgb, var(--surface) 55%, transparent) 70%, color-mix(in srgb, var(--surface) 25%, transparent) 100%); }
 .survey-pop-logo { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 6px; border: 1px solid var(--line); background: var(--nav, var(--surface)); overflow: hidden; }
 
+/* Keluar dari kontainer halaman: selebar layar (body sudah overflow-x: clip) */
+.full-bleed { width: 100vw; margin-left: calc(50% - 50vw); }
+
 /* Peta Literasi: blok utama halaman Peringatan */
 .lm-hero {
   background:
@@ -846,5 +849,4 @@ body:has(.im-root) { overflow: hidden; }
     radial-gradient(50% 70% at 92% 100%, rgba(57, 135, 229, 0.18), transparent 62%),
     radial-gradient(rgba(230, 237, 243, 0.06) 1px, transparent 1.3px) 0 0 / 18px 18px,
     var(--surface);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
 }

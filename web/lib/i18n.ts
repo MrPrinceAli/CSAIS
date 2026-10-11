@@ -307,7 +307,7 @@ const id = {
     eyebrow: "Pemetaan kebutuhan literasi",
     kpi: { incidents: "Incident menyebut wilayah", provinces: "Provinsi terdampak", audience: "Sasaran terbanyak", topic: "Materi terbanyak" },
     subtitle: "Incident per provinsi",
-    note: "jumlah incident yang diberitakan menyebut wilayah itu, bukan tingkat risiko sebenarnya",
+    note: "warna = jumlah incident yang diberitakan menyebut wilayah itu, bukan tingkat risiko sebenarnya",
     period: "Periode",
     periods: { "30": "30 hari", "90": "90 hari", "365": "1 tahun", "0": "Semua" } as Record<string, string>,
     audience: "Sasaran literasi",
@@ -325,7 +325,7 @@ const id = {
     table: "Tabel provinsi",
     cols: { province: "Provinsi", incidents: "Incident", audience: "Sasaran utama", topic: "Materi utama" },
     empty: "Belum ada incident yang menyebut wilayah Indonesia pada periode ini.",
-    showAll: "Tampilkan semua provinsi",
+    detail: "Rincian provinsi",
     source: "Wilayah dikenali dari judul dan isi berita dengan daftar 38 provinsi dan 514 kabupaten/kota Kepmendagri 2025; batas peta dari github.com/cahyadsn/wilayah (MIT). Sasaran dan materi literasi dari mesin (D1) atau keputusan lembaga (D4).",
   },
   prevention: {
@@ -897,7 +897,7 @@ const en: Dict = {
     table: "Province table",
     cols: { province: "Province", incidents: "Incidents", audience: "Main audience", topic: "Main topic" },
     empty: "No incidents name an Indonesian region in this period yet.",
-    showAll: "Show all provinces",
+    detail: "Province details",
     source: "Regions are recognised from news headlines and text using the 38 provinces and 514 regencies and cities of the 2025 Home Affairs decree; map boundaries from github.com/cahyadsn/wilayah (MIT). Literacy audiences and topics come from the machine (D1) or institution decisions (D4).",
   },
   prevention: {

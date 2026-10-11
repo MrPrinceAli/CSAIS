@@ -110,12 +110,12 @@ export default async function AlertsPage({ params, searchParams }: { params: Pro
   };
   return (
     <div className="flex flex-col gap-6 py-8">
+      <LiteracyMap lang={lang} period={period} base={base} />
+
       <header className="flex max-w-[78ch] flex-col gap-2">
         <h1 className="text-balance text-[28px] font-semibold leading-tight">{a.title}</h1>
         <p className="text-[14px] leading-relaxed text-soft">{a.lead}</p>
       </header>
-
-      <LiteracyMap lang={lang} period={period} base={base} />
 
       <GlobalSpotlight lang={lang} />
 

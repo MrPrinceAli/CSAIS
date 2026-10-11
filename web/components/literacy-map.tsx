@@ -14,7 +14,6 @@ import { attackLabel, getDict, L, type Lang } from "@/lib/i18n";
 import { audienceText, topicText } from "@/lib/prevention";
 import provinces from "@/lib/indonesia-provinces.json";
 import { LiteracyMapView, type ProvinceStat } from "@/components/literacy-map-view";
-import { SectionTitle } from "@/components/ui";
 
 const WIDTH = 1100;
 const HEIGHT = 430;
@@ -102,61 +101,66 @@ export async function LiteracyMap({ lang, period, base }: { lang: Lang; period: 
   ];
 
   return (
-    <section className="lm-hero relative flex flex-col gap-5 overflow-hidden rounded-2xl border border-line p-5 sm:p-7" aria-labelledby="lm-title">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="flex max-w-[70ch] flex-col gap-2">
-          <span className="label text-accent">{m.eyebrow}</span>
-          <h2 id="lm-title" className="text-balance text-[30px] font-semibold leading-tight sm:text-[36px]">
-            {m.title}
-          </h2>
-          <p className="text-[14px] leading-relaxed text-soft">{m.lead(f.num(counted.size))}</p>
-        </div>
-        <nav className="flex flex-wrap items-center gap-1.5" aria-label={m.period}>
-          <span className="label mr-1">{m.period}</span>
-          {PERIODS.map((p) => (
-            <Link key={p} href={`${base}${p === 90 ? "" : `?periode=${p}`}`} scroll={false} className={`chip no-underline ${period === p ? "chip-accent" : ""}`} aria-current={period === p ? "true" : undefined}>
-              {m.periods[String(p)]}
-            </Link>
-          ))}
-        </nav>
-      </div>
-      <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {kpis.map((k) => (
-          <div key={k.label} className="rounded-xl border border-line bg-[color-mix(in_srgb,var(--bg)_55%,transparent)] px-4 py-3 backdrop-blur-sm">
-            <dt className="label">{k.label}</dt>
-            <dd className="mt-1 line-clamp-2 text-[18px] font-semibold leading-snug text-fg">{k.value}</dd>
+    <section className="lm-hero full-bleed -mt-14 border-b border-line lg:h-[calc(100svh-57px)] lg:min-h-[600px]" aria-labelledby="lm-title">
+      <div className="mx-auto flex h-full w-full max-w-[1680px] flex-col gap-3 px-4 pb-3 pt-4 sm:px-8">
+        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <span className="label text-accent">{m.eyebrow}</span>
+            <h2 id="lm-title" className="text-[26px] font-semibold leading-tight sm:text-[30px]">
+              {m.title}
+            </h2>
+            <p className="max-w-[90ch] text-[13px] text-soft">
+              {m.lead(f.num(counted.size))} <span className="text-muted">({m.note})</span>
+            </p>
           </div>
-        ))}
-      </dl>
-      <SectionTitle aside={m.note}>{m.subtitle}</SectionTitle>
-      <LiteracyMapView
-        width={WIDTH}
-        height={HEIGHT}
-        stats={stats}
-        audienceOptions={options(nationalAudience, audienceText)}
-        topicOptions={options(nationalTopic, topicText)}
-        incidentHref={L(lang, "/incidents/")}
-        strings={{
-          audience: m.audience,
-          topic: m.topic,
-          all: m.all,
-          incidents: m.incidents,
-          legend: m.legend,
-          none: m.none,
-          pick: m.pick,
-          topAudience: m.topAudience,
-          topTopics: m.topTopics,
-          topTypes: m.topTypes,
-          cities: m.cities,
-          samples: m.samples,
-          table: m.table,
-          cols: m.cols,
-          tiers: t.flows.tiers,
-          empty: m.empty,
-          showAll: m.showAll,
-        }}
-      />
-      <p className="text-[11.5px] text-muted">{m.source}</p>
+          <nav className="flex flex-wrap items-center gap-1.5" aria-label={m.period}>
+            <span className="label mr-1">{m.period}</span>
+            {PERIODS.map((p) => (
+              <Link key={p} href={`${base}${p === 90 ? "" : `?periode=${p}`}`} scroll={false} className={`chip no-underline ${period === p ? "chip-accent" : ""}`} aria-current={period === p ? "true" : undefined}>
+                {m.periods[String(p)]}
+              </Link>
+            ))}
+          </nav>
+        </div>
+        <dl className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+          {kpis.map((k) => (
+            <div key={k.label} className="flex min-w-0 items-baseline gap-2 rounded-lg border border-line bg-[color-mix(in_srgb,var(--bg)_55%,transparent)] px-3 py-2 backdrop-blur-sm">
+              <dt className="label shrink-0">{k.label}</dt>
+              <dd className="truncate text-[15px] font-semibold text-fg" title={k.value}>
+                {k.value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+        <LiteracyMapView
+          width={WIDTH}
+          height={HEIGHT}
+          stats={stats}
+          audienceOptions={options(nationalAudience, audienceText)}
+          topicOptions={options(nationalTopic, topicText)}
+          incidentHref={L(lang, "/incidents/")}
+          strings={{
+            audience: m.audience,
+            topic: m.topic,
+            all: m.all,
+            incidents: m.incidents,
+            legend: m.legend,
+            none: m.none,
+            pick: m.pick,
+            topAudience: m.topAudience,
+            topTopics: m.topTopics,
+            topTypes: m.topTypes,
+            cities: m.cities,
+            samples: m.samples,
+            table: m.table,
+            cols: m.cols,
+            tiers: t.flows.tiers,
+            empty: m.empty,
+            detail: m.detail,
+          }}
+        />
+        <p className="text-[10.5px] leading-snug text-muted">{m.source}</p>
+      </div>
     </section>
   );
 }
