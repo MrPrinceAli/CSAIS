@@ -4,7 +4,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPortalCardsById, getPortalQueue, type PortalCard } from "@/lib/queries";
 import { formatters, incidentTitle } from "@/lib/format";
-import { attackLabel, getDict, isLang, L, type Lang } from "@/lib/i18n";
+import { attackLabel, attackOptions, getDict, isLang, L, type Lang } from "@/lib/i18n";
+import { candidateSteps, tipText } from "@/lib/prevention";
 import { INSTITUTION_LOGO, INSTITUTION_NAME, INSTITUTIONS, institutionFromSession, MANDATE, portalConfigured, REASONS, REVIEW_FIELDS, SESSION_COOKIE_NAME } from "@/lib/portal";
 import { reviewsBy } from "@/lib/survey";
 import { OrgLogo } from "@/components/org-logo";
@@ -80,11 +81,21 @@ export default async function PortalPage({ params, searchParams }: { params: Pro
     cards = pool.filter((c) => !reviewed.has(c.incident_id)).slice(0, PAGE);
   }
   const base = L(lang, "/portal");
+  const types = attackOptions(lang);
+  const stepsOf = (c: PortalCard) =>
+    candidateSteps(c.card.target_group ?? "", (c.card.attack_type ?? "").split(",").map((v) => v.trim()).filter(Boolean)).map((key) => ({
+      key,
+      text: tipText(key, lang) ?? key,
+    }));
   const reviewStrings = {
     decision: p.decision,
     reason: p.reason,
     fieldsTitle: p.fieldsTitle,
     fieldsHint: p.fieldsHint,
+    correction: p.correction,
+    preventionTitle: p.preventionTitle,
+    preventionHint: p.preventionHint,
+    preventionText: p.preventionText,
     fieldValues: p.fieldValues,
     note: p.note,
     source: p.source,
@@ -154,7 +165,13 @@ export default async function PortalPage({ params, searchParams }: { params: Pro
               <ReviewCard
                 incidentId={c.incident_id}
                 outputId={Number(c.card.output_id)}
-                fields={REVIEW_FIELDS.map((field) => ({ key: field, label: t.flows.rows[field], value: display(field, c.card[field], lang) }))}
+                fields={REVIEW_FIELDS.map((field) => ({
+                  key: field,
+                  label: t.flows.rows[field],
+                  value: display(field, c.card[field], lang),
+                  ...(field === "attack_type" ? { options: types } : {}),
+                }))}
+                steps={stepsOf(c)}
                 reasonsByStatus={REASONS}
                 strings={reviewStrings}
               />

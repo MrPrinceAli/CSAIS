@@ -15,6 +15,9 @@ export const SURVEY_FIELDS = ["attack_type", "target", "threat_actor", "attack_d
 export type SurveyField = (typeof SURVEY_FIELDS)[number];
 export const SURVEY_ANSWERS = ["sesuai", "tidak_sesuai", "tidak_tahu"] as const;
 export type SurveyAnswer = (typeof SURVEY_ANSWERS)[number];
+/** Pertanyaan kesimpulan "benar terjadi?" (bukan kolom kartu); sesuai = ya, tidak_sesuai = tidak. */
+export const VERDICT_FIELD = "kejadian" as const;
+export const CORRECTION_MAX = 120;
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS survey_responses (
@@ -28,8 +31,20 @@ const SCHEMA = `
     respondent TEXT,
     ip_hash TEXT,
     lang TEXT,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    corrected_value TEXT
   )`;
+// Kolom yang ditambahkan setelah tabel pertama dibuat
+const SURVEY_COLUMNS = ["corrected_value TEXT"];
+
+/** Tambahkan kolom yang belum ada di tabel lama. */
+async function addMissingColumns(db: ReturnType<typeof createClient>, table: string, columns: string[]) {
+  const info = await db.execute(`PRAGMA table_info(${table})`);
+  const have = new Set(info.rows.map((r) => String(r.name)));
+  for (const column of columns) {
+    if (!have.has(column.split(" ")[0])) await db.execute(`ALTER TABLE ${table} ADD COLUMN ${column}`);
+  }
+}
 
 const url = (process.env.SURVEY_DATABASE_URL ?? "").replace(/^libsql:\/\//, "https://");
 const authToken = process.env.SURVEY_AUTH_TOKEN;
@@ -46,7 +61,8 @@ function getClient() {
   if (!client) {
     if (!surveyConfigured()) throw new Error("SURVEY_DATABASE_URL dan SURVEY_AUTH_TOKEN belum diisi.");
     client = isLocalFile ? createClient({ url }) : createClient({ url, authToken });
-    ready = client.execute(SCHEMA).catch((error: unknown) => {
+    const db = client;
+    ready = db.execute(SCHEMA).then(() => addMissingColumns(db, "survey_responses", SURVEY_COLUMNS)).catch((error: unknown) => {
       client = null; // coba lagi pada permintaan berikutnya
       throw error;
     });
@@ -66,7 +82,7 @@ export function hashIp(ip: string): string | null {
 export type SurveySubmission = {
   incidentId: string;
   cardOutputId: number;
-  answers: { field: SurveyField; shownValue: string | null; answer: SurveyAnswer }[];
+  answers: { field: SurveyField | typeof VERDICT_FIELD; shownValue: string | null; answer: SurveyAnswer; correctedValue: string | null }[];
   respondent: string | null;
   ipHash: string | null;
   lang: string;
@@ -80,9 +96,9 @@ export async function saveSubmission(s: SurveySubmission): Promise<string> {
   const createdAt = new Date().toISOString();
   await db.batch(
     s.answers.map((a) => ({
-      sql: `INSERT INTO survey_responses (submission_id, incident_id, card_output_id, field, shown_value, answer, respondent, ip_hash, lang, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      args: [submissionId, s.incidentId, s.cardOutputId, a.field, a.shownValue, a.answer, s.respondent, s.ipHash, s.lang, createdAt],
+      sql: `INSERT INTO survey_responses (submission_id, incident_id, card_output_id, field, shown_value, answer, respondent, ip_hash, lang, created_at, corrected_value)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [submissionId, s.incidentId, s.cardOutputId, a.field, a.shownValue, a.answer, s.respondent, s.ipHash, s.lang, createdAt, a.correctedValue],
     })),
     "write",
   );
@@ -125,10 +141,13 @@ const REVIEWS_SCHEMA = `
     created_at TEXT NOT NULL,
     signer TEXT,
     signature TEXT,
-    signed TEXT
+    signed TEXT,
+    corrections TEXT,
+    prevention_keys TEXT,
+    prevention_text TEXT
   )`;
-// Kolom tanda tangan ditambahkan setelah tabel pertama dibuat
-const REVIEWS_COLUMNS = ["signer TEXT", "signature TEXT", "signed TEXT"];
+// Kolom yang ditambahkan setelah tabel pertama dibuat
+const REVIEWS_COLUMNS = ["signer TEXT", "signature TEXT", "signed TEXT", "corrections TEXT", "prevention_keys TEXT", "prevention_text TEXT"];
 
 let reviewsReady: Promise<unknown> | null = null;
 
@@ -138,13 +157,7 @@ async function reviewsClient() {
   if (!reviewsReady) {
     reviewsReady = db
       .execute(REVIEWS_SCHEMA)
-      .then(async () => {
-        const info = await db.execute("PRAGMA table_info(official_reviews)");
-        const have = new Set(info.rows.map((r) => String(r.name)));
-        for (const column of REVIEWS_COLUMNS) {
-          if (!have.has(column.split(" ")[0])) await db.execute(`ALTER TABLE official_reviews ADD COLUMN ${column}`);
-        }
-      })
+      .then(() => addMissingColumns(db, "official_reviews", REVIEWS_COLUMNS))
       .catch((error: unknown) => {
       reviewsReady = null;
       throw error;
@@ -163,6 +176,9 @@ export type OfficialReview = {
   reasonCode: string;
   reasonText: string | null;
   fieldStatus: Record<string, string>;
+  corrections: Record<string, string>;
+  preventionKeys: string[];
+  preventionText: string | null;
   sourceUrl: string | null;
   reviewer: string | null;
 };
@@ -170,11 +186,15 @@ export type OfficialReview = {
 export async function saveReview(r: OfficialReview): Promise<number> {
   const db = await reviewsClient();
   const result = await db.execute({
-    sql: `INSERT INTO official_reviews (incident_id, card_output_id, institution, status, reason_code, reason_text, field_status, source_url, reviewer, created_at, signer, signature, signed)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO official_reviews (incident_id, card_output_id, institution, status, reason_code, reason_text, field_status, source_url, reviewer, created_at, signer, signature, signed,
+            corrections, prevention_keys, prevention_text)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       r.incidentId, r.cardOutputId, r.institution, r.status, r.reasonCode, r.reasonText, JSON.stringify(r.fieldStatus), r.sourceUrl, r.reviewer,
       new Date().toISOString(), r.signed.signer, r.signed.signature, JSON.stringify(r.signed),
+      Object.keys(r.corrections).length ? JSON.stringify(r.corrections) : null,
+      r.preventionKeys.length ? JSON.stringify(r.preventionKeys) : null,
+      r.preventionText,
     ],
   });
   return Number(result.lastInsertRowid ?? 0);

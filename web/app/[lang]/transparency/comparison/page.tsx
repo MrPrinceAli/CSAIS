@@ -19,6 +19,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
 const FLOWS = ["D1", "D2", "D3", "D4"] as const;
 const FIELDS = ["attack_type", "target", "threat_actor", "attack_date", "location"] as const;
 const LEVELS = ["tinggi", "sedang", "rendah", "tanpa_skor"] as const;
+const VERDICTS = ["benar", "hoaks", "belum_pasti"] as const;
 const FLOW_TONE: Record<string, string> = { D1: "var(--accent)", D2: "var(--med)", D3: "var(--chain)", D4: "var(--good)" };
 
 /** Ringkasan metrik perbandingan alur D1 - D4 untuk seluruh incident (tabel flow_metrics). */
@@ -104,6 +105,23 @@ export default async function ComparisonPage({ params }: { params: Promise<Param
                 );
               })}
             </div>
+          </section>
+
+          <section className="min-w-0">
+            <SectionTitle aside={c.sections.verdictNote}>{c.sections.verdict}</SectionTitle>
+            {table(
+              ["", ...VERDICTS.map((v) => t.flows.verdicts[v]), c.cols.sameD4],
+              FLOWS.map((flow) => [
+                `${flow} · ${t.flows.names[flow]}`,
+                ...VERDICTS.map((v) => count(find("kesimpulan", flow, v))),
+                flow === "D4" ? "–" : (
+                  <span key="same" className="flex items-baseline gap-2">
+                    <span>{pct(find("kesimpulan_sama_d4", flow))}</span>
+                    {n(find("kesimpulan_sama_d4", flow))}
+                  </span>
+                ),
+              ]),
+            )}
           </section>
 
           <div className="grid gap-6 lg:grid-cols-2">

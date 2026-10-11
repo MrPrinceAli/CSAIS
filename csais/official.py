@@ -2,8 +2,10 @@
 
 Pernyataan datang dari dua sumber:
   - portal lembaga (web /portal): petugas BSSN, OJK, Komdigi, atau Siber Polri
-    memilih keputusan dan alasan dengan tombol; tersimpan di tabel
-    ``official_reviews`` pada database survei (dibaca dengan token baca);
+    memilih keputusan dan alasan dengan tombol, boleh menulis nilai yang benar
+    untuk kolom yang ditandai salah, serta memilih langkah pencegahan sendiri;
+    tersimpan di tabel ``official_reviews`` pada database survei (dibaca
+    dengan token baca);
   - ``statements/official_statements.csv`` (opsional): pernyataan resmi yang
     sudah dipublikasikan dan disalin tim, dengan tautan sumbernya.
 
@@ -34,7 +36,7 @@ from csais.config import PROJECT_ROOT
 from csais.db import get_connection, get_timestamp
 from csais.provenance import pipeline_stamp
 from csais.schema import record_run
-from csais.survey import SURVEY_FIELDS, fetch_rows, latest_d1
+from csais.survey import SURVEY_FIELDS, fetch_rows, latest_d1, select_sql, table_columns
 
 STATEMENTS_FILE = os.path.join(PROJECT_ROOT, "statements", "official_statements.csv")
 COLUMNS = (
@@ -73,12 +75,18 @@ REVIEWS_SCHEMA = """
         created_at TEXT NOT NULL,
         signer TEXT,
         signature TEXT,
-        signed TEXT
+        signed TEXT,
+        corrections TEXT,
+        prevention_keys TEXT,
+        prevention_text TEXT
     )
 """
+# Kolom yang ditambahkan web setelah tabel pertama dibuat; NULL bila belum ada
+REVIEW_OPTIONAL = ("signed", "corrections", "prevention_keys", "prevention_text")
 REVIEWS_SQL = """
     SELECT review_id, incident_id, institution, status, reason_code, reason_text,
-           field_status, source_url, reviewer, created_at, signed
+           field_status, source_url, reviewer, created_at, {signed}, {corrections},
+           {prevention_keys}, {prevention_text}
     FROM official_reviews ORDER BY review_id
 """
 OFFICIAL_TIER = {"dikonfirmasi": "rekomendasi_resmi", "dibantah": "peringatan_hoaks"}
@@ -127,17 +135,18 @@ def review_rows(rows):
     for review_id, incident_id, institution, status, code, note, field_status, source_url, reviewer, created_at, *rest in rows:
         if status not in STATUSES or code not in REASON_TEXT:
             continue
-        try:
-            marks = json.loads(field_status or "{}")
-        except ValueError:
-            marks = {}
+        signed_raw, corrections_raw, keys_raw, prevention_text = (list(rest) + [None] * 4)[:4]
+        marks = _json_value(field_status, {})
         reason = REASON_TEXT[code] + (f". {note.strip()}" if note and note.strip() else "")
-        try:
-            signed = json.loads(rest[0]) if rest and rest[0] else None
-        except ValueError:
-            signed = None
+        signed = _json_value(signed_raw, None)
+        corrections = _json_value(corrections_raw, {})
+        keys = _json_value(keys_raw, [])
         statements.append({
             **{key: None for key in COLUMNS},
+            # nilai yang benar menurut lembaga untuk kolom yang ditandai salah
+            **{field: _text(str(value)) for field, value in corrections.items() if field in SURVEY_FIELDS and value},
+            "prevention_keys": ";".join(k for k in keys if isinstance(k, str)) or None,
+            "prevention_text": _text(prevention_text),
             "statement_id": f"portal-{review_id}",
             "incident_id": incident_id,
             "institution": INSTITUTION_NAMES.get(institution, institution),
@@ -154,9 +163,21 @@ def review_rows(rows):
     return statements
 
 
+def _json_value(raw, default):
+    """JSON dari kolom teks; ``default`` bila kosong, rusak, atau jenisnya lain."""
+    try:
+        value = json.loads(raw) if raw else default
+    except (TypeError, ValueError):
+        return default
+    return value if isinstance(value, type(default)) or default is None else default
+
+
 def load_reviews():
     """Keputusan dari portal lembaga; [] bila database survei belum dikonfigurasi."""
-    rows = fetch_rows(REVIEWS_SQL)
+    columns = table_columns("official_reviews")
+    if not columns:
+        return []
+    rows = fetch_rows(select_sql(REVIEWS_SQL, columns, REVIEW_OPTIONAL))
     return review_rows(rows) if rows else []
 
 

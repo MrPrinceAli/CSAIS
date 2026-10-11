@@ -32,6 +32,9 @@ type Strings = {
   publishers: string; // label setelah angka, mis. "penerbit"
   form: {
     answers: Record<string, string>;
+    correction: string;
+    happened: string;
+    happenedAnswers: Record<string, string>;
     submit: string;
     sending: string;
     chooseOne: string;

@@ -175,6 +175,63 @@ def test_load_reviews_from_file(tmp_path, monkeypatch):
     assert official.load_reviews() == []
 
 
+def test_portal_corrections_and_prevention(temp_conn):
+    _pipeline_tables(temp_conn)
+    flows.record_d1(temp_conn)
+    review = REVIEW + (None, '{"target": "Bank Y", "location": "  "}', '["type:phishing:1", 5]', "Ganti kata sandi.")
+    statement = official.review_rows([review])[0]
+    assert (statement["target"], statement["location"]) == ("Bank Y", None)
+    assert (statement["prevention_keys"], statement["prevention_text"]) == ("type:phishing:1", "Ganti kata sandi.")
+    official.record_official(temp_conn, [statement])
+    d3 = _latest(temp_conn, "INC-A", "D3")
+    assert d3["target"] == "Bank Y" and json.loads(d3["field_status"])["target"] == "dibantah"
+    d4 = _latest(temp_conn, "INC-A", "D4")
+    assert json.loads(d4["prevention"]) == {"steps": ["type:phishing:1"], "text": "Ganti kata sandi."}
+    metrics = flow_compare.compute(temp_conn)
+    jaccard = next(m for m in metrics if m["metric"] == "preventif_jaccard_d1_d4")
+    assert jaccard["n"] == 1
+
+
+def test_load_reviews_from_old_table(tmp_path, monkeypatch):
+    import sqlite3
+    path = tmp_path / "survey.db"
+    conn = sqlite3.connect(path)
+    old = official.REVIEWS_SCHEMA.split("signer TEXT")[0].rstrip().rstrip(",") + ")"
+    conn.execute(old)
+    conn.execute(
+        "INSERT INTO official_reviews (incident_id, card_output_id, institution, status, reason_code, created_at)"
+        " VALUES ('INC-A', 1, 'BSSN', 'dikonfirmasi', 'ditangani', 't')"
+    )
+    conn.commit()
+    conn.close()
+    monkeypatch.setenv("SURVEY_DATABASE_URL", f"file:{path}")
+    reviews = official.load_reviews()
+    assert len(reviews) == 1 and reviews[0]["signed"] is None and reviews[0]["prevention_keys"] is None
+
+
+def test_verdicts_compared_with_d4(temp_conn):
+    from csais import survey
+
+    _pipeline_tables(temp_conn)
+    flows.record_d1(temp_conn)
+    survey.record_d2(temp_conn, [("INC-A", survey.VERDICT_FIELD, None, "tidak_sesuai", f"r{i}") for i in range(3)])
+    official.record_official(temp_conn, official.review_rows([REVIEW]))
+    metrics = {(m["metric"], m["flow"], m["field"]): m for m in flow_compare.compute(temp_conn)}
+    assert metrics[("kesimpulan", "D2", "hoaks")]["value"] == 1
+    assert metrics[("kesimpulan", "D4", "benar")]["value"] == 1
+    same = metrics[("kesimpulan_sama_d4", "D2", "")]
+    assert (same["value"], same["n"]) == (0.0, 1)  # publik bilang hoaks, lembaga mengonfirmasi
+
+
+def test_verdict_mapping():
+    assert flow_compare.verdict("D1", {"status": "tinggi"}) == "benar"
+    assert flow_compare.verdict("D1", {"status": "sedang"}) == "belum_pasti"
+    assert flow_compare.verdict("D3", {"status": "sebagian"}) == "belum_pasti"
+    assert flow_compare.verdict("D4", {"status": "dibantah"}) == "hoaks"
+    assert flow_compare.verdict("D2", {"status": "sesuai", "basis": '{"verdict": "benar"}'}) == "benar"
+    assert flow_compare.verdict("D2", {"status": "sesuai", "basis": None}) == "belum_pasti"
+
+
 def test_signature_travels_into_d4(temp_conn):
     _pipeline_tables(temp_conn)
     flows.record_d1(temp_conn)

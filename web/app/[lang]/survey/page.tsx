@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { getSurveyCard } from "@/lib/queries";
 import { pickSurveyIncident, surveyDisplay } from "@/lib/survey-pick";
 import { formatters, incidentTitle } from "@/lib/format";
-import { getDict, isLang, L } from "@/lib/i18n";
+import { attackOptions, getDict, isLang, L } from "@/lib/i18n";
 import { SURVEY_FIELDS } from "@/lib/survey";
 import { SurveyForm, type SurveyFieldView } from "@/components/survey-form";
 
@@ -27,7 +27,12 @@ export default async function SurveyPage({ params, searchParams }: { params: Pro
   const data = await getSurveyCard(requested ?? (await pickSurveyIncident()));
 
   const fields: SurveyFieldView[] = data
-    ? SURVEY_FIELDS.map((key) => ({ key, label: t.flows.rows[key], value: surveyDisplay(key, data.card[key], lang) }))
+    ? SURVEY_FIELDS.map((key) => ({
+        key,
+        label: t.flows.rows[key],
+        value: surveyDisplay(key, data.card[key], lang),
+        ...(key === "attack_type" ? { options: attackOptions(lang) } : {}),
+      }))
     : [];
 
   return (
@@ -75,6 +80,9 @@ export default async function SurveyPage({ params, searchParams }: { params: Pro
               nextHref={L(lang, "/survey")}
               strings={{
                 answers: t.survey.answers,
+                correction: t.survey.correction,
+                happened: t.survey.happened,
+                happenedAnswers: t.survey.happenedAnswers,
                 submit: t.survey.submit,
                 sending: t.survey.sending,
                 chooseOne: t.survey.chooseOne,

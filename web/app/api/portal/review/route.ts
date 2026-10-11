@@ -1,13 +1,17 @@
 import { queryOne } from "@/lib/db";
 import { signDecision } from "@/lib/attestation";
 import { institutionFromSession, KEY_COOKIE_NAME, keyFromSession, REASONS, REVIEW_FIELDS, REVIEW_STATUSES, SESSION_COOKIE_NAME, type ReviewStatus } from "@/lib/portal";
-import { saveReview, surveyConfigured } from "@/lib/survey";
+import { tipText } from "@/lib/prevention";
+import { CORRECTION_MAX, saveReview, surveyConfigured } from "@/lib/survey";
 
 /**
  * Simpan keputusan lembaga untuk satu kartu inti D1. Lembaga diambil dari
  * cookie sesi (bukan dari isi permintaan), kartu diperiksa ke flow_outputs, dan
  * keputusan ditandatangani (EIP-712) dengan kunci lembaga dari cookie kunci.
+ * Kolom yang ditandai salah boleh membawa nilai yang benar, dan lembaga boleh
+ * memilih langkah pencegahan sendiri; keduanya ikut ditandatangani (``fields``).
  */
+const MAX_STEPS = 12;
 export const dynamic = "force-dynamic";
 
 function bad(error: string, status = 400) {
@@ -49,6 +53,17 @@ export async function POST(request: Request) {
     if (rawFields[field] === "benar") fieldStatus[field] = "dikonfirmasi";
     if (rawFields[field] === "salah") fieldStatus[field] = "dibantah";
   }
+  const rawCorrections = body.corrections && typeof body.corrections === "object" ? (body.corrections as Record<string, unknown>) : {};
+  const corrections: Record<string, string> = {};
+  for (const field of REVIEW_FIELDS) {
+    const value = rawCorrections[field];
+    if (fieldStatus[field] !== "dibantah" || typeof value !== "string") continue;
+    const clean = value.replace(/\s+/g, " ").trim().slice(0, CORRECTION_MAX);
+    if (clean) corrections[field] = clean;
+  }
+  const rawSteps = Array.isArray(body.prevention) ? body.prevention : [];
+  const preventionKeys = [...new Set(rawSteps.filter((k): k is string => typeof k === "string" && tipText(k, "id") !== null))].slice(0, MAX_STEPS);
+  const preventionText = typeof body.prevention_text === "string" ? body.prevention_text.trim().slice(0, 600) || null : null;
   const note = typeof body.note === "string" ? body.note.trim().slice(0, 600) || null : null;
   const source = typeof body.source_url === "string" && /^https?:\/\/\S{3,500}$/.test(body.source_url.trim()) ? body.source_url.trim() : null;
   const reviewer = typeof body.reviewer === "string" ? body.reviewer.trim().slice(0, 80) || null : null;
@@ -66,7 +81,7 @@ export async function POST(request: Request) {
       institution: inst,
       status,
       reason,
-      fields: JSON.stringify(fieldStatus),
+      fields: JSON.stringify({ status: fieldStatus, values: corrections, prevention: preventionKeys, prevention_text: preventionText ?? "" }),
       note: note ?? "",
       source: source ?? "",
       issuedAt: Math.floor(Date.now() / 1000),
@@ -80,6 +95,9 @@ export async function POST(request: Request) {
       reasonCode: reason,
       reasonText: note,
       fieldStatus,
+      corrections,
+      preventionKeys,
+      preventionText,
       sourceUrl: source,
       reviewer,
     });

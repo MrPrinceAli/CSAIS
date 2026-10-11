@@ -16,6 +16,14 @@ Keputusan per kolom: minimal MIN_DECISIVE jawaban sesuai/tidak sesuai dan
 pilihan terbanyak sedikitnya AGREEMENT dari jawaban itu; selain itu ``belum``.
 Status kartu: ``tidak_sesuai`` bila ada kolom yang diputuskan tidak sesuai,
 ``sesuai`` bila semua kolom yang diputuskan sesuai, selain itu ``belum``.
+
+Penjawab yang memilih tidak sesuai boleh menulis nilai yang benar menurut
+berita (``corrected_value``). Kolom yang diputuskan tidak sesuai memakai
+koreksi terbanyak sebagai nilai D2; tanpa koreksi, nilai kartu tetap dipakai.
+
+Pertanyaan terpisah ``kejadian`` ("menurut Anda kejadian ini benar terjadi?",
+jawaban sesuai = ya, tidak_sesuai = tidak) diputuskan dengan aturan yang sama
+dan menjadi kesimpulan D2 di ``basis.verdict``: benar, hoaks, atau belum_pasti.
 Untuk sementara satu orang boleh menjawab berkali-kali; ``respondent`` dan
 ``ip_hash`` disimpan agar penyaringan bisa ditambahkan tanpa kehilangan data.
 """
@@ -34,6 +42,9 @@ SURVEY_FIELDS = ("attack_type", "target", "threat_actor", "attack_date", "locati
 ANSWERS = ("sesuai", "tidak_sesuai", "tidak_tahu")
 MIN_DECISIVE = 3
 AGREEMENT = 2 / 3
+VERDICT_FIELD = "kejadian"  # pertanyaan kesimpulan, bukan kolom kartu
+VERDICT_OF_ANSWER = {"sesuai": "benar", "tidak_sesuai": "hoaks"}
+UNDECIDED = "belum_pasti"
 DEMO_PREFIX = "demo-"  # responden data uji (scripts/seed_demo.py); ditandai "DATA UJI" di web
 
 # Skema di database survei; web (web/lib/survey.ts) membuat tabel yang sama
@@ -49,12 +60,13 @@ SURVEY_SCHEMA = """
         respondent TEXT,
         ip_hash TEXT,
         lang TEXT,
-        created_at TEXT NOT NULL
+        created_at TEXT NOT NULL,
+        corrected_value TEXT
     )
 """
 
 RESPONSES_SQL = """
-    SELECT incident_id, field, shown_value, answer, respondent
+    SELECT incident_id, field, shown_value, answer, respondent, {corrected_value}
     FROM survey_responses
 """
 
@@ -64,7 +76,7 @@ def _hrana_value(cell):
     return None if cell.get("type") == "null" else cell.get("value")
 
 
-def fetch_remote(database_url, auth_token, sql=RESPONSES_SQL):
+def fetch_remote(database_url, auth_token, sql):
     """Baca baris dari database survei di Turso; [] bila tabel belum ada."""
     client = TursoClient(database_url, auth_token)
     try:
@@ -77,7 +89,7 @@ def fetch_remote(database_url, auth_token, sql=RESPONSES_SQL):
     return [tuple(_hrana_value(cell) for cell in row) for row in result["rows"]]
 
 
-def fetch_file(path, sql=RESPONSES_SQL):
+def fetch_file(path, sql):
     """Baca baris dari berkas SQLite lokal (pengujian dan pengembangan)."""
     conn = sqlite3.connect(path)
     try:
@@ -100,9 +112,26 @@ def fetch_rows(sql):
     return fetch_remote(url, os.environ.get("SURVEY_AUTH_TOKEN"), sql)
 
 
+def table_columns(table):
+    """Nama kolom tabel di database survei; None bila belum dikonfigurasi.
+
+    Kolom baru ditambahkan web saat pertama dipakai, jadi pipeline memeriksa
+    dulu kolom yang ada sebelum memilihnya."""
+    rows = fetch_rows(f"PRAGMA table_info({table})")
+    return None if rows is None else {row[1] for row in rows}
+
+
+def select_sql(template, columns, optional):
+    """Isi kolom opsional di ``template``: namanya bila ada, NULL bila belum."""
+    return template.format(**{name: name if name in columns else "NULL" for name in optional})
+
+
 def fetch_responses():
     """Jawaban dari database survei; None bila belum dikonfigurasi."""
-    return fetch_rows(RESPONSES_SQL)
+    columns = table_columns("survey_responses")
+    if columns is None:
+        return None
+    return fetch_rows(select_sql(RESPONSES_SQL, columns, ("corrected_value",)))
 
 
 # --- Agregasi ---
@@ -117,6 +146,17 @@ def decide(counts):
     if disagree / decisive >= AGREEMENT:
         return "tidak_sesuai"
     return "belum"
+
+
+def top_correction(values):
+    """Koreksi terbanyak (huruf dan spasi dirapikan saat dihitung): (nilai, jumlah)."""
+    counts, first = {}, {}
+    for value in values:
+        key = " ".join(value.lower().split())
+        counts[key] = counts.get(key, 0) + 1
+        first.setdefault(key, " ".join(value.split()))
+    best = max(counts, key=counts.get)  # seri: koreksi yang lebih dulu masuk
+    return first[best], counts[best]
 
 
 def latest_d1(conn):
@@ -138,26 +178,36 @@ def latest_d1(conn):
 def d2_rows(cards, responses):
     """Keluaran D2 per incident yang punya jawaban untuk kartu terbarunya."""
     grouped = {}
-    for incident_id, field, shown, answer, respondent in responses:
-        if incident_id in cards and field in SURVEY_FIELDS and answer in ANSWERS:
-            grouped.setdefault(incident_id, []).append((field, shown, answer, respondent))
+    for incident_id, field, shown, answer, respondent, *rest in responses:
+        correction = (rest[0] or "").strip() if rest and rest[0] else None
+        if incident_id in cards and field in SURVEY_FIELDS + (VERDICT_FIELD,) and answer in ANSWERS:
+            grouped.setdefault(incident_id, []).append((field, shown, answer, respondent, correction))
     rows = {}
     for incident_id, answers in grouped.items():
         card = cards[incident_id]
-        counts = {field: {} for field in SURVEY_FIELDS}
+        counts = {field: {} for field in SURVEY_FIELDS + (VERDICT_FIELD,)}
+        corrections = {field: [] for field in SURVEY_FIELDS}
         respondents, matched, ignored, demo = set(), 0, 0, 0
-        for field, shown, answer, respondent in answers:
-            if (shown or None) != card.get(field):
+        for field, shown, answer, respondent, correction in answers:
+            if field != VERDICT_FIELD and (shown or None) != card.get(field):
                 ignored += 1
                 continue
             matched += 1
             counts[field][answer] = counts[field].get(answer, 0) + 1
+            if correction and answer == "tidak_sesuai" and field != VERDICT_FIELD:
+                corrections[field].append(correction)
             if respondent:
                 respondents.add(respondent)
                 demo += str(respondent).startswith(DEMO_PREFIX)
         if not matched:
             continue
         verdicts = {field: decide(counts[field]) for field in SURVEY_FIELDS if counts[field]}
+        values = {field: card.get(field) for field in flows.FIELDS}
+        corrected = {}
+        for field, given in corrections.items():
+            if given and verdicts.get(field) == "tidak_sesuai":
+                values[field], votes = top_correction(given)
+                corrected[field] = {"value": values[field], "votes": votes, "given": len(given)}
         decided = [v for v in verdicts.values() if v != "belum"]
         if "tidak_sesuai" in decided:
             status = "tidak_sesuai"
@@ -165,8 +215,13 @@ def d2_rows(cards, responses):
             status = "sesuai"
         else:
             status = flows.PENDING
+        extra = {}
+        if counts[VERDICT_FIELD]:
+            extra["verdict"] = VERDICT_OF_ANSWER.get(decide(counts[VERDICT_FIELD]), UNDECIDED)
+        if corrected:
+            extra["corrections"] = corrected
         rows[incident_id] = {
-            **{field: card.get(field) for field in flows.FIELDS},
+            **values,
             "field_status": verdicts,
             "status": status,
             "tier": "waspada" if status == "sesuai" else None,
@@ -177,6 +232,7 @@ def d2_rows(cards, responses):
                 "ignored_old_card": ignored,
                 "counts": {field: c for field, c in counts.items() if c},
                 "rule": {"min_decisive": MIN_DECISIVE, "agreement": round(AGREEMENT, 4)},
+                **extra,
                 **({"demo": True, "demo_responses": demo} if demo else {}),
             },
             "source_ref": "survey",

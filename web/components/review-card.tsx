@@ -1,14 +1,22 @@
 "use client";
 
-/* Kartu tinjauan portal lembaga: keputusan, alasan, dan penandaan kolom dengan tombol. */
+/*
+ * Kartu tinjauan portal lembaga: keputusan, alasan, penandaan kolom (dengan
+ * nilai yang benar untuk kolom yang salah), dan langkah pencegahan lembaga.
+ */
 import { useState } from "react";
 
-export type ReviewFieldView = { key: string; label: string; value: string | null };
+export type ReviewFieldView = { key: string; label: string; value: string | null; options?: { value: string; label: string }[] };
+export type ReviewStep = { key: string; text: string };
 type Strings = {
   decision: string;
   reason: string;
   fieldsTitle: string;
   fieldsHint: string;
+  correction: string;
+  preventionTitle: string;
+  preventionHint: string;
+  preventionText: string;
   fieldValues: Record<string, string>;
   note: string;
   source: string;
@@ -38,10 +46,13 @@ function Choice({ id, name, checked, tone, label, onChange }: { id: string; name
   );
 }
 
-export function ReviewCard({ incidentId, outputId, fields, reasonsByStatus, strings }: { incidentId: string; outputId: number; fields: ReviewFieldView[]; reasonsByStatus: Record<string, string[]>; strings: Strings }) {
+export function ReviewCard({ incidentId, outputId, fields, steps, reasonsByStatus, strings }: { incidentId: string; outputId: number; fields: ReviewFieldView[]; steps: ReviewStep[]; reasonsByStatus: Record<string, string[]>; strings: Strings }) {
   const [status, setStatus] = useState<string | null>(null);
   const [reason, setReason] = useState<string | null>(null);
   const [marks, setMarks] = useState<Record<string, string>>({});
+  const [corrections, setCorrections] = useState<Record<string, string>>({});
+  const [chosenSteps, setChosenSteps] = useState<string[]>([]);
+  const [preventionText, setPreventionText] = useState("");
   const [note, setNote] = useState("");
   const [source, setSource] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "saved" | "error" | "noreason">("idle");
@@ -58,7 +69,18 @@ export function ReviewCard({ incidentId, outputId, fields, reasonsByStatus, stri
       const response = await fetch("/api/portal/review", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ incident_id: incidentId, output_id: outputId, status, reason, fields: marks, note, source_url: source }),
+        body: JSON.stringify({
+          incident_id: incidentId,
+          output_id: outputId,
+          status,
+          reason,
+          fields: marks,
+          corrections,
+          prevention: chosenSteps,
+          prevention_text: preventionText,
+          note,
+          source_url: source,
+        }),
       });
       setState(response.ok ? "saved" : "error");
     } catch {
@@ -133,6 +155,35 @@ export function ReviewCard({ incidentId, outputId, fields, reasonsByStatus, stri
                     />
                   ))}
                 </div>
+                {marks[f.key] === "salah" ? (
+                  <label htmlFor={`${prefix}-${f.key}-fix`} className="flex flex-col gap-1 text-[12px] text-muted sm:col-span-2">
+                    {strings.correction}
+                    {f.options ? (
+                      <select
+                        id={`${prefix}-${f.key}-fix`}
+                        value={corrections[f.key] ?? ""}
+                        onChange={(e) => setCorrections((c) => ({ ...c, [f.key]: e.target.value }))}
+                        className="field text-[13px]"
+                      >
+                        <option value="">–</option>
+                        {f.options.map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        id={`${prefix}-${f.key}-fix`}
+                        type={f.key === "attack_date" ? "date" : "text"}
+                        value={corrections[f.key] ?? ""}
+                        onChange={(e) => setCorrections((c) => ({ ...c, [f.key]: e.target.value }))}
+                        maxLength={120}
+                        className="field text-[13px]"
+                      />
+                    )}
+                  </label>
+                ) : null}
               </div>
             ))}
           </div>
@@ -147,6 +198,32 @@ export function ReviewCard({ incidentId, outputId, fields, reasonsByStatus, stri
             </label>
 
           </div>
+        </details>
+      ) : null}
+      {status && status !== "dibantah" && steps.length ? (
+        <details className="rounded-md border border-line p-3">
+          <summary className="cursor-pointer text-[13px] text-soft">{strings.preventionTitle}</summary>
+          <p className="mt-2 text-[12px] text-muted">{strings.preventionHint}</p>
+          <ul className="mt-2 flex flex-col gap-1.5">
+            {steps.map((step) => (
+              <li key={step.key}>
+                <label htmlFor={`${prefix}-step-${step.key}`} className="flex cursor-pointer items-start gap-2 text-[13px]">
+                  <input
+                    id={`${prefix}-step-${step.key}`}
+                    type="checkbox"
+                    checked={chosenSteps.includes(step.key)}
+                    onChange={(e) => setChosenSteps((s) => (e.target.checked ? [...s, step.key] : s.filter((k) => k !== step.key)))}
+                    className="mt-0.5"
+                  />
+                  <span className="text-soft">{step.text}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+          <label className="mt-3 flex flex-col gap-1 text-[12px] text-muted" htmlFor={`${prefix}-prevention-text`}>
+            {strings.preventionText}
+            <textarea id={`${prefix}-prevention-text`} value={preventionText} onChange={(e) => setPreventionText(e.target.value)} maxLength={600} rows={2} className="field text-[13px]" />
+          </label>
         </details>
       ) : null}
       <div className="flex flex-wrap items-center gap-3">

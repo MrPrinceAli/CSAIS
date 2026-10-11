@@ -17,3 +17,6 @@ eval/flows/
 
 # cache jawaban LLM untuk eval/score_llm.py (lokal)
 eval/llm_cache.jsonl
+
+# website lokal dengan data uji (scripts/demo_local.sh)
+database/demo-portal.json

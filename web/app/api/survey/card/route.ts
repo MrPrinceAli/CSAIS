@@ -1,7 +1,7 @@
 import { query } from "@/lib/db";
 import { getPublisherDomains, getSurveyCard } from "@/lib/queries";
 import { domainOf, formatters, incidentTitle, publisherOf } from "@/lib/format";
-import { getDict, isLang } from "@/lib/i18n";
+import { attackOptions, getDict, isLang } from "@/lib/i18n";
 import { SURVEY_FIELDS } from "@/lib/survey";
 import { pickSurveyIncident, surveyDisplay } from "@/lib/survey-pick";
 
@@ -55,7 +55,12 @@ export async function GET(request: Request) {
       articles: data.articles.slice(0, 2).map((a) => ({ title: incidentTitle(a.title), url: a.url, date: f.date(a.published_date) })),
       logos,
       publishers,
-      fields: SURVEY_FIELDS.map((key) => ({ key, label: t.flows.rows[key], value: surveyDisplay(key, data.card[key], lang) })),
+      fields: SURVEY_FIELDS.map((key) => ({
+        key,
+        label: t.flows.rows[key],
+        value: surveyDisplay(key, data.card[key], lang),
+        ...(key === "attack_type" ? { options: attackOptions(lang) } : {}),
+      })),
     },
     { headers: { "Cache-Control": "no-store" } },
   );

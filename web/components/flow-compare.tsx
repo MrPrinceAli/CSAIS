@@ -26,6 +26,18 @@ const STATUS_CLASS: Record<string, string> = {
   sebagian: "text-med",
 };
 
+const VERDICT_CLASS: Record<string, string> = { benar: "text-good", hoaks: "text-high", belum_pasti: "text-muted" };
+const VERDICT_OF_STATUS: Record<string, string> = { tinggi: "benar", dikonfirmasi: "benar", dibantah: "hoaks" };
+
+/** Kesimpulan bersama satu keluaran; harus sama dengan verdict() di csais/flow_compare.py. */
+function verdictOf(o: FlowOutput): string {
+  if (o.flow === "D2") {
+    const value = parse<{ verdict?: string }>(o.basis)?.verdict;
+    return value && value in VERDICT_CLASS ? value : "belum_pasti";
+  }
+  return VERDICT_OF_STATUS[o.status] ?? "belum_pasti";
+}
+
 function parse<T>(raw: string | null): T | null {
   if (!raw) return null;
   try {
@@ -153,6 +165,18 @@ export function FlowCompare({ lang, incidentId, outputs }: { lang: Lang; inciden
                 return (
                   <td key={flow} className={cell}>
                     {o ? <span className={STATUS_CLASS[o.status] ?? "text-soft"}>{t.flows.status[o.status] ?? o.status}</span> : empty}
+                  </td>
+                );
+              })}
+            </tr>
+            <tr className="border-b border-line">
+              <th className={`${cell} label text-left font-medium`}>{t.flows.rows.verdict}</th>
+              {FLOWS.map((flow) => {
+                const o = latest[flow];
+                const v = o ? verdictOf(o) : null;
+                return (
+                  <td key={flow} className={cell}>
+                    {v ? <span className={`font-semibold ${VERDICT_CLASS[v]}`}>{t.flows.verdicts[v]}</span> : empty}
                   </td>
                 );
               })}

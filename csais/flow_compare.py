@@ -23,6 +23,11 @@ Ukuran yang dihitung:
                yang menambah langkah di luar D1
   bias         sebaran tingkat trust D1 seluruh incident dibanding incident
                yang sampai ke D4 (D4 cenderung kasus besar dan jelas)
+  kesimpulan   satu kesimpulan bersama per alur (benar, hoaks, belum_pasti):
+               D1 trust tinggi = benar; D2 dari pertanyaan "benar terjadi?";
+               D3/D4 dikonfirmasi = benar, dibantah = hoaks, sebagian =
+               belum_pasti. Dihitung sebarannya dan seberapa sering kesimpulan
+               yang sudah pasti sama dengan D4
 
 Dipakai dua tempat: ``eval/compare_flows.py`` (laporan penelitian, bisa
 dengan ``--as-of``) dan tahap pipeline ``run()`` yang menyimpan hasil terbaru
@@ -42,6 +47,9 @@ JUDGED_FIELDS = ("attack_type", "target", "threat_actor", "attack_date", "locati
 D2_JUDGMENT = {"sesuai": True, "tidak_sesuai": False}
 D3_JUDGMENT = {"dikonfirmasi": True, "dibantah": False}
 TRUST_LEVELS = ("tinggi", "sedang", "rendah", "tanpa_skor")
+VERDICTS = ("benar", "hoaks", "belum_pasti")
+UNDECIDED = "belum_pasti"
+VERDICT_OF_STATUS = {"tinggi": "benar", "dikonfirmasi": "benar", "dibantah": "hoaks"}
 
 
 # --- Pembacaan ---
@@ -66,6 +74,14 @@ def _json(value):
     return parsed if isinstance(parsed, dict) else {}
 
 
+def verdict(flow, row):
+    """Kesimpulan bersama satu keluaran alur: benar, hoaks, atau belum_pasti."""
+    if flow == "D2":
+        value = _json(row.get("basis")).get("verdict")
+        return value if value in VERDICTS else UNDECIDED
+    return VERDICT_OF_STATUS.get(row.get("status"), UNDECIDED)
+
+
 def load_latest(conn, as_of):
     """Snapshot terakhir tiap (alur, incident) sampai as_of: {flow: {incident: row}}."""
     conn.row_factory = sqlite3.Row
@@ -83,7 +99,11 @@ def load_latest(conn, as_of):
         first[row["flow"]].setdefault(row["incident_id"], moment)
     for flow in FLOWS:
         # dihapus: incident sudah tidak ada; belum: jawaban belum cukup untuk memutuskan
-        latest[flow] = {k: v for k, v in latest[flow].items() if v["status"] not in (REMOVED, PENDING)}
+        # kolom kartu (tetap dihitung bila kesimpulannya sudah pasti)
+        latest[flow] = {
+            k: v for k, v in latest[flow].items()
+            if v["status"] != REMOVED and (v["status"] != PENDING or verdict(flow, v) != UNDECIDED)
+        }
     return latest, first
 
 
@@ -234,6 +254,16 @@ def compare(latest, first, seen):
         added += bool(official_steps - machine_steps)
     add("preventif_jaccard_d1_d4", "D1-D4", "", statistics.mean(scores) if scores else None, len(scores))
     add("preventif_d4_menambah", "D4", "", added / len(scores) if scores else None, len(scores))
+
+    # Kesimpulan bersama dan kecocokannya dengan D4
+    for flow in FLOWS:
+        verdicts = {k: verdict(flow, v) for k, v in latest[flow].items()}
+        for value in VERDICTS:
+            add("kesimpulan", flow, value, sum(1 for v in verdicts.values() if v == value), len(verdicts))
+        if flow != "D4":
+            pairs = [(v, verdict("D4", d4[k])) for k, v in verdicts.items() if k in d4 and v != UNDECIDED]
+            add("kesimpulan_sama_d4", flow, "", sum(a == b for a, b in pairs) / len(pairs) if pairs else None, len(pairs),
+                "hanya kesimpulan yang sudah pasti")
 
     # Bias pilihan
     reached = [k for k in d4 if k in d1]

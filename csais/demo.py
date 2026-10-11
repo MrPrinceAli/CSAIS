@@ -2,11 +2,18 @@
 
 ``main.py --seed-demo`` (lokal):
   - survei: jawaban publik tiruan (responden ``demo-*``) untuk sekitar 30
-    incident terbaru, ditulis langsung ke database masukan (SURVEY_WRITE_TOKEN);
+    incident terbaru, ditulis langsung ke database masukan (SURVEY_WRITE_TOKEN),
+    termasuk koreksi untuk kolom yang dijawab tidak sesuai dan jawaban
+    pertanyaan kesimpulan ("benar terjadi?");
   - lembaga: keputusan tiruan lewat API portal produksi, masuk dengan password
     tiap lembaga (PORTAL_PASSWORDS di lingkungan, JSON), sehingga ditandatangani
-    kunci lembaga seperti keputusan sungguhan. Catatannya diawali "DATA UJI".
+    kunci lembaga seperti keputusan sungguhan. Sebagian membawa nilai yang
+    benar dan langkah pencegahan lembaga. Catatannya diawali "DATA UJI".
 Semua data uji ditandai "DATA UJI" di web.
+
+Untuk salinan lokal, TURSO_DATABASE_URL dan SURVEY_DATABASE_URL boleh berupa
+``file:/path.db`` dan CSAIS_WEB_URL menunjuk ke server pengembangan
+(lihat scripts/demo_local.sh).
 
 ``main.py --purge-demo``: hapus data uji dari database masukan (bila token tulis
 ada) dan keluaran D2 - D4 bertanda demo dari database pipeline. Di GitHub
@@ -24,7 +31,8 @@ import requests
 from csais import flows
 from csais.db import get_connection, get_timestamp
 from csais.official import DEMO_NOTE, INSTITUTION_NAMES
-from csais.survey import DEMO_PREFIX, SURVEY_FIELDS
+from csais.official import REVIEWS_SCHEMA
+from csais.survey import DEMO_PREFIX, SURVEY_FIELDS, SURVEY_SCHEMA, VERDICT_FIELD
 
 PORTAL_URL = os.environ.get("CSAIS_WEB_URL") or "https://csais.vercel.app"
 SURVEY_INCIDENTS = 30
@@ -40,9 +48,17 @@ MANDATE = {
 # (status, alasan, tandai target salah) per lembaga: 2 konfirmasi, 1 bantah, 1 sebagian
 PLAN = [("dikonfirmasi", "ditangani", False), ("dikonfirmasi", "laporan_diterima", True),
         ("dibantah", "hoaks", False), ("sebagian", "diselidiki", False)]
+# Imbauan tiruan per lembaga (teks bebas portal)
+ADVICE = {
+    "BSSN": "Perbarui sistem dan cadangkan data secara berkala; laporkan insiden ke BSSN.",
+    "OJK": "Cek legalitas pihak yang menawarkan investasi atau pinjaman di situs OJK sebelum bertransaksi.",
+    "KOMDIGI": "Jangan membuka tautan atau lampiran dari pengirim yang tidak dikenal; laporkan konten ke aduankonten.id.",
+    "POLRI": "Simpan bukti percakapan dan transfer, lalu laporkan ke patrolisiber.id.",
+}
 
 CARDS_SQL = """
-    SELECT o.incident_id, o.output_id, o.attack_type, o.target, o.threat_actor, o.attack_date, o.location
+    SELECT o.incident_id, o.output_id, o.attack_type, o.target, o.threat_actor, o.attack_date, o.location,
+           o.target_group
     FROM flow_outputs o
     JOIN (SELECT incident_id, MAX(output_id) AS last_id FROM flow_outputs WHERE flow = 'D1' GROUP BY incident_id) m
       ON m.last_id = o.output_id
@@ -55,23 +71,70 @@ CARDS_SQL = """
 
 
 def _remote(sql, url_env="TURSO_DATABASE_URL", token_env="TURSO_AUTH_TOKEN"):
-    from csais.survey import fetch_remote
+    from csais.survey import fetch_file, fetch_remote
 
-    return fetch_remote(os.environ[url_env], os.environ.get(token_env), sql)
+    url = os.environ[url_env]
+    if url.startswith("file:"):
+        return fetch_file(url[len("file:"):], sql)
+    return fetch_remote(url, os.environ.get(token_env), sql)
 
 
 def _write_input(statements):
+    url = os.environ["SURVEY_DATABASE_URL"]
+    if url.startswith("file:"):
+        import sqlite3
+
+        conn = sqlite3.connect(url[len("file:"):])
+        try:
+            for sql, args in statements:
+                conn.execute(sql, args)
+            conn.commit()
+        finally:
+            conn.close()
+        return []
     from csais.publish import TursoClient
 
     token = os.environ.get("SURVEY_WRITE_TOKEN")
     if not token:
         raise SystemExit("SURVEY_WRITE_TOKEN belum diisi di .env")
-    return TursoClient(os.environ["SURVEY_DATABASE_URL"], token).execute(statements)
+    return TursoClient(url, token).execute(statements)
+
+
+def _ensure_survey_table():
+    """Tabel jawaban dengan kolom koreksi (database lama belum punya kolomnya)."""
+    _write_input([(SURVEY_SCHEMA, [])])
+    columns = {row[1] for row in _remote("PRAGMA table_info(survey_responses)", "SURVEY_DATABASE_URL", "SURVEY_AUTH_TOKEN")}
+    if "corrected_value" not in columns:
+        _write_input([("ALTER TABLE survey_responses ADD COLUMN corrected_value TEXT", [])])
+
+
+def alternatives(cards):
+    """Nilai lain per kolom dari kartu-kartu lain, untuk koreksi tiruan."""
+    pool = {field: [] for field in SURVEY_FIELDS}
+    for card in cards:
+        for field, value in zip(SURVEY_FIELDS, card[2:7]):
+            if value and value not in pool[field]:
+                pool[field].append(value.split(",")[0].strip() if field == "attack_type" else value)
+    return pool
+
+
+def _correction(rng, pool, field, current, index):
+    """Koreksi tiruan yang konsisten per incident (penjawab cenderung sepakat)."""
+    options = [v for v in pool[field] if v != current]
+    if not options:
+        return None
+    main, other = options[index % len(options)], options[(index + 7) % len(options)]
+    return main if rng.random() < 0.8 else other
 
 
 def survey_rows(cards, rng, now):
-    """Jawaban tiruan: sebagian besar sesuai, sebagian incident cenderung tidak sesuai."""
+    """Jawaban tiruan: sebagian besar sesuai, sebagian incident cenderung tidak sesuai.
+
+    Jawaban tidak sesuai sering membawa koreksi, dan setiap penjawab juga
+    menjawab pertanyaan kesimpulan; incident yang dinilai keliru cenderung
+    dianggap hoaks."""
     rows = []
+    pool = alternatives(cards)
     for index, card in enumerate(cards):
         incident_id, output_id = card[0], card[1]
         values = dict(zip(SURVEY_FIELDS, card[2:7]))
@@ -87,8 +150,28 @@ def survey_rows(cards, rng, now):
                     answer = "tidak_sesuai" if roll < 0.75 else "tidak_tahu"
                 else:
                     answer = "sesuai" if roll < 0.8 else "tidak_tahu" if roll < 0.93 else "tidak_sesuai"
-                rows.append((submission, incident_id, output_id, field, values[field], answer, respondent, None, "id", now))
+                corrected = None
+                if answer == "tidak_sesuai" and rng.random() < 0.75:
+                    corrected = _correction(rng, pool, field, values[field], index)
+                rows.append((submission, incident_id, output_id, field, values[field], answer, respondent, None, "id", now, corrected))
+            roll = rng.random()
+            if skeptical:
+                verdict = "tidak_sesuai" if roll < 0.65 else "tidak_tahu" if roll < 0.9 else "sesuai"
+            else:
+                verdict = "sesuai" if roll < 0.75 else "tidak_tahu" if roll < 0.95 else "tidak_sesuai"
+            rows.append((submission, incident_id, output_id, VERDICT_FIELD, None, verdict, respondent, None, "id", now, None))
     return rows
+
+
+def candidate_steps(group, attack_type):
+    """Langkah yang bisa dipilih lembaga; sama dengan candidateSteps di web/lib/prevention.ts."""
+    by_type, alias = flows.PREVENTION["by_type"], flows.PREVENTION["alias"]
+    keys = [f"group:{group}"] if group in flows.PREVENTION["by_group"] else []
+    types = [alias.get(t, t) for t in flows.attack_types(attack_type or "")]
+    known = list(dict.fromkeys(t for t in types if t in by_type and t != "cyber_attack"))
+    for name in known + ["cyber_attack"]:
+        keys.extend(f"type:{name}:{j}" for j in range(len(by_type[name])))
+    return keys
 
 
 def pick_reviews(cards):
@@ -116,9 +199,10 @@ def seed(log=print, with_survey=True, institutions=None, overlap=False):
 def seed_survey(cards, rng, log=print):
     now = get_timestamp()
     rows = survey_rows(cards[:SURVEY_INCIDENTS], rng, now)
+    _ensure_survey_table()
     insert = (
         "INSERT INTO survey_responses (submission_id, incident_id, card_output_id, field, shown_value, answer,"
-        " respondent, ip_hash, lang, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        " respondent, ip_hash, lang, created_at, corrected_value) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
     for start in range(0, len(rows), 200):
         _write_input([(insert, list(r)) for r in rows[start : start + 200]])
@@ -146,7 +230,9 @@ def seed_reviews(cards, institutions=None, log=print, overlap=False):
     sessions = {}
     from csais.survey import fetch_rows
 
+    _write_input([(REVIEWS_SCHEMA, [])])  # tabel kosong bila web belum pernah menyimpan keputusan
     done = {row[0] for row in fetch_rows(f"SELECT incident_id FROM official_reviews WHERE reason_text LIKE '{DEMO_NOTE}%'") or []}
+    pool = alternatives(cards)
     picks = pick_overlap(cards) if overlap else pick_reviews(cards[SURVEY_INCIDENTS:])
     for inst, card, (status, reason, target_wrong) in picks:
         if (institutions and inst not in institutions) or card[0] in done:
@@ -160,9 +246,15 @@ def seed_reviews(cards, institutions=None, log=print, overlap=False):
         session = sessions[inst]
         if session is None:
             continue
+        wrong = bool(target_wrong and card[3])
+        steps = candidate_steps(card[7], card[2])
         body = {
             "incident_id": card[0], "output_id": int(card[1]), "status": status, "reason": reason,
-            "fields": {"target": "salah"} if target_wrong and card[3] else {},
+            "fields": {"target": "salah"} if wrong else {},
+            "corrections": {"target": _correction(random.Random(card[0]), pool, "target", card[3], len(card[0]))} if wrong else {},
+            # langkah lembaga: dua langkah terakhir yang relevan (sering berbeda dari saran mesin)
+            "prevention": steps[-2:] if status != "dibantah" else [],
+            "prevention_text": ADVICE[inst] if status == "dikonfirmasi" else "",
             "note": f"{DEMO_NOTE}: keputusan contoh untuk pengujian alur, bukan pernyataan resmi {INSTITUTION_NAMES.get(inst, inst)}.",
         }
         response = session.post(f"{PORTAL_URL}/api/portal/review", json=body, timeout=60)

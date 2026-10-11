@@ -72,6 +72,55 @@ def test_fetch_from_file(tmp_path, monkeypatch):
     )
     conn.commit()
     conn.close()
-    assert survey.fetch_responses() == [("INC-A", "target", None, "sesuai", "r1")]
+    assert survey.fetch_responses() == [("INC-A", "target", None, "sesuai", "r1", None)]
     monkeypatch.delenv("SURVEY_DATABASE_URL")
     assert survey.fetch_responses() is None
+
+
+def test_fetch_from_old_table_without_corrections(tmp_path, monkeypatch):
+    path = tmp_path / "survey.db"
+    conn = sqlite3.connect(path)
+    conn.execute(survey.SURVEY_SCHEMA.replace(",\n        corrected_value TEXT", ""))
+    conn.execute(
+        "INSERT INTO survey_responses (submission_id, incident_id, card_output_id, field, shown_value,"
+        " answer, respondent, created_at) VALUES ('s1', 'INC-A', 1, 'target', NULL, 'sesuai', 'r1', 't')"
+    )
+    conn.commit()
+    conn.close()
+    monkeypatch.setenv("SURVEY_DATABASE_URL", f"file:{path}")
+    assert "corrected_value" not in survey.table_columns("survey_responses")
+    assert survey.fetch_responses() == [("INC-A", "target", None, "sesuai", "r1", None)]
+
+
+def test_corrections_replace_value_judged_wrong(temp_conn):
+    _pipeline_tables(temp_conn)
+    flows.record_d1(temp_conn)
+    wrong = [("INC-A", "target", "Bank X", "tidak_sesuai", f"r{i}", value)
+             for i, value in enumerate(["Bank Y", " bank  y ", "Bank Z"])]
+    survey.record_d2(temp_conn, wrong + _answers("INC-A", "attack_type", "phishing", "sesuai", 3))
+    a = _latest(temp_conn, "INC-A", "D2")
+    assert (a["status"], a["target"], a["attack_type"]) == ("tidak_sesuai", "Bank Y", "phishing")
+    assert json.loads(a["basis"])["corrections"] == {"target": {"value": "Bank Y", "votes": 2, "given": 3}}
+
+
+def test_correction_ignored_when_field_not_decided_wrong(temp_conn):
+    _pipeline_tables(temp_conn)
+    flows.record_d1(temp_conn)
+    responses = [("INC-A", "target", "Bank X", "tidak_sesuai", "r0", "Bank Y")] + _answers("INC-A", "target", "Bank X", "sesuai", 3, start=1)
+    survey.record_d2(temp_conn, responses)
+    a = _latest(temp_conn, "INC-A", "D2")
+    assert a["target"] == "Bank X" and "corrections" not in json.loads(a["basis"])
+
+
+@pytest.mark.parametrize(
+    "answer, expected",
+    [("sesuai", "benar"), ("tidak_sesuai", "hoaks"), ("tidak_tahu", "belum_pasti")],
+)
+def test_verdict_question(temp_conn, answer, expected):
+    _pipeline_tables(temp_conn)
+    flows.record_d1(temp_conn)
+    survey.record_d2(temp_conn, _answers("INC-A", survey.VERDICT_FIELD, None, answer, 3))
+    a = _latest(temp_conn, "INC-A", "D2")
+    assert json.loads(a["basis"])["verdict"] == expected
+    assert a["status"] == flows.PENDING  # kolom kartu belum dinilai
+    assert survey.VERDICT_FIELD not in json.loads(a["field_status"])

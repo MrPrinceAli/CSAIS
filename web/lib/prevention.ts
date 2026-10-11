@@ -46,6 +46,21 @@ export function preventionKeys(group: string, types: string[]): PreventionKeys {
   return { steps, channels: [...keys] };
 }
 
+/**
+ * Semua langkah yang relevan untuk satu incident, sebagai pilihan lembaga di
+ * portal: langkah kelompok sasaran, semua langkah tiap jenis serangannya, lalu
+ * langkah umum serangan siber.
+ */
+export function candidateSteps(group: string, types: string[]): string[] {
+  const keys: string[] = [];
+  if (BY_GROUP[group]) keys.push(`group:${group}`);
+  const known = [...new Set(types.map((t) => ALIAS[t] ?? t).filter((t) => BY_TYPE[t]))];
+  for (const t of [...known.filter((t) => t !== "cyber_attack"), "cyber_attack"]) {
+    BY_TYPE[t].forEach((_, j) => keys.push(`type:${t}:${j}`));
+  }
+  return keys;
+}
+
 /** Teks satu langkah dari kuncinya; null bila kunci tidak dikenal. */
 export function tipText(key: string, lang: Lang): string | null {
   const [kind, name, index] = key.split(":");

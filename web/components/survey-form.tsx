@@ -1,11 +1,18 @@
 "use client";
 
-/* Formulir survei publik (alur D2): satu kartu inti, tiga pilihan per kolom. */
+/*
+ * Formulir survei publik (alur D2): satu kartu inti, tiga pilihan per kolom.
+ * Kolom yang dijawab tidak sesuai membuka isian nilai yang benar menurut
+ * berita; di akhir ada satu pertanyaan kesimpulan ("benar terjadi?").
+ */
 import { useState } from "react";
 
-export type SurveyFieldView = { key: string; label: string; value: string | null };
+export type SurveyFieldView = { key: string; label: string; value: string | null; options?: { value: string; label: string }[] };
 type Strings = {
   answers: Record<string, string>;
+  correction: string;
+  happened: string;
+  happenedAnswers: Record<string, string>;
   submit: string;
   sending: string;
   chooseOne: string;
@@ -18,6 +25,7 @@ type Strings = {
 const OPTIONS = ["sesuai", "tidak_sesuai", "tidak_tahu"] as const;
 const TONE: Record<string, string> = { sesuai: "var(--good)", tidak_sesuai: "var(--high)", tidak_tahu: "var(--muted)" };
 const RESPONDENT_KEY = "csais-respondent";
+const VERDICT_FIELD = "kejadian"; // sama dengan VERDICT_FIELD di lib/survey.ts
 
 /** Penanda acak per peramban, untuk menghitung responden berbeda; tidak memuat data pribadi. */
 function respondentId(): string | null {
@@ -35,6 +43,7 @@ function respondentId(): string | null {
 
 export function SurveyForm({ lang, incidentId, outputId, fields, nextHref, strings, onDone, compact = false }: { lang: string; incidentId: string; outputId: number; fields: SurveyFieldView[]; nextHref?: string; strings: Strings; onDone?: () => void; compact?: boolean }) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [corrections, setCorrections] = useState<Record<string, string>>({});
   const [state, setState] = useState<"idle" | "sending" | "done" | "error" | "empty">("idle");
 
   async function submit(event: React.FormEvent) {
@@ -48,7 +57,7 @@ export function SurveyForm({ lang, incidentId, outputId, fields, nextHref, strin
       const response = await fetch("/api/survey", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ incident_id: incidentId, output_id: outputId, answers, respondent: respondentId(), lang }),
+        body: JSON.stringify({ incident_id: incidentId, output_id: outputId, answers, corrections, respondent: respondentId(), lang }),
       });
       setState(response.ok ? "done" : "error");
       if (response.ok && onDone) window.setTimeout(onDone, 2500);
@@ -70,6 +79,61 @@ export function SurveyForm({ lang, incidentId, outputId, fields, nextHref, strin
     );
   }
 
+  const prefix = compact ? "pop-" : "";
+  const choices = (key: string, labels: Record<string, string>) => (
+    <div className="flex flex-wrap gap-1.5">
+      {OPTIONS.map((option) => {
+        const id = `${prefix}answer-${key}-${option}`;
+        const checked = answers[key] === option;
+        return (
+          <label
+            key={option}
+            htmlFor={id}
+            className={`cursor-pointer rounded-md border ${compact ? "px-2 py-1 text-[12px]" : "px-3 py-1.5 text-[13px]"} transition-colors focus-within:outline focus-within:outline-2`}
+            style={{ borderColor: checked ? TONE[option] : "var(--line)", color: checked ? TONE[option] : undefined, background: checked ? `color-mix(in srgb, ${TONE[option]} 12%, transparent)` : undefined }}
+          >
+            <input
+              id={id}
+              type="radio"
+              name={key}
+              value={option}
+              checked={checked}
+              onChange={() => {
+                setAnswers((prev) => ({ ...prev, [key]: option }));
+                setState("idle");
+              }}
+              className="sr-only"
+            />
+            {labels[option]}
+          </label>
+        );
+      })}
+    </div>
+  );
+  const correctionInput = (field: SurveyFieldView) => {
+    const id = `${prefix}correction-${field.key}`;
+    const value = corrections[field.key] ?? "";
+    const set = (v: string) => setCorrections((prev) => ({ ...prev, [field.key]: v }));
+    const cls = `field ${compact ? "text-[12.5px]" : "text-[13px]"}`;
+    return (
+      <label htmlFor={id} className={`flex flex-col gap-1 text-[12px] text-muted ${compact ? "" : "sm:col-span-2"}`}>
+        {strings.correction}
+        {field.options ? (
+          <select id={id} value={value} onChange={(e) => set(e.target.value)} className={cls}>
+            <option value="">–</option>
+            {field.options.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input id={id} type={field.key === "attack_date" ? "date" : "text"} value={value} onChange={(e) => set(e.target.value)} maxLength={120} className={cls} />
+        )}
+      </label>
+    );
+  };
+
   return (
     <form onSubmit={submit} className="card flex flex-col">
       {fields.map((field) => (
@@ -79,36 +143,15 @@ export function SurveyForm({ lang, incidentId, outputId, fields, nextHref, strin
             <span className="label">{field.label}</span>
             <span className={`${compact ? "text-[13.5px]" : "text-[15px]"} font-semibold ${field.value ? "" : "font-normal text-muted"}`}>{field.value ?? strings.unknown}</span>
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {OPTIONS.map((option) => {
-              const id = `answer-${field.key}-${option}`;
-              const checked = answers[field.key] === option;
-              return (
-                <label
-                  key={option}
-                  htmlFor={`${compact ? "pop-" : ""}${id}`}
-                  className={`cursor-pointer rounded-md border ${compact ? "px-2 py-1 text-[12px]" : "px-3 py-1.5 text-[13px]"} transition-colors focus-within:outline focus-within:outline-2`}
-                  style={{ borderColor: checked ? TONE[option] : "var(--line)", color: checked ? TONE[option] : undefined, background: checked ? `color-mix(in srgb, ${TONE[option]} 12%, transparent)` : undefined }}
-                >
-                  <input
-                    id={`${compact ? "pop-" : ""}${id}`}
-                    type="radio"
-                    name={field.key}
-                    value={option}
-                    checked={checked}
-                    onChange={() => {
-                      setAnswers((prev) => ({ ...prev, [field.key]: option }));
-                      setState("idle");
-                    }}
-                    className="sr-only"
-                  />
-                  {strings.answers[option]}
-                </label>
-              );
-            })}
-          </div>
+          {choices(field.key, strings.answers)}
+          {answers[field.key] === "tidak_sesuai" ? correctionInput(field) : null}
         </fieldset>
       ))}
+      <fieldset className={`grid gap-2 border-b border-line ${compact ? "px-3 py-2.5" : "px-4 py-3.5 gap-3"}`}>
+        <legend className="sr-only">{strings.happened}</legend>
+        <span className={`${compact ? "text-[13px]" : "text-[14px]"} font-semibold`}>{strings.happened}</span>
+        {choices(VERDICT_FIELD, strings.happenedAnswers)}
+      </fieldset>
       <div className={`flex flex-wrap items-center gap-3 ${compact ? "px-3 py-3" : "px-4 py-3.5"}`}>
         <button type="submit" className="btn btn-primary" disabled={state === "sending"}>
           {state === "sending" ? strings.sending : strings.submit}

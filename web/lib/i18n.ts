@@ -234,7 +234,8 @@ const id = {
     note: "snapshot terakhir tiap alur",
     names: { D1: "Mesin", D2: "Survei publik", D3: "Lembaga", D4: "Catatan resmi" },
     empty: "belum ada",
-    rows: { attack_type: "Jenis serangan", target: "Korban", threat_actor: "Pelaku", attack_date: "Tanggal kejadian", location: "Lokasi", target_group: "Kelompok sasaran", status: "Status", tier: "Tingkat", prevention: "Langkah preventif", reason: "Alasan lembaga" },
+    rows: { attack_type: "Jenis serangan", target: "Korban", threat_actor: "Pelaku", attack_date: "Tanggal kejadian", location: "Lokasi", target_group: "Kelompok sasaran", status: "Status", tier: "Tingkat", prevention: "Langkah preventif", reason: "Alasan lembaga", verdict: "Kesimpulan" },
+    verdicts: { benar: "Benar terjadi", hoaks: "Hoaks", belum_pasti: "Belum pasti" } as Record<string, string>,
     status: { tinggi: "trust tinggi", sedang: "trust sedang", rendah: "trust rendah", tanpa_skor: "belum dinilai", sesuai: "sesuai", tidak_sesuai: "tidak sesuai", tidak_tahu: "tidak tahu", dikonfirmasi: "dikonfirmasi", dibantah: "dibantah", sebagian: "sebagian", belum: "belum cukup jawaban" } as Record<string, string>,
     tiers: { peringatan_dini: "Peringatan dini", waspada: "Waspada", rekomendasi_resmi: "Rekomendasi resmi", peringatan_hoaks: "Peringatan hoaks" } as Record<string, string>,
     history: (n: string) => `D1 berubah ${n} kali`,
@@ -302,8 +303,10 @@ const id = {
       prevention: "Langkah preventif",
       bias: "Bias pilihan",
       biasNote: "sebaran tingkat trust D1: semua incident dibanding yang sampai ke D4",
+      verdict: "Kesimpulan bersama",
+      verdictNote: "satu kesimpulan per alur; kolom terakhir membandingkan yang sudah pasti dengan D4",
     },
-    cols: { field: "Kolom", precision: "Precision", recall: "Recall", f1: "F1", agree: "Setuju", kappa: "Kappa", hours: "Median jam", all: "Semua incident", reached: "Sampai D4" },
+    cols: { sameD4: "Sama dengan D4", field: "Kolom", precision: "Precision", recall: "Recall", f1: "F1", agree: "Setuju", kappa: "Kappa", hours: "Median jam", all: "Semua incident", reached: "Sampai D4" },
     hoax: { refuted: "Dibantah lembaga (D4)", machine: "Lolos mesin (trust tinggi/sedang)", public: "Lolos publik (survei sesuai)" },
     prevention: { jaccard: "Kemiripan langkah D1 dan D4 (Jaccard)", added: "Catatan D4 yang menambah langkah di luar D1" },
     detailLink: "Lihat perbandingan per incident di halaman detail incident.",
@@ -325,7 +328,11 @@ const id = {
     decision: "Keputusan",
     reason: "Alasan",
     fieldsTitle: "Kolom kartu (opsional)",
-    fieldsHint: "Tandai kolom yang salah bila ada; kolom yang tidak ditandai tidak dinilai.",
+    fieldsHint: "Tandai kolom yang salah bila ada, lalu tulis nilai yang benar; kolom yang tidak ditandai tidak dinilai.",
+    correction: "Nilai yang benar",
+    preventionTitle: "Langkah pencegahan dari lembaga (opsional)",
+    preventionHint: "Centang langkah yang dianjurkan lembaga untuk incident ini. Kosongkan bila tidak ada.",
+    preventionText: "Imbauan lembaga (teks bebas, opsional)",
     fieldValues: { benar: "Benar", salah: "Salah" } as Record<string, string>,
     note: "Catatan tambahan (opsional)",
     source: "Tautan siaran pers atau pernyataan resmi (opsional)",
@@ -361,11 +368,14 @@ const id = {
   },
   survey: {
     title: "Survei publik",
-    lead: "Periksa apakah kartu hasil mesin ini sesuai dengan beritanya. Nilai tiap kolom berdasarkan artikel di bawah, bukan dugaan apakah kejadiannya benar terjadi.",
+    lead: "Periksa apakah kartu hasil mesin ini sesuai dengan beritanya. Nilai tiap kolom berdasarkan artikel di bawah, bukan dugaan apakah kejadiannya benar terjadi; pendapat Anda soal itu ditanyakan terpisah di akhir.",
     card: "Kartu inti (D1)",
     read: "Baca beritanya",
     more: (n: string) => `dan ${n} artikel lain`,
     answers: { sesuai: "Sesuai", tidak_sesuai: "Tidak sesuai", tidak_tahu: "Tidak tahu" } as Record<string, string>,
+    correction: "Yang benar menurut berita (opsional)",
+    happened: "Menurut Anda, kejadian ini benar terjadi?",
+    happenedAnswers: { sesuai: "Ya, benar terjadi", tidak_sesuai: "Tidak, hoaks", tidak_tahu: "Tidak tahu" } as Record<string, string>,
     submit: "Kirim penilaian",
     sending: "Mengirim…",
     chooseOne: "Pilih jawaban untuk minimal satu kolom.",
@@ -730,7 +740,8 @@ const en: Dict = {
     note: "latest snapshot of each flow",
     names: { D1: "Machine", D2: "Public survey", D3: "Institution", D4: "Official record" },
     empty: "none yet",
-    rows: { attack_type: "Attack type", target: "Victim", threat_actor: "Actor", attack_date: "Event date", location: "Location", target_group: "Target group", status: "Status", tier: "Level", prevention: "Preventive steps", reason: "Institution's reason" },
+    rows: { attack_type: "Attack type", target: "Victim", threat_actor: "Actor", attack_date: "Event date", location: "Location", target_group: "Target group", status: "Status", tier: "Level", prevention: "Preventive steps", reason: "Institution's reason", verdict: "Conclusion" },
+    verdicts: { benar: "Happened", hoaks: "Hoax", belum_pasti: "Not yet certain" },
     status: { tinggi: "high trust", sedang: "medium trust", rendah: "low trust", tanpa_skor: "not scored", sesuai: "matches", tidak_sesuai: "does not match", tidak_tahu: "unsure", dikonfirmasi: "confirmed", dibantah: "refuted", sebagian: "partly", belum: "not enough answers" },
     tiers: { peringatan_dini: "Early warning", waspada: "Caution", rekomendasi_resmi: "Official advice", peringatan_hoaks: "Hoax warning" },
     history: (n) => `D1 changed ${n} times`,
@@ -798,8 +809,10 @@ const en: Dict = {
       prevention: "Preventive steps",
       bias: "Selection bias",
       biasNote: "D1 trust levels: all incidents versus those that reached D4",
+      verdict: "Shared conclusion",
+      verdictNote: "one conclusion per flow; the last column compares the certain ones with D4",
     },
-    cols: { field: "Field", precision: "Precision", recall: "Recall", f1: "F1", agree: "Agree", kappa: "Kappa", hours: "Median hours", all: "All incidents", reached: "Reached D4" },
+    cols: { sameD4: "Same as D4", field: "Field", precision: "Precision", recall: "Recall", f1: "F1", agree: "Agree", kappa: "Kappa", hours: "Median hours", all: "All incidents", reached: "Reached D4" },
     hoax: { refuted: "Refuted by institutions (D4)", machine: "Passed the machine (high/medium trust)", public: "Passed the public (survey matches)" },
     prevention: { jaccard: "Overlap of D1 and D4 steps (Jaccard)", added: "D4 records adding steps beyond D1" },
     detailLink: "See the per-incident comparison on each incident's detail page.",
@@ -821,7 +834,11 @@ const en: Dict = {
     decision: "Decision",
     reason: "Reason",
     fieldsTitle: "Card fields (optional)",
-    fieldsHint: "Mark any field that is wrong; unmarked fields are not judged.",
+    fieldsHint: "Mark any field that is wrong, then enter the correct value; unmarked fields are not judged.",
+    correction: "Correct value",
+    preventionTitle: "Institution's preventive steps (optional)",
+    preventionHint: "Tick the steps your institution recommends for this incident. Leave empty if none.",
+    preventionText: "Institution advisory (free text, optional)",
     fieldValues: { benar: "Correct", salah: "Wrong" },
     note: "Additional note (optional)",
     source: "Link to press release or official statement (optional)",
@@ -857,11 +874,14 @@ const en: Dict = {
   },
   survey: {
     title: "Public survey",
-    lead: "Check whether this machine-made card matches the news. Judge each field against the articles below, not on whether you believe the event happened.",
+    lead: "Check whether this machine-made card matches the news. Judge each field against the articles below, not on whether you believe the event happened; your view on that is asked separately at the end.",
     card: "Core card (D1)",
     read: "Read the news",
     more: (n) => `and ${n} more articles`,
     answers: { sesuai: "Matches", tidak_sesuai: "Does not match", tidak_tahu: "Not sure" },
+    correction: "What the news actually says (optional)",
+    happened: "In your view, did this really happen?",
+    happenedAnswers: { sesuai: "Yes, it happened", tidak_sesuai: "No, it's a hoax", tidak_tahu: "Not sure" },
     submit: "Send review",
     sending: "Sending…",
     chooseOne: "Answer at least one field.",
@@ -1097,6 +1117,15 @@ const ATTACK_EN: Record<string, string> = {
   file_inclusion: "File inclusion",
   unknown: "Not identified",
 };
+
+/** Pilihan jenis serangan (kode dan label) untuk koreksi di survei dan portal. */
+export function attackOptions(lang: Lang): { value: string; label: string }[] {
+  const table = lang === "en" ? ATTACK_EN : ATTACK_ID;
+  return Object.entries(table)
+    .filter(([key]) => key !== "unknown")
+    .map(([value, label]) => ({ value, label }))
+    .sort((a, b) => a.label.localeCompare(b.label, lang));
+}
 
 export function attackLabel(value: string | null | undefined, lang: Lang): string {
   const key = (value ?? "").split(",")[0].trim().toLowerCase();
