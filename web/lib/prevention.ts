@@ -22,9 +22,25 @@ const CHANNELS = data.channels as Record<string, Channel>;
 const SCAM_TYPES = new Set(data.scam_types);
 const LINK_TYPES = new Set(data.link_types);
 const FINANCE_GROUPS = new Set(data.finance_groups);
+const AUDIENCES = data.audiences as Record<string, Text>;
+const TOPICS = data.topics as Record<string, Text>;
+
+/** Semua kunci sasaran dan materi literasi (pilihan lembaga di portal). */
+export const AUDIENCE_KEYS = Object.keys(AUDIENCES);
+export const TOPIC_KEYS = Object.keys(TOPICS);
 
 export type Prevention = { steps: string[]; channels: Channel[] };
 export type PreventionKeys = { steps: string[]; channels: string[] };
+
+/* Sasaran dan materi literasi per incident dipilih pipeline (literacy_for di
+   csais/flows.py) atau lembaga di portal; web hanya menampilkan teksnya. */
+export function audienceText(key: string, lang: Lang): string | null {
+  return AUDIENCES[key]?.[lang] ?? null;
+}
+
+export function topicText(key: string, lang: Lang): string | null {
+  return TOPICS[key]?.[lang] ?? null;
+}
 
 /** Kunci tiga langkah (kelompok, lalu jenis serangan teratas) dan kanal pelaporan. */
 export function preventionKeys(group: string, types: string[]): PreventionKeys {

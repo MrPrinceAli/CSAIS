@@ -55,6 +55,13 @@ ADVICE = {
     "KOMDIGI": "Jangan membuka tautan atau lampiran dari pengirim yang tidak dikenal; laporkan konten ke aduankonten.id.",
     "POLRI": "Simpan bukti percakapan dan transfer, lalu laporkan ke patrolisiber.id.",
 }
+# Sasaran dan materi literasi yang lazim ditekankan tiap lembaga (tiruan)
+LITERACY = {
+    "BSSN": (["staf_ti", "pimpinan"], ["pembaruan_sistem", "cadangan_data"]),
+    "OJK": (["investor_ritel", "nasabah_bank"], ["cek_legalitas", "data_pribadi"]),
+    "KOMDIGI": (["pengguna_medsos", "orang_tua"], ["kenali_phishing", "cek_fakta"]),
+    "POLRI": (["ibu_rumah_tangga", "lansia"], ["rekayasa_sosial", "lapor_insiden"]),
+}
 
 CARDS_SQL = """
     SELECT o.incident_id, o.output_id, o.attack_type, o.target, o.threat_actor, o.attack_date, o.location,
@@ -185,6 +192,18 @@ def pick_reviews(cards):
     return picks
 
 
+def literacy_plan(inst, card, status):
+    """Pilihan lembaga: satu sasaran dan materi dari saran mesin, sisanya khas lembaga."""
+    machine = flows.literacy_for(card[7] or "", flows.attack_types(card[2]), hoax=status == "dibantah")
+    audience, topics = LITERACY[inst]
+    if status == "dibantah":
+        return {"audience": audience, "topics": ["cek_fakta", "lapor_insiden"]}
+    return {
+        "audience": list(dict.fromkeys(machine["audience"][:1] + audience)),
+        "topics": list(dict.fromkeys(machine["topics"][:1] + topics)),
+    }
+
+
 def seed(log=print, with_survey=True, institutions=None, overlap=False):
     """Isi data uji; ``with_survey=False`` dan ``institutions`` untuk melanjutkan sebagian,
     ``overlap`` untuk keputusan lembaga pada incident yang sudah disurvei."""
@@ -255,6 +274,7 @@ def seed_reviews(cards, institutions=None, log=print, overlap=False):
             # langkah lembaga: dua langkah terakhir yang relevan (sering berbeda dari saran mesin)
             "prevention": steps[-2:] if status != "dibantah" else [],
             "prevention_text": ADVICE[inst] if status == "dikonfirmasi" else "",
+            "literacy": literacy_plan(inst, card, status),
             "note": f"{DEMO_NOTE}: keputusan contoh untuk pengujian alur, bukan pernyataan resmi {INSTITUTION_NAMES.get(inst, inst)}.",
         }
         response = session.post(f"{PORTAL_URL}/api/portal/review", json=body, timeout=60)

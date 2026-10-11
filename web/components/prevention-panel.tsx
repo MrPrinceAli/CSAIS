@@ -1,7 +1,7 @@
 /* Status peringatan terkini dan langkah pencegahan satu incident (incident_tiers). */
 import type { IncidentTier } from "@/lib/queries";
 import { getDict, type Lang } from "@/lib/i18n";
-import { channelOf, tipText } from "@/lib/prevention";
+import { audienceText, channelOf, tipText, topicText } from "@/lib/prevention";
 import { DemoChip, TierBadge } from "@/components/ui";
 
 const TONE: Record<string, string> = {
@@ -11,7 +11,7 @@ const TONE: Record<string, string> = {
   peringatan_hoaks: "var(--high)",
 };
 
-function parse(raw: string | null): { steps?: string[]; channels?: string[]; text?: string | null } {
+function parse(raw: string | null): { steps?: string[]; channels?: string[]; text?: string | null; audience?: string[]; topics?: string[] } {
   if (!raw) return {};
   try {
     return JSON.parse(raw);
@@ -26,6 +26,8 @@ export function PreventionPanel({ tier, lang, compact = false }: { tier: Inciden
   const plan = parse(tier.prevention);
   const steps = (plan.steps ?? []).map((k) => tipText(k, lang)).filter((s): s is string => Boolean(s));
   const channels = (plan.channels ?? []).map(channelOf).filter((c) => c !== null);
+  const audience = (plan.audience ?? []).map((k) => audienceText(k, lang)).filter((s): s is string => Boolean(s));
+  const topics = (plan.topics ?? []).map((k) => topicText(k, lang)).filter((s): s is string => Boolean(s));
   const source =
     tier.source_flow === "D4" ? p.source.D4(tier.institution ?? "lembaga") : tier.source_flow === "D2" ? p.source.D2 : p.source.D1;
   return (
@@ -57,6 +59,32 @@ export function PreventionPanel({ tier, lang, compact = false }: { tier: Inciden
               <li key={s}>{s}</li>
             ))}
           </ul>
+        </div>
+      ) : null}
+      {!compact && (audience.length || topics.length) ? (
+        <div className="grid gap-3 border-t border-line pt-3 sm:grid-cols-2">
+          {audience.length ? (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[12px] text-muted">{p.audience}</span>
+              <span className="flex flex-wrap gap-1.5">
+                {audience.map((a) => (
+                  <span key={a} className="chip">
+                    {a}
+                  </span>
+                ))}
+              </span>
+            </div>
+          ) : null}
+          {topics.length ? (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[12px] text-muted">{p.topics}</span>
+              <ol className="flex list-decimal flex-col gap-0.5 pl-5 text-[13px] text-soft">
+                {topics.map((topic) => (
+                  <li key={topic}>{topic}</li>
+                ))}
+              </ol>
+            </div>
+          ) : null}
         </div>
       ) : null}
       {channels.length ? (

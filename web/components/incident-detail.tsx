@@ -3,7 +3,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getIncident, getIncidentTier, getPublisherDomains, getRelatedIncidents, type DocumentRow } from "@/lib/queries";
 import { domainOf, formatters, incidentTitle, publisherOf, severity } from "@/lib/format";
-import { attackLabel, evidenceRole, getDict, L, languageLabel, type Lang } from "@/lib/i18n";
+import { attackLabel, evidenceRole, getDict, groupLabel, L, languageLabel, type Lang } from "@/lib/i18n";
+import { FLOW_TONE, latestByFlow, parseJson, VERDICT_CLASS, verdictOf, type Flow } from "@/lib/flow-view";
+import type { FlowOutput } from "@/lib/queries";
 import { trustFromStored, trustScore, TRUST_COLOR } from "@/lib/trust";
 import { FlowCompare } from "@/components/flow-compare";
 import { SafeImage } from "@/components/safe-image";
@@ -49,6 +51,18 @@ function sourceOf(d: DocumentRow, publisherDomains: Record<string, string>): { l
   const publisher = publisherOf(d.title);
   if (publisher) return { label: publisher, domain: publisherDomains[publisher.toLowerCase()] ?? null };
   return { label: d.source_name ?? "—", domain: null };
+}
+
+const JUDGED_BY: Flow[] = ["D2", "D3", "D4"];
+const JUDGMENT_CLASS: Record<string, string> = { sesuai: "text-good", dikonfirmasi: "text-good", tidak_sesuai: "text-high", dibantah: "text-high" };
+type CardField = "attack_type" | "target" | "threat_actor" | "attack_date" | "location" | "target_group";
+
+function cardValue(field: CardField, value: string | null, lang: Lang): string | null {
+  if (!value) return null;
+  if (field === "attack_type") return [...new Set(value.split(",").map((v) => attackLabel(v, lang)))].join(", ");
+  if (field === "target_group") return value.split(",").map((g) => groupLabel(g.trim(), lang)).join(", ");
+  if (field === "location") return value.split(",").map((v) => v.trim().replace(/^./, (c) => c.toUpperCase())).join(", ");
+  return value;
 }
 
 type Row = { d: DocumentRow; i: number };
@@ -104,6 +118,42 @@ export async function IncidentDetailView({ lang, id, variant = "page" }: { lang:
   const firstSeen = dates.reduce((a, b) => (new Date(b) < new Date(a) ? b : a), dates[0] ?? "");
   const lastDates = [incident.last_published_date, ...docs.map((d) => d.published_date)].filter((v): v is string => Boolean(v));
   const lastSeen = lastDates.reduce((a, b) => (new Date(b) > new Date(a) ? b : a), lastDates[0] ?? "");
+
+  const latest = latestByFlow(flows);
+
+  /** Satu baris per alur yang sudah punya keluaran: label alur berwarna dan isinya. */
+  const flowLine = (render: (o: FlowOutput) => React.ReactNode, only: Flow[] = ["D1", ...JUDGED_BY]) => {
+    const present = only.filter((flow) => latest[flow]);
+    if (!present.length) return null;
+    return (
+      <ul className="flex flex-col gap-0.5 text-[12px]">
+        {present.map((flow) => (
+          <li key={flow} className="grid grid-cols-[92px_minmax(0,1fr)] gap-1.5">
+            <span className="font-mono font-semibold" style={{ color: FLOW_TONE[flow] }}>
+              {flow} <span className="font-sans font-normal text-muted">{t.flows.names[flow]}</span>
+            </span>
+            <span className="min-w-0">{render(latest[flow] as FlowOutput)}</span>
+          </li>
+        ))}
+      </ul>
+    );
+  };
+
+  /** Penilaian publik dan lembaga untuk satu kolom kartu, beserta nilai koreksinya bila berbeda. */
+  const judgments = (field: CardField) => {
+    const judged = JUDGED_BY.filter((flow) => parseJson<Record<string, string>>(latest[flow]?.field_status)?.[field]);
+    if (!judged.length) return null;
+    return flowLine((o) => {
+      const status = parseJson<Record<string, string>>(o.field_status)?.[field] ?? "";
+      const corrected = o[field] && o[field] !== latest.D1?.[field] ? cardValue(field, o[field], lang) : null;
+      return (
+        <span>
+          <span className={JUDGMENT_CLASS[status] ?? "text-soft"}>{t.flows.status[status] ?? status}</span>
+          {corrected ? <span className="text-fg"> → {corrected}</span> : null}
+        </span>
+      );
+    }, judged);
+  };
 
   /** Satu artikel dalam kronologi; peran hanya ditulis bila bukan "independen". */
   const renderRow = ({ d, i }: Row) => {
@@ -264,7 +314,7 @@ export async function IncidentDetailView({ lang, id, variant = "page" }: { lang:
       <div className="grid items-start gap-4 lg:grid-cols-[280px_minmax(0,1fr)_280px]">
         <section className="flex flex-col gap-4">
           <div>
-            <SectionTitle>{t.detail.claimsTitle}</SectionTitle>
+            <SectionTitle aside={latest.D2 || latest.D3 || latest.D4 ? t.detail.claimsNote : undefined}>{t.detail.claimsTitle}</SectionTitle>
             <div className="card flex flex-col gap-3.5 p-3.5">
               {claims.map((c, i) => (
                 <div key={c.key} className="fade-up flex flex-col gap-1" style={{ "--i": i } as React.CSSProperties}>
@@ -282,8 +332,31 @@ export async function IncidentDetailView({ lang, id, variant = "page" }: { lang:
                     />
                   </span>
                   {c.variants > 1 ? <span className="text-[12px] text-high">{t.detail.variants(c.variants)}</span> : null}
+                  {judgments(c.key)}
                 </div>
               ))}
+              {(["location", "target_group"] as const).map((key) => (
+                <div key={key} className="flex flex-col gap-1 border-t border-line pt-3">
+                  <span className="text-[12px] text-muted">{t.detail.claims[key]}</span>
+                  <span className="text-[14px] font-semibold">{cardValue(key, latest.D1?.[key] ?? null, lang) ?? <span className="font-normal text-muted">{t.common.unknown}</span>}</span>
+                  {judgments(key)}
+                </div>
+              ))}
+              {latest.D1 ? (
+                <>
+                  <div className="flex flex-col gap-1.5 border-t border-line pt-3">
+                    <span className="text-[12px] text-muted">{t.detail.claims.status}</span>
+                    {flowLine((o) => <span className={JUDGMENT_CLASS[o.status] ?? "text-soft"}>{t.flows.status[o.status] ?? o.status}</span>)}
+                  </div>
+                  <div className="flex flex-col gap-1.5 border-t border-line pt-3">
+                    <span className="text-[12px] text-muted">{t.detail.claims.verdict}</span>
+                    {flowLine((o) => {
+                      const v = verdictOf(o);
+                      return <span className={`font-semibold ${VERDICT_CLASS[v]}`}>{t.flows.verdicts[v]}</span>;
+                    })}
+                  </div>
+                </>
+              ) : null}
             </div>
           </div>
           {related.length ? (

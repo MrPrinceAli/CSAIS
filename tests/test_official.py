@@ -178,7 +178,8 @@ def test_load_reviews_from_file(tmp_path, monkeypatch):
 def test_portal_corrections_and_prevention(temp_conn):
     _pipeline_tables(temp_conn)
     flows.record_d1(temp_conn)
-    review = REVIEW + (None, '{"target": "Bank Y", "location": "  "}', '["type:phishing:1", 5]', "Ganti kata sandi.")
+    literacy = '{"audience": ["staf_keuangan", "pimpinan"], "topics": ["kenali_phishing"]}'
+    review = REVIEW + (None, '{"target": "Bank Y", "location": "  "}', '["type:phishing:1", 5]', "Ganti kata sandi.", literacy)
     statement = official.review_rows([review])[0]
     assert (statement["target"], statement["location"]) == ("Bank Y", None)
     assert (statement["prevention_keys"], statement["prevention_text"]) == ("type:phishing:1", "Ganti kata sandi.")
@@ -186,7 +187,14 @@ def test_portal_corrections_and_prevention(temp_conn):
     d3 = _latest(temp_conn, "INC-A", "D3")
     assert d3["target"] == "Bank Y" and json.loads(d3["field_status"])["target"] == "dibantah"
     d4 = _latest(temp_conn, "INC-A", "D4")
-    assert json.loads(d4["prevention"]) == {"steps": ["type:phishing:1"], "text": "Ganti kata sandi."}
+    assert json.loads(d4["prevention"]) == {
+        "steps": ["type:phishing:1"], "text": "Ganti kata sandi.",
+        "audience": ["staf_keuangan", "pimpinan"], "topics": ["kenali_phishing"],
+    }
+    official.store_statements(temp_conn, [statement], "t")  # kolom CSV baru ikut tersimpan
+    flows.record_tiers(temp_conn)
+    tier = json.loads(temp_conn.execute("SELECT prevention FROM incident_tiers WHERE incident_id = 'INC-A'").fetchone()[0])
+    assert (tier["audience"], tier["topics"]) == (["staf_keuangan", "pimpinan"], ["kenali_phishing"])
     metrics = flow_compare.compute(temp_conn)
     jaccard = next(m for m in metrics if m["metric"] == "preventif_jaccard_d1_d4")
     assert jaccard["n"] == 1

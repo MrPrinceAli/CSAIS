@@ -20,7 +20,8 @@ Ukuran yang dihitung:
   hoaks        incident yang dibantah D4: berapa yang dinilai tinggi/sedang
                oleh mesin dan berapa yang dinilai sesuai oleh publik
   preventif    rata-rata Jaccard kunci langkah D1 dengan D4, dan porsi D4
-               yang menambah langkah di luar D1
+               yang menambah langkah di luar D1; juga Jaccard sasaran literasi
+               dan materi literasi D1 dengan D4 (yang diisi lembaga saja)
   bias         sebaran tingkat trust D1 seluruh incident dibanding incident
                yang sampai ke D4 (D4 cenderung kasus besar dan jelas)
   kesimpulan   satu kesimpulan bersama per alur (benar, hoaks, belum_pasti):
@@ -254,6 +255,16 @@ def compare(latest, first, seen):
         added += bool(official_steps - machine_steps)
     add("preventif_jaccard_d1_d4", "D1-D4", "", statistics.mean(scores) if scores else None, len(scores))
     add("preventif_d4_menambah", "D4", "", added / len(scores) if scores else None, len(scores))
+    for key, metric in (("audience", "literasi_sasaran_jaccard_d1_d4"), ("topics", "literasi_materi_jaccard_d1_d4")):
+        scores = []
+        for incident_id, official in d4.items():
+            machine = d1.get(incident_id)
+            chosen = set(_json(official.get("prevention")).get(key) or [])
+            if machine is None or not chosen:
+                continue
+            suggested = set(_json(machine.get("prevention")).get(key) or [])
+            scores.append(len(suggested & chosen) / len(suggested | chosen))
+        add(metric, "D1-D4", "", statistics.mean(scores) if scores else None, len(scores))
 
     # Kesimpulan bersama dan kecocokannya dengan D4
     for flow in FLOWS:

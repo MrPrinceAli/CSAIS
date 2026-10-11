@@ -17,6 +17,10 @@ type Strings = {
   preventionTitle: string;
   preventionHint: string;
   preventionText: string;
+  literacyTitle: string;
+  literacyHint: string;
+  audienceLabel: string;
+  topicsLabel: string;
   fieldValues: Record<string, string>;
   note: string;
   source: string;
@@ -46,13 +50,33 @@ function Choice({ id, name, checked, tone, label, onChange }: { id: string; name
   );
 }
 
-export function ReviewCard({ incidentId, outputId, fields, steps, reasonsByStatus, strings }: { incidentId: string; outputId: number; fields: ReviewFieldView[]; steps: ReviewStep[]; reasonsByStatus: Record<string, string[]>; strings: Strings }) {
+export function ReviewCard({
+  incidentId,
+  outputId,
+  fields,
+  steps,
+  audiences,
+  topics,
+  reasonsByStatus,
+  strings,
+}: {
+  incidentId: string;
+  outputId: number;
+  fields: ReviewFieldView[];
+  steps: ReviewStep[];
+  audiences: ReviewStep[];
+  topics: ReviewStep[];
+  reasonsByStatus: Record<string, string[]>;
+  strings: Strings;
+}) {
   const [status, setStatus] = useState<string | null>(null);
   const [reason, setReason] = useState<string | null>(null);
   const [marks, setMarks] = useState<Record<string, string>>({});
   const [corrections, setCorrections] = useState<Record<string, string>>({});
   const [chosenSteps, setChosenSteps] = useState<string[]>([]);
   const [preventionText, setPreventionText] = useState("");
+  const [chosenAudience, setChosenAudience] = useState<string[]>([]);
+  const [chosenTopics, setChosenTopics] = useState<string[]>([]);
   const [note, setNote] = useState("");
   const [source, setSource] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "saved" | "error" | "noreason">("idle");
@@ -78,6 +102,7 @@ export function ReviewCard({ incidentId, outputId, fields, steps, reasonsByStatu
           corrections,
           prevention: chosenSteps,
           prevention_text: preventionText,
+          literacy: { audience: chosenAudience, topics: chosenTopics },
           note,
           source_url: source,
         }),
@@ -224,6 +249,44 @@ export function ReviewCard({ incidentId, outputId, fields, steps, reasonsByStatu
             {strings.preventionText}
             <textarea id={`${prefix}-prevention-text`} value={preventionText} onChange={(e) => setPreventionText(e.target.value)} maxLength={600} rows={2} className="field text-[13px]" />
           </label>
+        </details>
+      ) : null}
+      {status ? (
+        <details className="rounded-md border border-line p-3">
+          <summary className="cursor-pointer text-[13px] text-soft">{strings.literacyTitle}</summary>
+          <p className="mt-2 text-[12px] text-muted">{strings.literacyHint}</p>
+          {(
+            [
+              [strings.audienceLabel, "aud", audiences, chosenAudience, setChosenAudience],
+              [strings.topicsLabel, "top", topics, chosenTopics, setChosenTopics],
+            ] as const
+          ).map(([label, key, options, chosen, setChosen]) => (
+            <fieldset key={key} className="mt-3 flex flex-col gap-1.5">
+              <legend className="label mb-1.5">{label}</legend>
+              <div className="flex flex-wrap gap-1.5">
+                {options.map((option) => {
+                  const checked = chosen.includes(option.key);
+                  return (
+                    <label
+                      key={option.key}
+                      htmlFor={`${prefix}-${key}-${option.key}`}
+                      className="cursor-pointer rounded-md border px-2.5 py-1 text-[12.5px] transition-colors focus-within:outline focus-within:outline-2"
+                      style={{ borderColor: checked ? "var(--accent)" : "var(--line)", color: checked ? "var(--accent)" : undefined }}
+                    >
+                      <input
+                        id={`${prefix}-${key}-${option.key}`}
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => setChosen((s) => (e.target.checked ? [...s, option.key] : s.filter((k) => k !== option.key)))}
+                        className="sr-only"
+                      />
+                      {option.text}
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+          ))}
         </details>
       ) : null}
       <div className="flex flex-wrap items-center gap-3">

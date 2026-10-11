@@ -74,7 +74,30 @@ def prevention_for(group, types):
     if any(t in PREVENTION["link_types"] for t in types):
         channels.append("konten")
     channels.append("patrol")
-    return {"steps": steps, "channels": channels}
+    return {"steps": steps, "channels": channels, **literacy_for(group, types)}
+
+
+LITERACY_MAX = 3  # sasaran literasi dan materi per incident
+
+
+def literacy_for(group, types, hoax=False):
+    """Sasaran literasi (siapa yang perlu diedukasi) dan materinya, dari kelompok
+    sasaran dan jenis serangan; untuk hoaks, materinya cek fakta dan pelaporan."""
+    alias = PREVENTION["alias"]
+    known = [alias.get(t, t) for t in types]
+    audience = list(PREVENTION["audience_by_group"].get(group, []))[:2]
+    for attack_type in known:
+        audience.extend(PREVENTION["audience_by_type"].get(attack_type, []))
+    audience = list(dict.fromkeys(audience))[:LITERACY_MAX] or ["pengguna_medsos"]
+    if hoax:
+        topics = list(PREVENTION["topics_hoax"])
+    else:
+        topics = list(PREVENTION["topics_by_group"].get(group, []))
+        by_type = PREVENTION["topics_by_type"]
+        for i, attack_type in enumerate([t for t in known if t in by_type] or ["cyber_attack"]):
+            topics.extend(by_type[attack_type][: 2 if i == 0 else 1])
+        topics.append("lapor_insiden")
+    return {"audience": audience, "topics": list(dict.fromkeys(topics))[:LITERACY_MAX]}
 
 
 # --- Database ---
@@ -376,12 +399,19 @@ def tier_rows(d1, d2, d3, d4):
             basis = _loads(official.get("basis"))
             plan = _loads(official.get("prevention"))
             if official["tier"] == "peringatan_hoaks":
-                prevention = {"steps": HOAX_STEPS, "channels": ["konten"], "text": plan.get("text")}
+                hoax = literacy_for(machine.get("target_group") or "", [], hoax=True)
+                prevention = {
+                    "steps": HOAX_STEPS, "channels": ["konten"], "text": plan.get("text"),
+                    "audience": plan.get("audience") or base.get("audience") or hoax["audience"],
+                    "topics": plan.get("topics") or hoax["topics"],
+                }
             else:
                 prevention = {
                     "steps": plan.get("steps") or base.get("steps") or [],
                     "channels": base.get("channels") or [],
                     "text": plan.get("text"),
+                    "audience": plan.get("audience") or base.get("audience") or [],
+                    "topics": plan.get("topics") or base.get("topics") or [],
                 }
             row.update(tier=official["tier"], source_flow="D4", institution=basis.get("institution"),
                        reason=official.get("reason"), prevention=prevention, demo=bool(basis.get("demo")))

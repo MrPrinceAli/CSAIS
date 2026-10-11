@@ -144,10 +144,11 @@ const REVIEWS_SCHEMA = `
     signed TEXT,
     corrections TEXT,
     prevention_keys TEXT,
-    prevention_text TEXT
+    prevention_text TEXT,
+    literacy TEXT
   )`;
 // Kolom yang ditambahkan setelah tabel pertama dibuat
-const REVIEWS_COLUMNS = ["signer TEXT", "signature TEXT", "signed TEXT", "corrections TEXT", "prevention_keys TEXT", "prevention_text TEXT"];
+const REVIEWS_COLUMNS = ["signer TEXT", "signature TEXT", "signed TEXT", "corrections TEXT", "prevention_keys TEXT", "prevention_text TEXT", "literacy TEXT"];
 
 let reviewsReady: Promise<unknown> | null = null;
 
@@ -179,6 +180,7 @@ export type OfficialReview = {
   corrections: Record<string, string>;
   preventionKeys: string[];
   preventionText: string | null;
+  literacy: { audience: string[]; topics: string[] };
   sourceUrl: string | null;
   reviewer: string | null;
 };
@@ -187,14 +189,15 @@ export async function saveReview(r: OfficialReview): Promise<number> {
   const db = await reviewsClient();
   const result = await db.execute({
     sql: `INSERT INTO official_reviews (incident_id, card_output_id, institution, status, reason_code, reason_text, field_status, source_url, reviewer, created_at, signer, signature, signed,
-            corrections, prevention_keys, prevention_text)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            corrections, prevention_keys, prevention_text, literacy)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       r.incidentId, r.cardOutputId, r.institution, r.status, r.reasonCode, r.reasonText, JSON.stringify(r.fieldStatus), r.sourceUrl, r.reviewer,
       new Date().toISOString(), r.signed.signer, r.signed.signature, JSON.stringify(r.signed),
       Object.keys(r.corrections).length ? JSON.stringify(r.corrections) : null,
       r.preventionKeys.length ? JSON.stringify(r.preventionKeys) : null,
       r.preventionText,
+      r.literacy.audience.length || r.literacy.topics.length ? JSON.stringify(r.literacy) : null,
     ],
   });
   return Number(result.lastInsertRowid ?? 0);

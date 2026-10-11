@@ -5,7 +5,7 @@
 #   scripts/demo_local.sh mirror   # salin data situs live ke database/demo.db
 #   scripts/demo_local.sh start    # jalankan website di http://localhost:3100
 #   scripts/demo_local.sh seed     # (server harus jalan) isi data uji D2 - D4,
-#                                  # lalu hitung ulang alur, peringatan, dan metrik
+#                                  # lalu hitung ulang alur D1 - D4, peringatan, dan metrik
 #
 # Portal lembaga lokal memakai kunci uji database/demo-portal.json; password
 # tiap lembaga ada di TEST_PASSWORDS di bawah. Semua berkas demo ada di
@@ -37,6 +37,7 @@ case "${1:-start}" in
       CSAIS_WEB_URL="http://localhost:$PORT" PORTAL_PASSWORDS="$TEST_PASSWORDS"
     rm -f "$SURVEY"
     python3 -c "from csais import flows; from csais.db import get_connection; print('Keluaran demo lama dihapus:', flows.purge_demo_outputs(get_connection()))"
+    python3 -c "from csais import flows; flows.run()"
     python3 main.py --seed-demo
     DEMO_OVERLAP=1 python3 main.py --seed-demo
     python3 -c "

@@ -1,7 +1,7 @@
 import { queryOne } from "@/lib/db";
 import { signDecision } from "@/lib/attestation";
 import { institutionFromSession, KEY_COOKIE_NAME, keyFromSession, REASONS, REVIEW_FIELDS, REVIEW_STATUSES, SESSION_COOKIE_NAME, type ReviewStatus } from "@/lib/portal";
-import { tipText } from "@/lib/prevention";
+import { AUDIENCE_KEYS, tipText, TOPIC_KEYS } from "@/lib/prevention";
 import { CORRECTION_MAX, saveReview, surveyConfigured } from "@/lib/survey";
 
 /**
@@ -9,7 +9,8 @@ import { CORRECTION_MAX, saveReview, surveyConfigured } from "@/lib/survey";
  * cookie sesi (bukan dari isi permintaan), kartu diperiksa ke flow_outputs, dan
  * keputusan ditandatangani (EIP-712) dengan kunci lembaga dari cookie kunci.
  * Kolom yang ditandai salah boleh membawa nilai yang benar, dan lembaga boleh
- * memilih langkah pencegahan sendiri; keduanya ikut ditandatangani (``fields``).
+ * memilih langkah pencegahan, sasaran literasi, dan materi literasi sendiri;
+ * semuanya ikut ditandatangani (``fields``).
  */
 const MAX_STEPS = 12;
 export const dynamic = "force-dynamic";
@@ -64,6 +65,10 @@ export async function POST(request: Request) {
   const rawSteps = Array.isArray(body.prevention) ? body.prevention : [];
   const preventionKeys = [...new Set(rawSteps.filter((k): k is string => typeof k === "string" && tipText(k, "id") !== null))].slice(0, MAX_STEPS);
   const preventionText = typeof body.prevention_text === "string" ? body.prevention_text.trim().slice(0, 600) || null : null;
+  const rawLiteracy = body.literacy && typeof body.literacy === "object" ? (body.literacy as Record<string, unknown>) : {};
+  const pick = (value: unknown, allowed: string[]) =>
+    [...new Set(Array.isArray(value) ? value.filter((k): k is string => typeof k === "string" && allowed.includes(k)) : [])].slice(0, MAX_STEPS);
+  const literacy = { audience: pick(rawLiteracy.audience, AUDIENCE_KEYS), topics: pick(rawLiteracy.topics, TOPIC_KEYS) };
   const note = typeof body.note === "string" ? body.note.trim().slice(0, 600) || null : null;
   const source = typeof body.source_url === "string" && /^https?:\/\/\S{3,500}$/.test(body.source_url.trim()) ? body.source_url.trim() : null;
   const reviewer = typeof body.reviewer === "string" ? body.reviewer.trim().slice(0, 80) || null : null;
@@ -81,7 +86,7 @@ export async function POST(request: Request) {
       institution: inst,
       status,
       reason,
-      fields: JSON.stringify({ status: fieldStatus, values: corrections, prevention: preventionKeys, prevention_text: preventionText ?? "" }),
+      fields: JSON.stringify({ status: fieldStatus, values: corrections, prevention: preventionKeys, prevention_text: preventionText ?? "", literacy }),
       note: note ?? "",
       source: source ?? "",
       issuedAt: Math.floor(Date.now() / 1000),
@@ -98,6 +103,7 @@ export async function POST(request: Request) {
       corrections,
       preventionKeys,
       preventionText,
+      literacy,
       sourceUrl: source,
       reviewer,
     });

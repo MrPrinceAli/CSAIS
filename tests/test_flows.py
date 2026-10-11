@@ -25,7 +25,34 @@ import compare_flows  # noqa: E402
     ],
 )
 def test_prevention_for(group, types, steps, channels):
-    assert flows.prevention_for(group, types) == {"steps": steps, "channels": channels}
+    plan = flows.prevention_for(group, types)
+    assert (plan["steps"], plan["channels"]) == (steps, channels)
+    assert plan["audience"] == flows.literacy_for(group, types)["audience"]
+
+
+@pytest.mark.parametrize(
+    "group, types, hoax, audience, topics",
+    [
+        ("STUDENTS", ["phishing"], False, ["pelajar_sma", "mahasiswa", "staf_keuangan"], ["kenali_phishing", "verifikasi_dua_langkah", "lapor_insiden"]),
+        ("CHILDREN", ["data_leak"], False, ["anak", "orang_tua", "pengguna_medsos"], ["keamanan_anak", "data_pribadi", "kata_sandi"]),
+        ("", [], False, ["pengguna_medsos"], ["kenali_phishing", "pembaruan_sistem", "lapor_insiden"]),
+        ("SMES", ["investment_scam", "ransomware"], False, ["pelaku_umkm", "staf_keuangan", "investor_ritel"], ["cek_legalitas", "rekayasa_sosial", "cadangan_data"]),
+        ("ELDERLY", ["online_scam"], True, ["lansia", "ibu_rumah_tangga"], ["cek_fakta", "lapor_insiden"]),
+    ],
+)
+def test_literacy_for(group, types, hoax, audience, topics):
+    assert flows.literacy_for(group, types, hoax=hoax) == {"audience": audience, "topics": topics}
+
+
+def test_literacy_keys_exist_in_catalog():
+    catalog = flows.PREVENTION
+    for keys in catalog["audience_by_group"].values():
+        assert set(keys) <= set(catalog["audiences"])
+    for keys in catalog["audience_by_type"].values():
+        assert set(keys) <= set(catalog["audiences"])
+    for keys in list(catalog["topics_by_type"].values()) + list(catalog["topics_by_group"].values()) + [catalog["topics_hoax"]]:
+        assert set(keys) <= set(catalog["topics"])
+    assert set(catalog["topics_by_type"]) <= set(catalog["by_type"])
 
 
 def test_prevention_keys_resolve_to_text():

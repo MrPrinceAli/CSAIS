@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { getPortalCardsById, getPortalQueue, type PortalCard } from "@/lib/queries";
 import { formatters, incidentTitle } from "@/lib/format";
 import { attackLabel, attackOptions, getDict, isLang, L, type Lang } from "@/lib/i18n";
-import { candidateSteps, tipText } from "@/lib/prevention";
+import { AUDIENCE_KEYS, audienceText, candidateSteps, TOPIC_KEYS, tipText, topicText } from "@/lib/prevention";
 import { INSTITUTION_LOGO, INSTITUTION_NAME, INSTITUTIONS, institutionFromSession, MANDATE, portalConfigured, REASONS, REVIEW_FIELDS, SESSION_COOKIE_NAME } from "@/lib/portal";
 import { reviewsBy } from "@/lib/survey";
 import { OrgLogo } from "@/components/org-logo";
@@ -82,6 +82,8 @@ export default async function PortalPage({ params, searchParams }: { params: Pro
   }
   const base = L(lang, "/portal");
   const types = attackOptions(lang);
+  const audiences = AUDIENCE_KEYS.map((key) => ({ key, text: audienceText(key, lang) ?? key }));
+  const topics = TOPIC_KEYS.map((key) => ({ key, text: topicText(key, lang) ?? key }));
   const stepsOf = (c: PortalCard) =>
     candidateSteps(c.card.target_group ?? "", (c.card.attack_type ?? "").split(",").map((v) => v.trim()).filter(Boolean)).map((key) => ({
       key,
@@ -96,6 +98,10 @@ export default async function PortalPage({ params, searchParams }: { params: Pro
     preventionTitle: p.preventionTitle,
     preventionHint: p.preventionHint,
     preventionText: p.preventionText,
+    literacyTitle: p.literacyTitle,
+    literacyHint: p.literacyHint,
+    audienceLabel: p.audienceLabel,
+    topicsLabel: p.topicsLabel,
     fieldValues: p.fieldValues,
     note: p.note,
     source: p.source,
@@ -172,6 +178,8 @@ export default async function PortalPage({ params, searchParams }: { params: Pro
                   ...(field === "attack_type" ? { options: types } : {}),
                 }))}
                 steps={stepsOf(c)}
+                audiences={audiences}
+                topics={topics}
                 reasonsByStatus={REASONS}
                 strings={reviewStrings}
               />

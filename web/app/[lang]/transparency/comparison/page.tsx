@@ -185,6 +185,8 @@ export default async function ComparisonPage({ params }: { params: Promise<Param
                 [
                   [c.prevention.jaccard, ratio(find("preventif_jaccard_d1_d4", "D1-D4")), n(find("preventif_jaccard_d1_d4", "D1-D4"))],
                   [c.prevention.added, pct(find("preventif_d4_menambah", "D4")), n(find("preventif_d4_menambah", "D4"))],
+                  [c.prevention.audience, ratio(find("literasi_sasaran_jaccard_d1_d4", "D1-D4")), n(find("literasi_sasaran_jaccard_d1_d4", "D1-D4"))],
+                  [c.prevention.topics, ratio(find("literasi_materi_jaccard_d1_d4", "D1-D4")), n(find("literasi_materi_jaccard_d1_d4", "D1-D4"))],
                 ],
               )}
             </section>

@@ -1,51 +1,16 @@
-/* Perbandingan keluaran alur D1 - D4 satu incident: snapshot terakhir tiap alur berdampingan. */
+/*
+ * Perbandingan keluaran preventif alur D1 - D4 satu incident: sasaran literasi,
+ * materi literasi, langkah pencegahan, dan alasan lembaga berdampingan. Nilai
+ * kolom kartu dan penilaiannya ada di bagian "Klaim terekstrak".
+ */
 import type { FlowOutput } from "@/lib/queries";
 import { formatters } from "@/lib/format";
 import Link from "next/link";
-import { attackLabel, getDict, groupLabel, L, type Lang } from "@/lib/i18n";
-import { channelOf, tipText } from "@/lib/prevention";
+import { getDict, L, type Lang } from "@/lib/i18n";
+import { FLOW_TONE, FLOWS, latestByFlow, parseJson, type PreventionPlan } from "@/lib/flow-view";
+import { audienceText, channelOf, tipText, topicText } from "@/lib/prevention";
 import { recordUid } from "@/lib/records";
 import { DemoChip, SectionTitle } from "@/components/ui";
-
-const FLOWS = ["D1", "D2", "D3", "D4"] as const;
-const FIELDS = ["attack_type", "target", "threat_actor", "attack_date", "location", "target_group"] as const;
-type Field = (typeof FIELDS)[number];
-
-const FLOW_TONE: Record<string, string> = { D1: "var(--accent)", D2: "var(--med)", D3: "var(--chain)", D4: "var(--good)" };
-const TIER_CLASS: Record<string, string> = {
-  peringatan_dini: "text-accent",
-  waspada: "text-med",
-  rekomendasi_resmi: "text-good",
-  peringatan_hoaks: "text-high",
-};
-const STATUS_CLASS: Record<string, string> = {
-  sesuai: "text-good",
-  dikonfirmasi: "text-good",
-  tidak_sesuai: "text-high",
-  dibantah: "text-high",
-  sebagian: "text-med",
-};
-
-const VERDICT_CLASS: Record<string, string> = { benar: "text-good", hoaks: "text-high", belum_pasti: "text-muted" };
-const VERDICT_OF_STATUS: Record<string, string> = { tinggi: "benar", dikonfirmasi: "benar", dibantah: "hoaks" };
-
-/** Kesimpulan bersama satu keluaran; harus sama dengan verdict() di csais/flow_compare.py. */
-function verdictOf(o: FlowOutput): string {
-  if (o.flow === "D2") {
-    const value = parse<{ verdict?: string }>(o.basis)?.verdict;
-    return value && value in VERDICT_CLASS ? value : "belum_pasti";
-  }
-  return VERDICT_OF_STATUS[o.status] ?? "belum_pasti";
-}
-
-function parse<T>(raw: string | null): T | null {
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return null;
-  }
-}
 
 /** Nama host tautan sumber pernyataan; null bila bukan URL http(s). */
 function hostOf(ref: string | null): string | null {
@@ -57,42 +22,51 @@ function hostOf(ref: string | null): string | null {
   }
 }
 
-function valueLabel(field: Field, value: string | null, lang: Lang): string | null {
-  if (!value) return null;
-  if (field === "attack_type") return [...new Set(value.split(",").map((v) => attackLabel(v, lang)))].join(", ");
-  if (field === "target_group") return groupLabel(value, lang);
-  if (field === "location") return value.split(",").map((v) => v.trim().replace(/^./, (c) => c.toUpperCase())).join(", ");
-  return value;
-}
-
 export function FlowCompare({ lang, incidentId, outputs }: { lang: Lang; incidentId: string; outputs: FlowOutput[] }) {
   const t = getDict(lang);
   const f = formatters(lang);
-  const latest: Partial<Record<(typeof FLOWS)[number], FlowOutput>> = {};
-  for (const o of outputs) if (o.status !== "dihapus") latest[o.flow] = o;
+  const latest = latestByFlow(outputs);
   const d1History = outputs.filter((o) => o.flow === "D1").length;
   if (!latest.D1) return null;
 
   const cell = "px-3 py-2.5 align-top";
   const empty = <span className="text-muted">–</span>;
+  const plans = Object.fromEntries(FLOWS.map((flow) => [flow, parseJson<PreventionPlan>(latest[flow]?.prevention)]));
 
-  const fieldCell = (o: FlowOutput | undefined, field: Field) => {
-    if (!o) return empty;
-    const label = valueLabel(field, o[field], lang);
-    const judged = parse<Record<string, string>>(o.field_status)?.[field];
+  const chips = (keys: string[] | undefined, text: (key: string, lang: Lang) => string | null) => {
+    const labels = (keys ?? []).map((k) => text(k, lang)).filter((s): s is string => Boolean(s));
+    if (!labels.length) return empty;
     return (
-      <div className="flex flex-col gap-0.5">
-        <span className={label ? "text-fg" : "text-muted"}>{label ?? t.common.unknown}</span>
-        {judged ? <span className={`text-[11.5px] ${STATUS_CLASS[judged] ?? "text-muted"}`}>{t.flows.status[judged] ?? judged}</span> : null}
-      </div>
+      <span className="flex flex-wrap gap-1.5">
+        {labels.map((label) => (
+          <span key={label} className="chip">
+            {label}
+          </span>
+        ))}
+      </span>
     );
   };
 
-  const preventionCell = (o: FlowOutput | undefined) => {
-    const plan = parse<{ steps?: string[]; channels?: string[]; text?: string }>(o?.prevention ?? null);
+  const topicsCell = (plan: PreventionPlan | null) => {
+    const topics = (plan?.topics ?? []).map((k) => topicText(k, lang)).filter((s): s is string => Boolean(s));
+    if (!topics.length) return empty;
+    return (
+      <ol className="flex flex-col gap-1 text-soft">
+        {topics.map((topic, i) => (
+          <li key={topic} className="grid grid-cols-[20px_minmax(0,1fr)] gap-1">
+            <span className="font-mono text-[11.5px] text-muted">{i + 1}.</span>
+            <span>{topic}</span>
+          </li>
+        ))}
+      </ol>
+    );
+  };
+
+  const stepsCell = (plan: PreventionPlan | null) => {
     if (!plan) return empty;
     const steps = (plan.steps ?? []).map((k) => tipText(k, lang)).filter((s): s is string => Boolean(s));
     const channels = (plan.channels ?? []).map(channelOf).filter((c) => c !== null);
+    if (!steps.length && !plan.text && !channels.length) return empty;
     return (
       <div className="flex flex-col gap-1.5">
         {steps.length ? (
@@ -120,9 +94,20 @@ export function FlowCompare({ lang, incidentId, outputs }: { lang: Lang; inciden
     );
   };
 
+  const row = (label: string, render: (flow: (typeof FLOWS)[number]) => React.ReactNode, last = false) => (
+    <tr className={last ? "" : "border-b border-line"}>
+      <th className={`${cell} label text-left font-medium`}>{label}</th>
+      {FLOWS.map((flow) => (
+        <td key={flow} className={cell}>
+          {render(flow)}
+        </td>
+      ))}
+    </tr>
+  );
+
   return (
     <div>
-      <SectionTitle aside={`${t.flows.note} · ${t.flows.history(f.num(d1History))} · ${t.flows.since(f.date(outputs[0].recorded_at))}`}>{t.flows.title}</SectionTitle>
+      <SectionTitle aside={`${t.flows.outputNote} · ${t.flows.history(f.num(d1History))} · ${t.flows.since(f.date(outputs[0].recorded_at))}`}>{t.flows.title}</SectionTitle>
       <div className="card overflow-x-auto">
         <table className="w-full min-w-[760px] table-fixed border-collapse text-[13px]">
           <thead>
@@ -136,7 +121,7 @@ export function FlowCompare({ lang, incidentId, outputs }: { lang: Lang; inciden
                     </span>
                     <span className="text-[13px] text-fg">{t.flows.names[flow]}</span>
                     <span className="text-[11.5px] font-normal text-muted">{latest[flow] ? f.date(latest[flow].recorded_at) : t.flows.empty}</span>
-                    {parse<{ demo?: boolean }>(latest[flow]?.basis ?? null)?.demo ? <DemoChip lang={lang} /> : null}
+                    {parseJson<{ demo?: boolean }>(latest[flow]?.basis)?.demo ? <DemoChip lang={lang} /> : null}
                     {flow === "D2" ? (
                       <Link href={`${L(lang, "/survey")}?id=${encodeURIComponent(incidentId)}`} className="text-[11.5px] font-normal">
                         {t.flows.judge}
@@ -148,85 +133,32 @@ export function FlowCompare({ lang, incidentId, outputs }: { lang: Lang; inciden
             </tr>
           </thead>
           <tbody>
-            {FIELDS.map((field) => (
-              <tr key={field} className="border-b border-line">
-                <th className={`${cell} label text-left font-medium`}>{t.flows.rows[field]}</th>
-                {FLOWS.map((flow) => (
-                  <td key={flow} className={cell}>
-                    {fieldCell(latest[flow], field)}
-                  </td>
-                ))}
-              </tr>
-            ))}
-            <tr className="border-b border-line">
-              <th className={`${cell} label text-left font-medium`}>{t.flows.rows.status}</th>
-              {FLOWS.map((flow) => {
+            {row(t.flows.audience, (flow) => chips(plans[flow]?.audience, audienceText))}
+            {row(t.flows.topics, (flow) => topicsCell(plans[flow]))}
+            {row(t.flows.rows.prevention, (flow) => stepsCell(plans[flow]))}
+            {row(
+              t.flows.rows.reason,
+              (flow) => {
                 const o = latest[flow];
+                if (!o?.reason) return empty;
                 return (
-                  <td key={flow} className={cell}>
-                    {o ? <span className={STATUS_CLASS[o.status] ?? "text-soft"}>{t.flows.status[o.status] ?? o.status}</span> : empty}
-                  </td>
+                  <span className="flex flex-col gap-1">
+                    <span className="text-soft">{o.reason}</span>
+                    {flow === "D4" ? (
+                      <Link href={`${L(lang, "/verify")}?q=${recordUid(o.output_id, o.output_hash)}`} className="text-[11.5px]">
+                        {t.flows.verifyRecord}
+                      </Link>
+                    ) : null}
+                    {hostOf(o.source_ref) ? (
+                      <a href={o.source_ref ?? "#"} target="_blank" rel="noreferrer" className="text-[11.5px]">
+                        {hostOf(o.source_ref)}
+                      </a>
+                    ) : null}
+                  </span>
                 );
-              })}
-            </tr>
-            <tr className="border-b border-line">
-              <th className={`${cell} label text-left font-medium`}>{t.flows.rows.verdict}</th>
-              {FLOWS.map((flow) => {
-                const o = latest[flow];
-                const v = o ? verdictOf(o) : null;
-                return (
-                  <td key={flow} className={cell}>
-                    {v ? <span className={`font-semibold ${VERDICT_CLASS[v]}`}>{t.flows.verdicts[v]}</span> : empty}
-                  </td>
-                );
-              })}
-            </tr>
-            <tr className="border-b border-line">
-              <th className={`${cell} label text-left font-medium`}>{t.flows.rows.tier}</th>
-              {FLOWS.map((flow) => {
-                const tier = latest[flow]?.tier;
-                return (
-                  <td key={flow} className={cell}>
-                    {tier ? <span className={`font-semibold ${TIER_CLASS[tier] ?? ""}`}>{t.flows.tiers[tier] ?? tier}</span> : empty}
-                  </td>
-                );
-              })}
-            </tr>
-            <tr className="border-b border-line">
-              <th className={`${cell} label text-left font-medium`}>{t.flows.rows.prevention}</th>
-              {FLOWS.map((flow) => (
-                <td key={flow} className={cell}>
-                  {preventionCell(latest[flow])}
-                </td>
-              ))}
-            </tr>
-            <tr>
-              <th className={`${cell} label text-left font-medium`}>{t.flows.rows.reason}</th>
-              {FLOWS.map((flow) => {
-                const o = latest[flow];
-                return (
-                  <td key={flow} className={cell}>
-                    {o?.reason ? (
-                      <span className="flex flex-col gap-1">
-                        <span className="text-soft">{o.reason}</span>
-                        {flow === "D4" ? (
-                          <Link href={`${L(lang, "/verify")}?q=${recordUid(o.output_id, o.output_hash)}`} className="text-[11.5px]">
-                            {t.flows.verifyRecord}
-                          </Link>
-                        ) : null}
-                        {hostOf(o.source_ref) ? (
-                          <a href={o.source_ref ?? "#"} target="_blank" rel="noreferrer" className="text-[11.5px]">
-                            {hostOf(o.source_ref)}
-                          </a>
-                        ) : null}
-                      </span>
-                    ) : (
-                      empty
-                    )}
-                  </td>
-                );
-              })}
-            </tr>
+              },
+              true,
+            )}
           </tbody>
         </table>
       </div>

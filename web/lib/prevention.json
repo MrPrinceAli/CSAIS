@@ -1,5 +1,5 @@
 {
-  "_comment": "Panduan pencegahan umum, dipakai bersama oleh web (lib/prevention.ts) dan pipeline (csais/flows.py). Kunci langkah: type:<jenis>:<urutan>, group:<kelompok>, dan hoax:<urutan> (untuk incident yang dibantah lembaga).",
+  "_comment": "Panduan pencegahan umum, dipakai bersama oleh web (lib/prevention.ts) dan pipeline (csais/flows.py). Kunci langkah: type:<jenis>:<urutan>, group:<kelompok>, dan hoax:<urutan> (untuk incident yang dibantah lembaga). Sasaran literasi (audiences) dan materi (topics) per incident dipilih pipeline (literacy_for di csais/flows.py); web hanya menampilkan teksnya.",
   "by_type": {
     "phishing": [
       {
@@ -254,5 +254,303 @@
       "id": "Periksa kabar serupa lewat situs dan akun resmi lembaga sebelum membagikannya.",
       "en": "Check similar news on the institution's official site and accounts before sharing."
     }
+  ],
+  "audiences": {
+    "pelajar_sma": {
+      "id": "Pelajar SMP, SMA, dan SMK",
+      "en": "Middle and high school students"
+    },
+    "mahasiswa": {
+      "id": "Mahasiswa",
+      "en": "University students"
+    },
+    "guru": {
+      "id": "Guru dan tenaga pendidik",
+      "en": "Teachers and school staff"
+    },
+    "orang_tua": {
+      "id": "Orang tua murid",
+      "en": "Parents"
+    },
+    "anak": {
+      "id": "Anak dan remaja pengguna gim dan media sosial",
+      "en": "Children and teens on games and social media"
+    },
+    "ibu_rumah_tangga": {
+      "id": "Ibu rumah tangga",
+      "en": "Homemakers"
+    },
+    "pengguna_medsos": {
+      "id": "Pengguna media sosial dan aplikasi pesan",
+      "en": "Social media and messaging users"
+    },
+    "nasabah_bank": {
+      "id": "Nasabah bank dan pengguna dompet digital",
+      "en": "Bank customers and e-wallet users"
+    },
+    "investor_ritel": {
+      "id": "Investor ritel dan pengguna aset kripto",
+      "en": "Retail investors and crypto users"
+    },
+    "staf_keuangan": {
+      "id": "Staf kantor bidang keuangan dan ekonomi",
+      "en": "Finance and economics office staff"
+    },
+    "staf_umum": {
+      "id": "Staf kantor umum dan administrasi",
+      "en": "General office and admin staff"
+    },
+    "staf_ti": {
+      "id": "Staf TI dan admin sistem",
+      "en": "IT staff and system administrators"
+    },
+    "pimpinan": {
+      "id": "Pimpinan dan manajer organisasi",
+      "en": "Executives and managers"
+    },
+    "pelaku_umkm": {
+      "id": "Pelaku UMKM dan pedagang daring",
+      "en": "Small business owners and online sellers"
+    },
+    "asn_layanan": {
+      "id": "ASN dan petugas layanan publik",
+      "en": "Civil servants and public service staff"
+    },
+    "pencari_kerja": {
+      "id": "Pencari kerja dan lulusan baru",
+      "en": "Job seekers and fresh graduates"
+    },
+    "lansia": {
+      "id": "Lansia dan keluarga pendampingnya",
+      "en": "Older adults and their caregivers"
+    }
+  },
+  "audience_by_group": {
+    "STUDENTS": [
+      "pelajar_sma",
+      "mahasiswa",
+      "guru"
+    ],
+    "CHILDREN": [
+      "anak",
+      "orang_tua",
+      "guru"
+    ],
+    "INDIVIDUALS": [
+      "pengguna_medsos",
+      "ibu_rumah_tangga"
+    ],
+    "EMPLOYEES": [
+      "staf_umum",
+      "staf_keuangan"
+    ],
+    "BUSINESSES": [
+      "pimpinan",
+      "staf_ti",
+      "staf_keuangan"
+    ],
+    "GOVERNMENT": [
+      "asn_layanan",
+      "staf_ti"
+    ],
+    "CIVIL_SERVANTS": [
+      "asn_layanan",
+      "staf_umum"
+    ],
+    "BANK_CUSTOMERS": [
+      "nasabah_bank",
+      "ibu_rumah_tangga"
+    ],
+    "SMES": [
+      "pelaku_umkm",
+      "staf_keuangan"
+    ],
+    "JOB_SEEKERS": [
+      "pencari_kerja",
+      "mahasiswa"
+    ],
+    "ELDERLY": [
+      "lansia",
+      "ibu_rumah_tangga"
+    ]
+  },
+  "audience_by_type": {
+    "investment_scam": [
+      "investor_ritel"
+    ],
+    "crypto_attack": [
+      "investor_ritel"
+    ],
+    "ransomware": [
+      "staf_ti",
+      "pimpinan"
+    ],
+    "vulnerability_exploitation": [
+      "staf_ti"
+    ],
+    "network_intrusion": [
+      "staf_ti"
+    ],
+    "ddos": [
+      "staf_ti"
+    ],
+    "phishing": [
+      "staf_keuangan"
+    ],
+    "credential_attack": [
+      "nasabah_bank"
+    ],
+    "online_scam": [
+      "ibu_rumah_tangga"
+    ],
+    "job_scam": [
+      "pencari_kerja"
+    ],
+    "mobile_attack": [
+      "pengguna_medsos"
+    ],
+    "social_engineering": [
+      "lansia"
+    ],
+    "data_breach": [
+      "pengguna_medsos"
+    ]
+  },
+  "topics": {
+    "kenali_phishing": {
+      "id": "Mengenali surel, SMS, dan tautan palsu",
+      "en": "Spotting fake emails, texts, and links"
+    },
+    "verifikasi_dua_langkah": {
+      "id": "Mengaktifkan verifikasi dua langkah",
+      "en": "Turning on two-step verification"
+    },
+    "kata_sandi": {
+      "id": "Kata sandi kuat dan pengelola kata sandi",
+      "en": "Strong passwords and password managers"
+    },
+    "data_pribadi": {
+      "id": "Melindungi data pribadi, OTP, dan PIN",
+      "en": "Protecting personal data, OTPs, and PINs"
+    },
+    "cek_legalitas": {
+      "id": "Mengecek legalitas investasi dan pinjaman di OJK",
+      "en": "Checking investment and loan licences with OJK"
+    },
+    "lowongan_palsu": {
+      "id": "Mengenali lowongan kerja palsu",
+      "en": "Spotting fake job offers"
+    },
+    "aplikasi_resmi": {
+      "id": "Bahaya berkas APK dan aplikasi tidak resmi",
+      "en": "The danger of APK files and unofficial apps"
+    },
+    "cadangan_data": {
+      "id": "Cadangan data dan pemulihan setelah ransomware",
+      "en": "Backups and recovery after ransomware"
+    },
+    "pembaruan_sistem": {
+      "id": "Pembaruan sistem dan tambalan keamanan",
+      "en": "System updates and security patches"
+    },
+    "rekayasa_sosial": {
+      "id": "Taktik rekayasa sosial dan penipuan lewat telepon",
+      "en": "Social engineering and phone scams"
+    },
+    "transaksi_aman": {
+      "id": "Transaksi daring yang aman",
+      "en": "Safe online transactions"
+    },
+    "keamanan_anak": {
+      "id": "Keamanan anak di gim dan media sosial",
+      "en": "Child safety in games and social media"
+    },
+    "deepfake": {
+      "id": "Mengenali deepfake dan suara tiruan",
+      "en": "Recognising deepfakes and cloned voices"
+    },
+    "cek_fakta": {
+      "id": "Memeriksa kebenaran informasi sebelum menyebarkan",
+      "en": "Checking information before sharing it"
+    },
+    "lapor_insiden": {
+      "id": "Cara melapor dan menyimpan bukti",
+      "en": "How to report and keep evidence"
+    }
+  },
+  "topics_by_type": {
+    "phishing": [
+      "kenali_phishing",
+      "verifikasi_dua_langkah"
+    ],
+    "malicious_link": [
+      "kenali_phishing",
+      "aplikasi_resmi"
+    ],
+    "malware": [
+      "aplikasi_resmi",
+      "pembaruan_sistem"
+    ],
+    "mobile_attack": [
+      "aplikasi_resmi",
+      "pembaruan_sistem"
+    ],
+    "ransomware": [
+      "cadangan_data",
+      "pembaruan_sistem"
+    ],
+    "data_breach": [
+      "data_pribadi",
+      "kata_sandi"
+    ],
+    "credential_attack": [
+      "kata_sandi",
+      "verifikasi_dua_langkah"
+    ],
+    "online_scam": [
+      "transaksi_aman",
+      "rekayasa_sosial"
+    ],
+    "job_scam": [
+      "lowongan_palsu",
+      "data_pribadi"
+    ],
+    "investment_scam": [
+      "cek_legalitas",
+      "rekayasa_sosial"
+    ],
+    "crypto_attack": [
+      "cek_legalitas",
+      "kata_sandi"
+    ],
+    "social_engineering": [
+      "rekayasa_sosial",
+      "deepfake"
+    ],
+    "vulnerability_exploitation": [
+      "pembaruan_sistem",
+      "cadangan_data"
+    ],
+    "network_intrusion": [
+      "pembaruan_sistem",
+      "kata_sandi"
+    ],
+    "ddos": [
+      "pembaruan_sistem",
+      "lapor_insiden"
+    ],
+    "cyber_attack": [
+      "kenali_phishing",
+      "pembaruan_sistem"
+    ]
+  },
+  "topics_by_group": {
+    "CHILDREN": [
+      "keamanan_anak"
+    ]
+  },
+  "topics_hoax": [
+    "cek_fakta",
+    "lapor_insiden"
   ]
 }

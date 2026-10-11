@@ -3,7 +3,8 @@
 Pernyataan datang dari dua sumber:
   - portal lembaga (web /portal): petugas BSSN, OJK, Komdigi, atau Siber Polri
     memilih keputusan dan alasan dengan tombol, boleh menulis nilai yang benar
-    untuk kolom yang ditandai salah, serta memilih langkah pencegahan sendiri;
+    untuk kolom yang ditandai salah, serta memilih langkah pencegahan, sasaran
+    literasi, dan materi literasi sendiri;
     tersimpan di tabel ``official_reviews`` pada database survei (dibaca
     dengan token baca);
   - ``statements/official_statements.csv`` (opsional): pernyataan resmi yang
@@ -35,7 +36,7 @@ from csais import flows
 from csais.config import PROJECT_ROOT
 from csais.db import get_connection, get_timestamp
 from csais.provenance import pipeline_stamp
-from csais.schema import record_run
+from csais.schema import ensure_column, record_run
 from csais.survey import SURVEY_FIELDS, fetch_rows, latest_d1, select_sql, table_columns
 
 STATEMENTS_FILE = os.path.join(PROJECT_ROOT, "statements", "official_statements.csv")
@@ -43,7 +44,10 @@ COLUMNS = (
     "statement_id", "incident_id", "institution", "status", "statement_date",
     "source_url", "reason", "attack_type", "target", "threat_actor", "attack_date",
     "location", "prevention_text", "prevention_keys", "recorded_by",
+    "audience_keys", "topic_keys",
 )
+# Kolom CSV yang ditambahkan belakangan (boleh tidak ada di berkas lama)
+LATER_COLUMNS = ("audience_keys", "topic_keys")
 STATUSES = ("dikonfirmasi", "dibantah", "sebagian")
 DEMO_NOTE = "DATA UJI"  # catatan keputusan data uji (scripts/seed_demo.py)
 INSTITUTION_NAMES = {"BSSN": "BSSN", "OJK": "OJK", "KOMDIGI": "Komdigi", "POLRI": "Siber Polri"}
@@ -78,15 +82,16 @@ REVIEWS_SCHEMA = """
         signed TEXT,
         corrections TEXT,
         prevention_keys TEXT,
-        prevention_text TEXT
+        prevention_text TEXT,
+        literacy TEXT
     )
 """
 # Kolom yang ditambahkan web setelah tabel pertama dibuat; NULL bila belum ada
-REVIEW_OPTIONAL = ("signed", "corrections", "prevention_keys", "prevention_text")
+REVIEW_OPTIONAL = ("signed", "corrections", "prevention_keys", "prevention_text", "literacy")
 REVIEWS_SQL = """
     SELECT review_id, incident_id, institution, status, reason_code, reason_text,
            field_status, source_url, reviewer, created_at, {signed}, {corrections},
-           {prevention_keys}, {prevention_text}
+           {prevention_keys}, {prevention_text}, {literacy}
     FROM official_reviews ORDER BY review_id
 """
 OFFICIAL_TIER = {"dikonfirmasi": "rekomendasi_resmi", "dibantah": "peringatan_hoaks"}
@@ -107,6 +112,7 @@ def load_statements(path=STATEMENTS_FILE):
     rows, errors, seen = [], [], set()
     with open(path, encoding="utf-8", newline="") as fh:
         for line, raw in enumerate(csv.DictReader(fh), start=2):
+            raw = {**{key: None for key in LATER_COLUMNS}, **raw}
             row = {key: _text(raw.get(key)) for key in COLUMNS}
             problem = None
             if not row["statement_id"] or row["statement_id"] in seen:
@@ -135,18 +141,21 @@ def review_rows(rows):
     for review_id, incident_id, institution, status, code, note, field_status, source_url, reviewer, created_at, *rest in rows:
         if status not in STATUSES or code not in REASON_TEXT:
             continue
-        signed_raw, corrections_raw, keys_raw, prevention_text = (list(rest) + [None] * 4)[:4]
+        signed_raw, corrections_raw, keys_raw, prevention_text, literacy_raw = (list(rest) + [None] * 5)[:5]
         marks = _json_value(field_status, {})
         reason = REASON_TEXT[code] + (f". {note.strip()}" if note and note.strip() else "")
         signed = _json_value(signed_raw, None)
         corrections = _json_value(corrections_raw, {})
         keys = _json_value(keys_raw, [])
+        literacy = _json_value(literacy_raw, {})
         statements.append({
             **{key: None for key in COLUMNS},
             # nilai yang benar menurut lembaga untuk kolom yang ditandai salah
             **{field: _text(str(value)) for field, value in corrections.items() if field in SURVEY_FIELDS and value},
             "prevention_keys": ";".join(k for k in keys if isinstance(k, str)) or None,
             "prevention_text": _text(prevention_text),
+            "audience_keys": _keys(literacy.get("audience")),
+            "topic_keys": _keys(literacy.get("topics")),
             "statement_id": f"portal-{review_id}",
             "incident_id": incident_id,
             "institution": INSTITUTION_NAMES.get(institution, institution),
@@ -161,6 +170,15 @@ def review_rows(rows):
             "demo": bool(note and note.strip().upper().startswith(DEMO_NOTE)),
         })
     return statements
+
+
+def _keys(values):
+    """Daftar kunci dari portal -> teks "a;b" seperti kolom CSV; None bila kosong."""
+    return ";".join(v for v in values if isinstance(v, str)) or None if isinstance(values, list) else None
+
+
+def _split(value):
+    return [k.strip() for k in (value or "").split(";") if k.strip()]
 
 
 def _json_value(raw, default):
@@ -188,6 +206,8 @@ def create_tables(conn):
         f"(statement_id TEXT PRIMARY KEY, {columns}, loaded_at TEXT NOT NULL)"
     )
     conn.commit()
+    for name in LATER_COLUMNS:
+        ensure_column(conn, "official_statements", name, "TEXT")
 
 
 def store_statements(conn, rows, loaded_at):
@@ -232,10 +252,13 @@ def d3_row(card, statement, items):
             verdicts[field] = "dikonfirmasi" if card.get(field) and _same(field, card.get(field), stated) else "dibantah"
         elif field in marked:
             verdicts[field] = marked[field]
-    keys = [k.strip() for k in (statement["prevention_keys"] or "").split(";") if k.strip()]
+    keys = _split(statement["prevention_keys"])
+    audience, topics = _split(statement.get("audience_keys")), _split(statement.get("topic_keys"))
     prevention = None
-    if keys or statement["prevention_text"]:
+    if keys or statement["prevention_text"] or audience or topics:
         prevention = {"steps": keys, "text": statement["prevention_text"]}
+        # sasaran dan materi literasi hanya ditulis bila lembaga mengisinya (hash catatan lama tetap)
+        prevention.update({k: v for k, v in (("audience", audience), ("topics", topics)) if v})
     return {
         **values,
         "field_status": verdicts,
