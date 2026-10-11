@@ -1,16 +1,27 @@
 """Terbitkan hasil pipeline ke Turso (SQLite yang di-host) lewat HTTP API.
 
 Pekerja pipeline tetap bekerja pada file SQLite lokal (cepat), lalu tahap ini
-menyalin tabel yang dibutuhkan dashboard ke Turso. Setiap tabel ditulis ke
-tabel sementara ``<nama>__new`` per potongan (masing-masing satu transaksi),
-lalu ditukar dengan tabel lama dalam satu transaksi, sehingga pembaca tidak
-pernah melihat tabel setengah terisi.
+menyalin tabel yang dibutuhkan dashboard ke Turso.
+
+Penerbitan bersifat inkremental: setiap baris di Turso membawa kolom ``_h``
+(hash isinya). Tahap ini membaca pasangan (rowid, hash) dari Turso, lalu hanya
+menghapus baris yang sudah hilang dan menambah baris yang baru atau berubah,
+dalam satu transaksi. Kuota tulis Turso jadi terpakai sebanyak perubahan,
+bukan sebanyak seluruh isi tabel.
+
+Tabel dibangun ulang penuh bila belum ada di Turso, skemanya berubah, atau
+perubahannya lebih dari separuh tabel: ditulis ke tabel sementara
+``<nama>__new`` per potongan (masing-masing satu transaksi), lalu ditukar
+dengan tabel lama dalam satu transaksi. Dalam kedua cara, pembaca tidak pernah
+melihat tabel setengah terisi.
 
 Kredensial dibaca dari variabel lingkungan:
   TURSO_DATABASE_URL  misalnya libsql://csais-nama.turso.io
   TURSO_AUTH_TOKEN    token dari `turso db tokens create <db>`
 """
 
+import hashlib
+import json
 import os
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
@@ -24,6 +35,17 @@ CHUNK_ROWS = 2000  # baris per permintaan HTTP (satu transaksi)
 ROWS_PER_STATEMENT = 100  # baris per statement INSERT multi-baris
 WORKERS = 4  # tabel yang disalin bersamaan (masing-masing koneksi dan sesi sendiri)
 REQUEST_TIMEOUT = 120
+HASH_COLUMN = "_h"  # hash isi baris di Turso, dasar perbandingan inkremental
+HASH_PAGE = 100000  # pasangan (rowid, hash) yang dibaca per permintaan
+
+# Stempel waktu yang ditulis ulang setiap run walau isi barisnya sama. Kolom ini
+# tidak ikut dihitung dalam hash, jadi baris yang hanya berbeda di kolom ini
+# tidak ditulis ulang (Turso menyimpan waktu saat isinya terakhir berubah).
+VOLATILE_COLUMNS = {
+    "sources": {"updated_at"},
+    "v07_trust": {"computed_at"},
+    "incident_tiers": {"updated_at"},
+}
 
 # Tabel yang diterbitkan: nama -> (SELECT sumber, daftar index remote)
 PUBLISH_TABLES = {
@@ -126,6 +148,14 @@ class TursoClient:
         """Jalankan statements di dalam BEGIN ... COMMIT (satu permintaan)."""
         return self.execute([("BEGIN", [])] + list(statements) + [("COMMIT", [])])
 
+    def query(self, sql, args=()):
+        """Jalankan satu SELECT; kembalikan baris sebagai tuple nilai."""
+        result = self.execute([(sql, list(args))])[0]["response"]["result"]
+        return [
+            tuple(None if cell.get("type") == "null" else cell.get("value") for cell in row)
+            for row in result["rows"]
+        ]
+
 
 # --- Skema ---
 def column_definitions(conn, table, select_sql):
@@ -137,27 +167,34 @@ def column_definitions(conn, table, select_sql):
     return [(desc[0], declared.get(desc[0], "TEXT")) for desc in cursor.description]
 
 
-def create_statements(table, columns):
+def remote_columns(client, table):
+    """(nama, tipe) kolom tabel di Turso; [] bila tabel belum ada."""
+    return [(row[1], row[2]) for row in client.query(f'PRAGMA table_info("{table}")')]
+
+
+def create_statements(target, columns):
     body = ", ".join(f'"{name}" {ctype}' for name, ctype in columns)
     return [
-        (f'DROP TABLE IF EXISTS "{table}__new"', []),
-        (f'CREATE TABLE "{table}__new" ({body})', []),
+        (f'DROP TABLE IF EXISTS "{target}"', []),
+        (f'CREATE TABLE "{target}" ({body})', []),
+    ]
+
+
+def index_statements(table, indexes):
+    return [
+        (f'CREATE INDEX IF NOT EXISTS "idx_{table}_{column}" ON "{table}"("{column}")', [])
+        for column in indexes
     ]
 
 
 def swap_statements(table, indexes):
-    statements = [
+    return [
         (f'DROP TABLE IF EXISTS "{table}"', []),
         (f'ALTER TABLE "{table}__new" RENAME TO "{table}"', []),
-    ]
-    for column in indexes:
-        statements.append(
-            (f'CREATE INDEX IF NOT EXISTS "idx_{table}_{column}" ON "{table}"("{column}")', [])
-        )
-    return statements
+    ] + index_statements(table, indexes)
 
 
-def insert_statements(table, columns, rows):
+def insert_statements(target, columns, rows):
     """INSERT multi-baris: setiap statement memuat sampai ROWS_PER_STATEMENT baris."""
     names = ", ".join(f'"{name}"' for name, _ in columns)
     row_marks = "(" + ", ".join("?" for _ in columns) + ")"
@@ -166,34 +203,128 @@ def insert_statements(table, columns, rows):
     for start in range(0, len(rows), ROWS_PER_STATEMENT):
         batch = rows[start : start + ROWS_PER_STATEMENT]
         sql = (
-            f'INSERT INTO "{table}__new" ({names}) VALUES '
+            f'INSERT INTO "{target}" ({names}) VALUES '
             + ", ".join([row_marks] * len(batch))
         )
         statements.append((sql, [value for row in batch for value in row]))
     return statements
 
 
-# --- Publikasi ---
-def publish_table(conn, client, table, select_sql, indexes, log=print):
-    """Salin satu tabel ke Turso; kembalikan jumlah baris."""
-    columns = column_definitions(conn, table, select_sql)
-    client.execute(create_statements(table, columns))
+# --- Hash baris ---
+def row_hash(row, skip=frozenset()):
+    """Hash 64-bit isi baris; kolom pada posisi ``skip`` diabaikan."""
+    values = [value for index, value in enumerate(row) if index not in skip]
+    data = json.dumps(values, ensure_ascii=False, separators=(",", ":"), default=str)
+    return hashlib.blake2b(data.encode(), digest_size=8).hexdigest()
+
+
+def remote_hashes(client, table):
+    """{hash: [rowid, ...]} baris yang sudah ada di Turso, dibaca per halaman."""
+    sql = (
+        "SELECT max(rid), group_concat(rid || ':' || ifnull(h, ''), ',') FROM "
+        f'(SELECT rowid AS rid, "{HASH_COLUMN}" AS h FROM "{table}" '
+        "WHERE rowid > ? ORDER BY rowid LIMIT ?)"
+    )
+    by_hash, last = {}, 0
+    while True:
+        last_rowid, pairs = client.query(sql, [last, HASH_PAGE])[0]
+        if last_rowid is None:
+            return by_hash
+        for pair in pairs.split(","):
+            rowid, _, value = pair.partition(":")
+            by_hash.setdefault(value, []).append(int(rowid))
+        last = int(last_rowid)
+
+
+def _hashed_rows(conn, select_sql, skip):
     cursor = conn.cursor()
     cursor.execute(select_sql)
-    total = 0
     while True:
         rows = cursor.fetchmany(CHUNK_ROWS)
         if not rows:
-            break
-        client.transaction(insert_statements(table, columns, rows))
-        total += len(rows)
+            return
+        for row in rows:
+            yield tuple(row) + (row_hash(row, skip),)
+
+
+# --- Publikasi ---
+def rebuild_table(conn, client, table, select_sql, columns, skip, indexes):
+    """Bangun ulang tabel lewat ``<nama>__new`` lalu tukar; kembalikan (total, ditulis)."""
+    client.execute(create_statements(f"{table}__new", columns))
+    total = 0
+    batch = []
+    for row in _hashed_rows(conn, select_sql, skip):
+        batch.append(row)
+        if len(batch) == CHUNK_ROWS:
+            client.transaction(insert_statements(f"{table}__new", columns, batch))
+            total += len(batch)
+            batch = []
+    if batch:
+        client.transaction(insert_statements(f"{table}__new", columns, batch))
+        total += len(batch)
     client.transaction(swap_statements(table, indexes))
-    log(f"   {table:28s} {total} baris")
-    return total
+    return total, total
+
+
+def sync_table(conn, client, table, select_sql, columns, skip, indexes):
+    """Terapkan selisih lokal vs Turso; kembalikan (total, ditulis), atau None bila
+    selisihnya lebih dari separuh tabel (bangun ulang lebih hemat)."""
+    remote = remote_hashes(client, table)
+    added, total = [], 0
+    for row in _hashed_rows(conn, select_sql, skip):
+        total += 1
+        rowids = remote.get(row[-1])
+        if rowids:
+            rowids.pop()  # baris yang sama sudah ada di Turso
+        else:
+            added.append(row)
+    removed = [rowid for rowids in remote.values() for rowid in rowids]
+    if len(removed) + len(added) > max(total, 1) / 2:
+        return None
+    if not removed and not added:
+        return total, 0
+    statements = []
+    if removed:
+        statements.append((
+            f'DELETE FROM "{table}" WHERE rowid IN (SELECT value FROM json_each(?))',
+            [json.dumps(removed)],
+        ))
+    if len(added) <= CHUNK_ROWS:
+        statements += insert_statements(table, columns, added)
+    else:
+        # terlalu besar untuk satu permintaan: siapkan di tabel sementara dulu
+        stage = f"{table}__add"
+        client.execute(create_statements(stage, columns))
+        for start in range(0, len(added), CHUNK_ROWS):
+            client.transaction(insert_statements(stage, columns, added[start : start + CHUNK_ROWS]))
+        statements += [
+            (f'INSERT INTO "{table}" SELECT * FROM "{stage}"', []),
+            (f'DROP TABLE "{stage}"', []),
+        ]
+    client.transaction(statements + index_statements(table, indexes))
+    return total, len(removed) + len(added)
+
+
+def publish_table(conn, client, table, select_sql, indexes, log=print):
+    """Salin satu tabel ke Turso; kembalikan jumlah baris yang ditulis."""
+    local = column_definitions(conn, table, select_sql)
+    columns = local + [(HASH_COLUMN, "TEXT")]
+    volatile = VOLATILE_COLUMNS.get(table, set())
+    skip = frozenset(index for index, (name, _) in enumerate(local) if name in volatile)
+    result = None
+    if remote_columns(client, table) == columns:
+        result = sync_table(conn, client, table, select_sql, columns, skip, indexes)
+    mode = "inkremental"
+    if result is None:
+        result = rebuild_table(conn, client, table, select_sql, columns, skip, indexes)
+        mode = "bangun ulang"
+    total, written = result
+    log(f"   {table:28s} {total} baris, {written} ditulis ({mode})")
+    return written
 
 
 def publish_all(client=None, tables=None, log=print, workers=WORKERS):
-    """Terbitkan semua tabel di PUBLISH_TABLES; kembalikan total baris.
+    """Terbitkan semua tabel di PUBLISH_TABLES; kembalikan total baris yang ditulis.
 
     Tabel independen satu sama lain (masing-masing punya tabel sementara dan
     ditukar sendiri), jadi disalin ``workers`` sekaligus. Bila ``client``
@@ -243,7 +374,7 @@ def run():
     print("   PUBLISH - TERBITKAN KE TURSO")
     print("==================================================")
     total = publish_all()
-    print(f"\nSelesai: {total} baris diterbitkan.")
+    print(f"\nSelesai: {total} baris ditulis ke Turso.")
 
 
 if __name__ == "__main__":
