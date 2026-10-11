@@ -10,6 +10,7 @@
  */
 import type { Lang } from "./i18n";
 import data from "./prevention.json";
+import platformData from "./platforms.json";
 
 type Text = Record<Lang, string>;
 export type Channel = { name: string; url: string };
@@ -34,8 +35,32 @@ export type PreventionKeys = { steps: string[]; channels: string[] };
 
 /* Sasaran dan materi literasi per incident dipilih pipeline (literacy_for di
    csais/flows.py) atau lembaga di portal; web hanya menampilkan teksnya. */
+type Platform = { name: string; category: string };
+type PlatformCategory = { label: Text; topics: string[]; age?: Text; age_source?: string };
+const PLATFORMS = platformData.platforms as Record<string, Platform>;
+const CATEGORIES = platformData.categories as Record<string, PlatformCategory>;
+
+/** Platform dan kategorinya untuk kunci audiens ``platform:<kunci>``; null bila bukan platform. */
+export function platformOf(key: string): { name: string; category: PlatformCategory | null } | null {
+  if (!key.startsWith("platform:")) return null;
+  const platform = PLATFORMS[key.slice("platform:".length)];
+  return platform ? { name: platform.name, category: CATEGORIES[platform.category] ?? null } : null;
+}
+
+/** Teks sasaran literasi; kunci platform menjadi "Pengguna <platform> di Indonesia" (dengan usia bila bersumber). */
 export function audienceText(key: string, lang: Lang): string | null {
+  const platform = platformOf(key);
+  if (platform) {
+    const age = platform.category?.age?.[lang];
+    const base = lang === "en" ? `${platform.name} users in Indonesia` : `Pengguna ${platform.name} di Indonesia`;
+    return age ? `${base}, ${age}` : base;
+  }
   return AUDIENCES[key]?.[lang] ?? null;
+}
+
+/** Sasaran untuk layanan di luar katalog (korban incident global), mis. "Pengguna dan pelanggan Ticketmaster di Indonesia". */
+export function serviceAudience(name: string, lang: Lang): string {
+  return lang === "en" ? `Users and customers of ${name} in Indonesia` : `Pengguna dan pelanggan ${name} di Indonesia`;
 }
 
 export function topicText(key: string, lang: Lang): string | null {

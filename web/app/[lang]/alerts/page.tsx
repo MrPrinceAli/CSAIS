@@ -9,6 +9,7 @@ import { tipText } from "@/lib/prevention";
 import { PreventionPanel } from "@/components/prevention-panel";
 import { RiskOverview } from "@/components/risk-overview";
 import { LiteracyMap, PERIODS, type Period } from "@/components/literacy-map";
+import { GlobalSpotlight } from "@/components/global-spotlight";
 import { DemoChip, SectionTitle, TierBadge, TypeChip } from "@/components/ui";
 
 type Params = { lang: string };
@@ -114,10 +115,12 @@ export default async function AlertsPage({ params, searchParams }: { params: Pro
         <p className="text-[14px] leading-relaxed text-soft">{a.lead}</p>
       </header>
 
-      <RiskOverview lang={lang} />
+      <LiteracyMap lang={lang} period={period} base={base} />
+
+      <GlobalSpotlight lang={lang} />
 
       <div className="border-t border-line pt-6">
-        <LiteracyMap lang={lang} period={period} base={base} />
+        <RiskOverview lang={lang} />
       </div>
 
       <div className="flex flex-col gap-1 border-t border-line pt-6">

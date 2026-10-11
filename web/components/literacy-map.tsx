@@ -16,8 +16,8 @@ import provinces from "@/lib/indonesia-provinces.json";
 import { LiteracyMapView, type ProvinceStat } from "@/components/literacy-map-view";
 import { SectionTitle } from "@/components/ui";
 
-const WIDTH = 960;
-const HEIGHT = 380;
+const WIDTH = 1100;
+const HEIGHT = 430;
 export const PERIODS = [30, 90, 365, 0] as const;
 export type Period = (typeof PERIODS)[number];
 
@@ -79,6 +79,7 @@ export async function LiteracyMap({ lang, period, base }: { lang: Lang; period: 
       code,
       name: feature.properties.name,
       d: path(feature) ?? "",
+      c: path.centroid(feature).map((v) => Math.round(v)) as [number, number],
       n: p?.ids.size ?? 0,
       byAudience: Object.fromEntries(p?.audiences ?? []),
       byTopic: Object.fromEntries(p?.topics ?? []),
@@ -92,20 +93,41 @@ export async function LiteracyMap({ lang, period, base }: { lang: Lang; period: 
   const options = (map: Counted, text: (key: string, lang: Lang) => string | null) =>
     top(map, 40).map(([key, n]) => ({ key, label: text(key, lang) ?? key, n }));
 
+  const affected = stats.filter((s) => s.n > 0).length;
+  const kpis = [
+    { label: m.kpi.incidents, value: f.num(counted.size) },
+    { label: m.kpi.provinces, value: `${f.num(affected)} / 38` },
+    { label: m.kpi.audience, value: top(nationalAudience, 1).map(([k]) => audienceText(k, lang) ?? k)[0] ?? "–" },
+    { label: m.kpi.topic, value: top(nationalTopic, 1).map(([k]) => topicText(k, lang) ?? k)[0] ?? "–" },
+  ];
+
   return (
-    <section className="flex flex-col gap-3">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-[20px] font-semibold">{m.title}</h2>
-        <p className="max-w-[90ch] text-[13.5px] text-muted">{m.lead(f.num(counted.size))}</p>
+    <section className="lm-hero relative flex flex-col gap-5 overflow-hidden rounded-2xl border border-line p-5 sm:p-7" aria-labelledby="lm-title">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="flex max-w-[70ch] flex-col gap-2">
+          <span className="label text-accent">{m.eyebrow}</span>
+          <h2 id="lm-title" className="text-balance text-[30px] font-semibold leading-tight sm:text-[36px]">
+            {m.title}
+          </h2>
+          <p className="text-[14px] leading-relaxed text-soft">{m.lead(f.num(counted.size))}</p>
+        </div>
+        <nav className="flex flex-wrap items-center gap-1.5" aria-label={m.period}>
+          <span className="label mr-1">{m.period}</span>
+          {PERIODS.map((p) => (
+            <Link key={p} href={`${base}${p === 90 ? "" : `?periode=${p}`}`} scroll={false} className={`chip no-underline ${period === p ? "chip-accent" : ""}`} aria-current={period === p ? "true" : undefined}>
+              {m.periods[String(p)]}
+            </Link>
+          ))}
+        </nav>
       </div>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="label mr-1">{m.period}</span>
-        {PERIODS.map((p) => (
-          <Link key={p} href={`${base}${p === 90 ? "" : `?periode=${p}`}#peta-literasi`} className={`chip no-underline ${period === p ? "chip-accent" : ""}`} aria-current={period === p ? "true" : undefined}>
-            {m.periods[String(p)]}
-          </Link>
+      <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {kpis.map((k) => (
+          <div key={k.label} className="rounded-xl border border-line bg-[color-mix(in_srgb,var(--bg)_55%,transparent)] px-4 py-3 backdrop-blur-sm">
+            <dt className="label">{k.label}</dt>
+            <dd className="mt-1 line-clamp-2 text-[18px] font-semibold leading-snug text-fg">{k.value}</dd>
+          </div>
         ))}
-      </div>
+      </dl>
       <SectionTitle aside={m.note}>{m.subtitle}</SectionTitle>
       <LiteracyMapView
         width={WIDTH}

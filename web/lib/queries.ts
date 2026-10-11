@@ -1152,3 +1152,52 @@ export async function getLiteracyRows(days: number): Promise<LiteracyRow[]> {
     [since],
   );
 }
+
+export type GlobalSpotlight = {
+  incident_id: string;
+  title: string | null;
+  location: string | null;
+  attack_type: string | null;
+  target: string | null;
+  document_count: number;
+  domains: number | null;
+  last_published_date: string | null;
+  prevention: string | null;
+  tier: string | null;
+  platforms: string | null;
+  sector: string | null;
+};
+
+/**
+ * Incident luar negeri yang paling ramai diberitakan dalam ``days`` hari terakhir
+ * (jumlah artikel + 2 x jumlah sumber), untuk rekomendasi literasi masyarakat
+ * Indonesia. Incident Indonesia (lokasi Indonesia atau menyebut wilayahnya) tidak ikut.
+ */
+export async function getGlobalSpotlight(days = 14, limit = 6): Promise<GlobalSpotlight[]> {
+  const [regions, platforms, trust, tiers] = await Promise.all([
+    hasTable("incident_regions"),
+    hasTable("incident_platforms"),
+    hasTable("v07_trust"),
+    hasTable("incident_tiers"),
+  ]);
+  const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+  return query<GlobalSpotlight>(
+    `SELECT i.incident_id, a.title, i.location, i.attack_type, i.target, i.document_count,
+            ${trust ? "t.domain_count" : "NULL"} AS domains, i.last_published_date,
+            ${tiers ? "it.prevention, it.tier" : "NULL AS prevention, NULL AS tier"},
+            ${platforms ? "(SELECT group_concat(p.platform) FROM incident_platforms p WHERE p.incident_id = i.incident_id)" : "NULL"} AS platforms,
+            (SELECT x.target_sector FROM v05_incident_documents d JOIN v03_information_extraction x ON x.article_id = d.article_id
+             WHERE d.incident_id = i.incident_id AND x.target_sector NOT IN ('', 'UNKNOWN')
+             GROUP BY x.target_sector ORDER BY COUNT(*) DESC, x.target_sector LIMIT 1) AS sector
+     FROM v05_incidents i
+     LEFT JOIN articles a ON a.article_id = i.anchor_article_id
+     ${trust ? "LEFT JOIN v07_trust t ON t.incident_id = i.incident_id" : ""}
+     ${tiers ? "LEFT JOIN incident_tiers it ON it.incident_id = i.incident_id" : ""}
+     WHERE i.last_published_date >= ? AND i.document_count >= 2
+       AND lower(COALESCE(i.location, '')) NOT LIKE '%indonesia%'
+       ${regions ? "AND i.incident_id NOT IN (SELECT incident_id FROM incident_regions)" : ""}
+     ORDER BY i.document_count + 2 * COALESCE(${trust ? "t.domain_count" : "0"}, 0) DESC
+     LIMIT ?`,
+    [since, limit],
+  );
+}

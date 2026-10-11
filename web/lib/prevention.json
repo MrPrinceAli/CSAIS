@@ -504,6 +504,22 @@
     "lapor_insiden": {
       "id": "Cara melapor dan menyimpan bukti",
       "en": "How to report and keep evidence"
+    },
+    "keamanan_kripto": {
+      "id": "Mengamankan dompet kripto: frasa pemulihan, kunci privat, dan airdrop palsu",
+      "en": "Securing crypto wallets: recovery phrases, private keys, and fake airdrops"
+    },
+    "keamanan_akun": {
+      "id": "Mencegah pembajakan akun media sosial dan aplikasi pesan",
+      "en": "Preventing takeover of social media and messaging accounts"
+    },
+    "belanja_aman": {
+      "id": "Belanja daring aman: bayar hanya di dalam aplikasi resmi",
+      "en": "Safe online shopping: pay only inside the official app"
+    },
+    "keamanan_gim": {
+      "id": "Penipuan item, top-up, dan akun gim",
+      "en": "Scams with game items, top-ups, and accounts"
     }
   },
   "topics_by_type": {

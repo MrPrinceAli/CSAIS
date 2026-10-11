@@ -40,6 +40,8 @@ NO_SCORE = "tanpa_skor"
 PREVENTION_FILE = os.path.join(PROJECT_ROOT, "web", "lib", "prevention.json")
 with open(PREVENTION_FILE, encoding="utf-8") as _fh:
     PREVENTION = json.load(_fh)
+with open(os.path.join(PROJECT_ROOT, "web", "lib", "platforms.json"), encoding="utf-8") as _fh:
+    PLATFORMS = json.load(_fh)
 
 # Kolom isi yang ikut dihitung dalam output_hash (urutan tetap)
 _HASHED = FIELDS + ("field_status", "status", "tier", "prevention", "basis", "source_ref", "reason", "supersedes")
@@ -90,7 +92,12 @@ def literacy_for(group, types, hoax=False, communities=()):
     kelompok sasaran V0.3, lalu dari jenis serangan."""
     alias = PREVENTION["alias"]
     known = [alias.get(t, t) for t in types]
-    audience = [c for c in communities if c in PREVENTION["audiences"]][:2]
+    audience = [c for c in communities if c in PREVENTION["audiences"] or c.startswith("platform:")][:2]
+    platform_topics = []
+    for key in audience:
+        if key.startswith("platform:"):
+            category = PLATFORMS["platforms"].get(key[len("platform:"):], {}).get("category")
+            platform_topics.extend(PLATFORMS["categories"].get(category, {}).get("topics", [])[:2])
     audience += list(PREVENTION["audience_by_group"].get(group, []))[:2]
     for attack_type in known:
         audience.extend(PREVENTION["audience_by_type"].get(attack_type, []))
@@ -98,7 +105,7 @@ def literacy_for(group, types, hoax=False, communities=()):
     if hoax:
         topics = list(PREVENTION["topics_hoax"])
     else:
-        topics = list(PREVENTION["topics_by_group"].get(group, []))
+        topics = platform_topics + list(PREVENTION["topics_by_group"].get(group, []))
         by_type = PREVENTION["topics_by_type"]
         for i, attack_type in enumerate([t for t in known if t in by_type] or ["cyber_attack"]):
             topics.extend(by_type[attack_type][: 2 if i == 0 else 1])

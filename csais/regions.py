@@ -17,13 +17,21 @@ Kelompok masyarakat dikenali dengan kata kunci (COMMUNITY_PATTERNS) dan
 disimpan sebagai kunci sasaran literasi di web/lib/prevention.json; alur D1
 memakainya sebagai sasaran literasi yang paling spesifik.
 
-Tabel: ``incident_regions`` (satu baris per incident dan wilayah) dan
-``incident_communities`` (satu baris per incident dan kelompok).
+Platform yang banyak dipakai masyarakat Indonesia (Binance, WhatsApp, Shopee,
+Roblox, ...; web/lib/platforms.json) dikenali di incident negara MANA PUN:
+kebocoran di luar negeri pada layanan yang juga dipakai di Indonesia tetap
+menjadi sasaran literasi "pengguna <platform> di Indonesia" (kunci
+``platform:<kunci>``).
+
+Tabel: ``incident_regions`` (satu baris per incident dan wilayah),
+``incident_communities`` (satu baris per incident dan kelompok), dan
+``incident_platforms`` (satu baris per incident dan platform).
 """
 
 import json
 import os
 import re
+import sqlite3
 from collections import Counter
 
 from csais.config import PROJECT_ROOT
@@ -32,10 +40,14 @@ from csais.schema import record_run
 from csais.text import split_publisher
 
 WILAYAH_FILE = os.path.join(PROJECT_ROOT, "csais", "data", "wilayah.json")
+PLATFORMS_FILE = os.path.join(PROJECT_ROOT, "web", "lib", "platforms.json")
 CONTENT_CHARS = 4000  # awal isi artikel yang ikut dibaca
 
 with open(WILAYAH_FILE, encoding="utf-8") as _fh:
     WILAYAH = json.load(_fh)
+with open(PLATFORMS_FILE, encoding="utf-8") as _fh:
+    PLATFORMS = json.load(_fh)["platforms"]
+PLATFORM_RE = {key: re.compile(rf"(?<![\w-])(?:{p['pattern']})(?![\w-])") for key, p in PLATFORMS.items()}
 
 PROVINCE_DISPLAY = {"31": "DKI Jakarta", "34": "DI Yogyakarta"}
 # Singkatan dan sebutan lain provinsi (huruf besar-kecil seperti di berita)
@@ -153,6 +165,10 @@ def find_communities(text):
     return Counter({key: len(regex.findall(text)) for key, regex in COMMUNITY_RE.items() if regex.search(text)})
 
 
+def find_platforms(text):
+    return Counter({key: len(regex.findall(text)) for key, regex in PLATFORM_RE.items() if regex.search(text)})
+
+
 def province_name(code):
     return PROVINCE_DISPLAY.get(code) or WILAYAH["provinsi"][code].strip()
 
@@ -170,7 +186,7 @@ def incident_context(conn):
     """{incident_id: (Counter wilayah, Counter kelompok)} untuk incident Indonesia."""
     columns = {row[1] for row in conn.execute("PRAGMA table_info(articles)")}
     content = f"substr(a.content, 1, {CONTENT_CHARS})" if "content" in columns else "NULL"
-    texts, indonesian = {}, set()
+    texts, indonesian, platforms = {}, set(), {}
     for incident_id, title, summary, body, language, location in conn.execute(_DOCS_SQL.format(content=content)):
         if language == "id" or "indonesia" in (location or "").lower():
             indonesian.add(incident_id)
@@ -179,6 +195,9 @@ def incident_context(conn):
         if publisher and summary:
             summary = summary.replace(publisher, " ")
         texts.setdefault(incident_id, []).append((" ".join(p for p in (headline, body) if p), summary or ""))
+        found = set(find_platforms(f"{headline} {summary or ''} {body or ''}"))
+        if found:
+            platforms.setdefault(incident_id, Counter()).update(found)
     result = {}
     for incident_id in indonesian:
         strong, weak, communities = Counter(), Counter(), Counter()
@@ -194,10 +213,10 @@ def incident_context(conn):
         regions.update({key: n for key, n in weak.items() if key not in strong and n >= 2})
         if regions or communities:
             result[incident_id] = (regions, communities)
-    return result
+    return result, platforms
 
 
-def store(conn, context):
+def store(conn, context, platforms=None):
     conn.execute("DROP TABLE IF EXISTS incident_regions")
     conn.execute("""
         CREATE TABLE incident_regions (
@@ -214,6 +233,12 @@ def store(conn, context):
         community_rows.extend((incident_id, key, n) for key, n in communities.items())
     conn.executemany("INSERT INTO incident_regions VALUES (?, ?, ?, ?, ?, ?)", region_rows)
     conn.executemany("INSERT INTO incident_communities VALUES (?, ?, ?)", community_rows)
+    conn.execute("DROP TABLE IF EXISTS incident_platforms")
+    conn.execute("CREATE TABLE incident_platforms (incident_id TEXT NOT NULL, platform TEXT NOT NULL, mentions INTEGER NOT NULL)")
+    conn.executemany(
+        "INSERT INTO incident_platforms VALUES (?, ?, ?)",
+        [(incident_id, key, n) for incident_id, found in (platforms or {}).items() for key, n in found.items()],
+    )
     conn.execute("CREATE INDEX idx_incident_regions_province ON incident_regions(province_code)")
     conn.execute("CREATE INDEX idx_incident_communities_incident ON incident_communities(incident_id)")
     conn.commit()
@@ -221,15 +246,21 @@ def store(conn, context):
 
 
 def communities_by_incident(conn):
-    """incident_id -> kunci kelompok, paling banyak disebut dulu; {} bila tabel belum ada."""
-    try:
-        rows = conn.execute("SELECT incident_id, audience, mentions FROM incident_communities").fetchall()
-    except Exception:
-        return {}
+    """incident_id -> kunci sasaran dari berita: kelompok masyarakat dulu, lalu
+    platform (``platform:<kunci>``), masing-masing paling banyak disebut dulu;
+    {} bila tabel belum ada."""
     grouped = {}
-    for incident_id, audience, mentions in rows:
-        grouped.setdefault(incident_id, []).append((mentions, audience))
-    return {k: [a for _, a in sorted(v, key=lambda x: (-x[0], x[1]))] for k, v in grouped.items()}
+    for sql, prefix, rank in (
+        ("SELECT incident_id, audience, mentions FROM incident_communities", "", 0),
+        ("SELECT incident_id, platform, mentions FROM incident_platforms", "platform:", 1),
+    ):
+        try:
+            rows = conn.execute(sql).fetchall()
+        except sqlite3.OperationalError:
+            continue
+        for incident_id, key, mentions in rows:
+            grouped.setdefault(incident_id, []).append((rank, -mentions, f"{prefix}{key}"))
+    return {k: [key for *_, key in sorted(v)] for k, v in grouped.items()}
 
 
 def run():
@@ -239,8 +270,8 @@ def run():
     started_at = get_timestamp()
     conn = get_connection()
     try:
-        context = incident_context(conn)
-        with_region, with_community = store(conn, context)
+        context, platforms = incident_context(conn)
+        with_region, with_community = store(conn, context, platforms)
         record_run(conn, "incident_regions", started_at, with_region)
         provinces = Counter(
             row[0] for row in conn.execute("SELECT province FROM incident_regions GROUP BY incident_id, province")
@@ -249,6 +280,7 @@ def run():
         conn.close()
     print(f"Incident dengan wilayah  : {with_region}")
     print(f"Incident dengan kelompok : {with_community}")
+    print(f"Incident dengan platform : {len(platforms)} (semua negara)")
     print("Provinsi teratas         : " + ", ".join(f"{name} {n}" for name, n in provinces.most_common(6)))
     print("==================================================")
 

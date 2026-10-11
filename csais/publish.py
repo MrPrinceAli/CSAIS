@@ -92,6 +92,7 @@ PUBLISH_TABLES = {
     "evidence_leaves": ("SELECT * FROM evidence_leaves", ["batch_id", "evidence_uid"]),
     "incident_regions": ("SELECT * FROM incident_regions", ["incident_id", "province_code"]),
     "incident_communities": ("SELECT * FROM incident_communities", ["incident_id", "audience"]),
+    "incident_platforms": ("SELECT * FROM incident_platforms", ["incident_id", "platform"]),
 }
 
 

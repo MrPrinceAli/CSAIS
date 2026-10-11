@@ -1,0 +1,378 @@
+{
+  "_comment": "Platform yang sering dipakai masyarakat Indonesia. Incident di negara mana pun yang menyebut platform ini menjadi sasaran literasi \"pengguna <platform> di Indonesia\" (csais/regions.py, kunci audiens platform:<kunci>). Pola dicocokkan sebagai kata utuh, peka huruf besar/kecil. Usia hanya diisi bila ada sumber resmi (age_source).",
+  "categories": {
+    "kripto": {
+      "label": {
+        "id": "exchange dan dompet kripto",
+        "en": "crypto exchanges and wallets"
+      },
+      "topics": [
+        "keamanan_kripto",
+        "cek_legalitas",
+        "verifikasi_dua_langkah"
+      ],
+      "age": {
+        "id": "usia 18–30 tahun (sekitar 62% investor kripto Indonesia)",
+        "en": "aged 18–30 (about 62% of Indonesian crypto investors)"
+      },
+      "age_source": "Bappebti, data per September 2024 (26,9% usia 18–24 dan 35,1% usia 25–30), dikutip investortrust.id dan kontan.co.id"
+    },
+    "dompet_digital": {
+      "label": {
+        "id": "dompet digital",
+        "en": "e-wallets"
+      },
+      "topics": [
+        "transaksi_aman",
+        "data_pribadi",
+        "rekayasa_sosial"
+      ]
+    },
+    "bank": {
+      "label": {
+        "id": "aplikasi bank",
+        "en": "banking apps"
+      },
+      "topics": [
+        "data_pribadi",
+        "kenali_phishing",
+        "rekayasa_sosial"
+      ]
+    },
+    "media_sosial": {
+      "label": {
+        "id": "media sosial dan aplikasi pesan",
+        "en": "social media and messaging"
+      },
+      "topics": [
+        "keamanan_akun",
+        "verifikasi_dua_langkah",
+        "rekayasa_sosial"
+      ]
+    },
+    "surel_awan": {
+      "label": {
+        "id": "akun surel dan layanan awan",
+        "en": "email and cloud accounts"
+      },
+      "topics": [
+        "kata_sandi",
+        "verifikasi_dua_langkah",
+        "kenali_phishing"
+      ]
+    },
+    "perangkat": {
+      "label": {
+        "id": "ponsel dan perangkat",
+        "en": "phones and devices"
+      },
+      "topics": [
+        "pembaruan_sistem",
+        "aplikasi_resmi",
+        "keamanan_akun"
+      ]
+    },
+    "belanja": {
+      "label": {
+        "id": "belanja daring",
+        "en": "online shopping"
+      },
+      "topics": [
+        "belanja_aman",
+        "transaksi_aman",
+        "kenali_phishing"
+      ]
+    },
+    "gim": {
+      "label": {
+        "id": "gim daring",
+        "en": "online games"
+      },
+      "topics": [
+        "keamanan_gim",
+        "keamanan_anak",
+        "kata_sandi"
+      ]
+    },
+    "transportasi": {
+      "label": {
+        "id": "aplikasi transportasi dan pesan-antar",
+        "en": "ride-hailing and delivery apps"
+      },
+      "topics": [
+        "rekayasa_sosial",
+        "transaksi_aman",
+        "data_pribadi"
+      ]
+    },
+    "hiburan": {
+      "label": {
+        "id": "layanan streaming",
+        "en": "streaming services"
+      },
+      "topics": [
+        "kata_sandi",
+        "kenali_phishing",
+        "verifikasi_dua_langkah"
+      ]
+    },
+    "ai": {
+      "label": {
+        "id": "aplikasi AI",
+        "en": "AI apps"
+      },
+      "topics": [
+        "data_pribadi",
+        "deepfake",
+        "cek_fakta"
+      ]
+    }
+  },
+  "platforms": {
+    "binance": {
+      "name": "Binance",
+      "category": "kripto",
+      "pattern": "Binance"
+    },
+    "indodax": {
+      "name": "Indodax",
+      "category": "kripto",
+      "pattern": "Indodax"
+    },
+    "tokocrypto": {
+      "name": "Tokocrypto",
+      "category": "kripto",
+      "pattern": "Tokocrypto"
+    },
+    "pintu": {
+      "name": "Pintu",
+      "category": "kripto",
+      "pattern": "aplikasi Pintu|Pintu\\.co\\.id|exchange Pintu"
+    },
+    "coinbase": {
+      "name": "Coinbase",
+      "category": "kripto",
+      "pattern": "Coinbase"
+    },
+    "bybit": {
+      "name": "Bybit",
+      "category": "kripto",
+      "pattern": "Bybit"
+    },
+    "okx": {
+      "name": "OKX",
+      "category": "kripto",
+      "pattern": "OKX"
+    },
+    "metamask": {
+      "name": "MetaMask",
+      "category": "kripto",
+      "pattern": "Meta[Mm]ask"
+    },
+    "trust_wallet": {
+      "name": "Trust Wallet",
+      "category": "kripto",
+      "pattern": "Trust Wallet"
+    },
+    "kucoin": {
+      "name": "KuCoin",
+      "category": "kripto",
+      "pattern": "KuCoin"
+    },
+    "dana": {
+      "name": "DANA",
+      "category": "dompet_digital",
+      "pattern": "(?:aplikasi|akun|saldo|e-wallet|dompet digital) DANA|DANA (?:Indonesia|e-wallet)"
+    },
+    "ovo": {
+      "name": "OVO",
+      "category": "dompet_digital",
+      "pattern": "OVO"
+    },
+    "gopay": {
+      "name": "GoPay",
+      "category": "dompet_digital",
+      "pattern": "Go[Pp]ay"
+    },
+    "shopeepay": {
+      "name": "ShopeePay",
+      "category": "dompet_digital",
+      "pattern": "ShopeePay"
+    },
+    "linkaja": {
+      "name": "LinkAja",
+      "category": "dompet_digital",
+      "pattern": "LinkAja"
+    },
+    "paypal": {
+      "name": "PayPal",
+      "category": "dompet_digital",
+      "pattern": "PayPal"
+    },
+    "bca": {
+      "name": "BCA",
+      "category": "bank",
+      "pattern": "BCA|Bank Central Asia"
+    },
+    "bri": {
+      "name": "BRI",
+      "category": "bank",
+      "pattern": "BRI|Bank Rakyat Indonesia|BRImo"
+    },
+    "mandiri": {
+      "name": "Bank Mandiri",
+      "category": "bank",
+      "pattern": "Bank Mandiri|Livin'? by Mandiri"
+    },
+    "bni": {
+      "name": "BNI",
+      "category": "bank",
+      "pattern": "BNI|Bank Negara Indonesia"
+    },
+    "bsi": {
+      "name": "BSI",
+      "category": "bank",
+      "pattern": "BSI|Bank Syariah Indonesia"
+    },
+    "whatsapp": {
+      "name": "WhatsApp",
+      "category": "media_sosial",
+      "pattern": "WhatsApp|WA Web"
+    },
+    "telegram": {
+      "name": "Telegram",
+      "category": "media_sosial",
+      "pattern": "Telegram"
+    },
+    "instagram": {
+      "name": "Instagram",
+      "category": "media_sosial",
+      "pattern": "Instagram"
+    },
+    "facebook": {
+      "name": "Facebook",
+      "category": "media_sosial",
+      "pattern": "Facebook"
+    },
+    "tiktok": {
+      "name": "TikTok",
+      "category": "media_sosial",
+      "pattern": "Tik[Tt]ok"
+    },
+    "x_twitter": {
+      "name": "X (Twitter)",
+      "category": "media_sosial",
+      "pattern": "Twitter"
+    },
+    "discord": {
+      "name": "Discord",
+      "category": "media_sosial",
+      "pattern": "Discord"
+    },
+    "gmail": {
+      "name": "Gmail",
+      "category": "surel_awan",
+      "pattern": "Gmail"
+    },
+    "microsoft": {
+      "name": "Microsoft 365 dan Outlook",
+      "category": "surel_awan",
+      "pattern": "Microsoft 365|Outlook|Office 365"
+    },
+    "icloud": {
+      "name": "iCloud dan Apple ID",
+      "category": "surel_awan",
+      "pattern": "iCloud|Apple ID"
+    },
+    "android": {
+      "name": "Android",
+      "category": "perangkat",
+      "pattern": "Android"
+    },
+    "iphone": {
+      "name": "iPhone",
+      "category": "perangkat",
+      "pattern": "iPhone|iOS"
+    },
+    "shopee": {
+      "name": "Shopee",
+      "category": "belanja",
+      "pattern": "Shopee(?!Pay)"
+    },
+    "tokopedia": {
+      "name": "Tokopedia",
+      "category": "belanja",
+      "pattern": "Tokopedia"
+    },
+    "lazada": {
+      "name": "Lazada",
+      "category": "belanja",
+      "pattern": "Lazada"
+    },
+    "bukalapak": {
+      "name": "Bukalapak",
+      "category": "belanja",
+      "pattern": "Bukalapak"
+    },
+    "amazon": {
+      "name": "Amazon",
+      "category": "belanja",
+      "pattern": "Amazon(?! Web Services)"
+    },
+    "roblox": {
+      "name": "Roblox",
+      "category": "gim",
+      "pattern": "Roblox"
+    },
+    "free_fire": {
+      "name": "Free Fire",
+      "category": "gim",
+      "pattern": "Free Fire"
+    },
+    "mobile_legends": {
+      "name": "Mobile Legends",
+      "category": "gim",
+      "pattern": "Mobile Legends|MLBB"
+    },
+    "steam": {
+      "name": "Steam",
+      "category": "gim",
+      "pattern": "Steam"
+    },
+    "minecraft": {
+      "name": "Minecraft",
+      "category": "gim",
+      "pattern": "Minecraft"
+    },
+    "pubg": {
+      "name": "PUBG",
+      "category": "gim",
+      "pattern": "PUBG"
+    },
+    "gojek": {
+      "name": "Gojek",
+      "category": "transportasi",
+      "pattern": "Gojek"
+    },
+    "grab": {
+      "name": "Grab",
+      "category": "transportasi",
+      "pattern": "Grab(?:Food|Pay|Car|Bike)?(?= |$|,|\\.)"
+    },
+    "netflix": {
+      "name": "Netflix",
+      "category": "hiburan",
+      "pattern": "Netflix"
+    },
+    "spotify": {
+      "name": "Spotify",
+      "category": "hiburan",
+      "pattern": "Spotify"
+    },
+    "chatgpt": {
+      "name": "ChatGPT",
+      "category": "ai",
+      "pattern": "ChatGPT|OpenAI"
+    }
+  }
+}

@@ -53,18 +53,36 @@ def _tables(conn):
 
 def test_incident_context_and_store(temp_conn):
     _tables(temp_conn)
-    context = regions.incident_context(temp_conn)
+    context, platforms = regions.incident_context(temp_conn)
     assert set(context) == {"A", "B"}
+    assert "C" not in platforms  # "Bali" bukan platform
     a_regions, a_communities = context["A"]
     # nama media (Koran Jakarta) dan wilayah yang hanya di satu ringkasan (Lampung) tidak dihitung
     assert set(a_regions) == {("35", "35.78")} and a_regions[("35", "35.78")] == 2
     assert "pelajar_smp" in a_communities
     # B: Lampung disebut ringkasan dua artikel, Bali hanya satu
     assert set(context["B"][0]) == {("18", None)}
-    assert regions.store(temp_conn, context) == (2, 1)
-    assert regions.communities_by_incident(temp_conn) == {"A": ["pelajar_smp"]}
+    assert regions.store(temp_conn, context, {"C": {"binance": 2}}) == (2, 1)
+    # kelompok masyarakat dulu, lalu platform (berlaku juga untuk incident luar negeri)
+    assert regions.communities_by_incident(temp_conn) == {"A": ["pelajar_smp"], "C": ["platform:binance"]}
     rows = temp_conn.execute("SELECT province, kabkota FROM incident_regions WHERE incident_id = 'A'").fetchall()
     assert rows == [("Jawa Timur", "Kota Surabaya")]
+
+
+def test_platforms_found_in_any_country(temp_conn):
+    _tables(temp_conn)
+    temp_conn.execute("INSERT INTO v05_incidents VALUES ('D', 'united states')")
+    temp_conn.execute("INSERT INTO v05_incident_documents VALUES ('D', 6)")
+    temp_conn.execute("INSERT INTO articles VALUES (6, 'Binance users hit by wallet leak', '', NULL, 'en')")
+    _, platforms = regions.incident_context(temp_conn)
+    assert platforms["D"] == {"binance": 1}
+    assert dict(regions.find_platforms("dana desa cair")) == {}
+
+
+def test_platform_audience_and_topics():
+    plan = flows.literacy_for("", ["data_breach"], communities=["platform:binance"])
+    assert plan["audience"][0] == "platform:binance"
+    assert plan["topics"][:2] == ["keamanan_kripto", "cek_legalitas"]
 
 
 def test_communities_lead_literacy_audience():

@@ -14,6 +14,7 @@ export type ProvinceStat = {
   code: string;
   name: string;
   d: string;
+  c: [number, number];
   n: number;
   byAudience: Record<string, number>;
   byTopic: Record<string, number>;
@@ -38,7 +39,12 @@ type Strings = {
   cities: string;
   samples: string;
   table: string;
-  cols: { province: string; incidents: string; audience: string; topic: string };
+  cols: {
+    province: string;
+    incidents: string;
+    audience: string;
+    topic: string;
+  };
   tiers: Record<string, string>;
   empty: string;
   showAll: string;
@@ -48,12 +54,43 @@ type Strings = {
 const RAMP = ["#184f95", "#256abf", "#3987e5", "#6da7ec", "#b7d3f6"];
 const NO_DATA = "#1c2836";
 const TABLE_ROWS = 10;
+const LABELS = 5; // provinsi teratas yang diberi label nama dan angka
 
 /** Batas kelas: 5 kelas dari 1 sampai nilai terbesar, tanpa batas ganda. */
 function breaksFor(max: number): number[] {
   if (max <= 5) return Array.from({ length: Math.max(max, 1) }, (_, i) => i + 1);
   const raw = [1, max * 0.15, max * 0.35, max * 0.6, max * 0.85].map((v) => Math.max(1, Math.round(v)));
   return [...new Set(raw)];
+}
+
+type Placed = {
+  s: ProvinceStat;
+  x: number;
+  y: number;
+  w: number;
+  above: boolean;
+};
+
+/**
+ * Letak label provinsi teratas: bergantian di atas dan di bawah titik pusatnya,
+ * lalu digeser ke kanan dalam barisnya agar tidak saling menimpa.
+ */
+function placeLabels(items: { s: ProvinceStat; text: string }[], width: number, height: number): Placed[] {
+  const sorted = [...items].sort((a, b) => a.s.c[0] - b.s.c[0]);
+  const rows: Record<"above" | "below", number> = {
+    above: -Infinity,
+    below: -Infinity,
+  };
+  return sorted.map(({ s, text }, i) => {
+    const above = i % 2 === 0;
+    const w = text.length * 7.4 + 22;
+    const key = above ? "above" : "below";
+    let x = Math.min(Math.max(s.c[0] - w / 2, 4), width - w - 4);
+    x = Math.max(x, rows[key] + 6);
+    rows[key] = x + w;
+    const y = above ? Math.max(s.c[1] - 58, 4) : Math.min(s.c[1] + 34, height - 26);
+    return { s, x, y, w, above };
+  });
 }
 
 function classOf(value: number, breaks: number[]): number {
@@ -84,13 +121,14 @@ export function LiteracyMapView({
   const [audience, setAudience] = useState("");
   const [topic, setTopic] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
-  const [hover, setHover] = useState<{ code: string; x: number; y: number } | null>(null);
+  const [hover, setHover] = useState<{
+    code: string;
+    x: number;
+    y: number;
+  } | null>(null);
   const [allRows, setAllRows] = useState(false);
 
-  const valueOf = useMemo(
-    () => (s: ProvinceStat) => (audience ? (s.byAudience[audience] ?? 0) : topic ? (s.byTopic[topic] ?? 0) : s.n),
-    [audience, topic],
-  );
+  const valueOf = useMemo(() => (s: ProvinceStat) => (audience ? (s.byAudience[audience] ?? 0) : topic ? (s.byTopic[topic] ?? 0) : s.n), [audience, topic]);
   const max = Math.max(0, ...stats.map(valueOf));
   const breaks = breaksFor(max);
   const ramp = RAMP.slice(RAMP.length - breaks.length);
@@ -100,6 +138,8 @@ export function LiteracyMapView({
   };
   const ranked = [...stats].filter((s) => valueOf(s) > 0).sort((a, b) => valueOf(b) - valueOf(a) || a.name.localeCompare(b.name));
   const current = stats.find((s) => s.code === (selected ?? ranked[0]?.code)) ?? null;
+  const labelled = ranked.slice(0, LABELS);
+  const glowing = new Set(stats.filter((s) => classOf(valueOf(s), breaks) >= breaks.length - 2 && valueOf(s) > 0).map((s) => s.code));
   const hovered = hover ? stats.find((s) => s.code === hover.code) : null;
 
   const list = (title: string, items: Item[]) =>
@@ -134,32 +174,58 @@ export function LiteracyMapView({
   return (
     <div className="flex flex-col gap-4" id="peta-literasi">
       <div className="flex flex-wrap items-end gap-3">
-        {select("lm-audience", strings.audience, audience, (v) => {
-          setAudience(v);
-          setTopic("");
-        }, audienceOptions)}
-        {select("lm-topic", strings.topic, topic, (v) => {
-          setTopic(v);
-          setAudience("");
-        }, topicOptions)}
+        {select(
+          "lm-audience",
+          strings.audience,
+          audience,
+          (v) => {
+            setAudience(v);
+            setTopic("");
+          },
+          audienceOptions,
+        )}
+        {select(
+          "lm-topic",
+          strings.topic,
+          topic,
+          (v) => {
+            setTopic(v);
+            setAudience("");
+          },
+          topicOptions,
+        )}
       </div>
 
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="card relative p-2">
+      <div className="flex flex-col gap-4">
+        <div className="relative">
           <svg viewBox={`0 0 ${width} ${height}`} className="block h-auto w-full" role="img" aria-label={strings.table}>
+            <defs>
+              <filter id="lm-glow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="7" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
             {stats.map((s) => (
               <path
                 key={s.code}
                 d={s.d}
                 fill={fill(s)}
                 stroke={s.code === current?.code ? "var(--fg)" : "var(--bg)"}
-                strokeWidth={s.code === current?.code ? 1.6 : 0.6}
+                strokeWidth={s.code === current?.code ? 1.8 : 0.6}
+                filter={glowing.has(s.code) ? "url(#lm-glow)" : undefined}
                 className="cursor-pointer outline-none transition-[fill] focus-visible:stroke-[var(--accent)]"
                 tabIndex={0}
                 aria-label={`${s.name}: ${`${valueOf(s)} ${strings.incidents}`}`}
                 onMouseMove={(e) => {
                   const box = (e.currentTarget.ownerSVGElement as SVGSVGElement).getBoundingClientRect();
-                  setHover({ code: s.code, x: e.clientX - box.left, y: e.clientY - box.top });
+                  setHover({
+                    code: s.code,
+                    x: e.clientX - box.left,
+                    y: e.clientY - box.top,
+                  });
                 }}
                 onMouseLeave={() => setHover(null)}
                 onClick={() => setSelected(s.code)}
@@ -171,11 +237,32 @@ export function LiteracyMapView({
                 }}
               />
             ))}
+            {placeLabels(
+              labelled.map((s) => ({ s, text: `${s.name} ${valueOf(s)}` })),
+              width,
+              height,
+            ).map(({ s, x, y, w, above }) => (
+              <g key={s.code} className="pointer-events-none" aria-hidden="true">
+                <line x1={s.c[0]} y1={s.c[1]} x2={x + w / 2} y2={above ? y + 24 : y} stroke="var(--fg)" strokeOpacity={0.5} strokeWidth={1} />
+                <circle cx={s.c[0]} cy={s.c[1]} r={3.2} fill="var(--fg)" />
+                <rect x={x} y={y} width={w} height={24} rx={12} fill="rgba(11,18,25,0.86)" stroke="var(--line-2)" />
+                <text x={x + w / 2} y={y + 16} textAnchor="middle" fontSize={12.5} fontWeight={600} fill="var(--fg)">
+                  {s.name} <tspan fill="var(--accent)">{valueOf(s)}</tspan>
+                </text>
+              </g>
+            ))}
           </svg>
           {hovered && hover ? (
             <div
               className="pointer-events-none absolute z-10 rounded-md border border-line bg-[var(--nav)] px-2.5 py-1.5 text-[12px] shadow-lg"
-              style={hover.x > 520 ? { right: `calc(100% - ${hover.x - 14}px)`, top: hover.y + 14 } : { left: hover.x + 14, top: hover.y + 14 }}
+              style={
+                hover.x > 520
+                  ? {
+                      right: `calc(100% - ${hover.x - 14}px)`,
+                      top: hover.y + 14,
+                    }
+                  : { left: hover.x + 14, top: hover.y + 14 }
+              }
             >
               <span className="block font-semibold text-fg">{hovered.name}</span>
               <span className="text-soft">{`${valueOf(hovered)} ${strings.incidents}`}</span>
@@ -200,30 +287,34 @@ export function LiteracyMapView({
           </div>
         </div>
 
-        <aside className="card flex flex-col gap-4 p-4">
+        <aside className="grid gap-5 rounded-xl border border-line bg-[color-mix(in_srgb,var(--bg)_60%,transparent)] p-5 backdrop-blur-sm md:grid-cols-2 xl:grid-cols-4">
           {current && valueOf(current) > 0 ? (
             <>
-              <header className="flex flex-col gap-0.5">
-                <h3 className="text-[17px] font-semibold">{current.name}</h3>
-                <span className="text-[12.5px] text-muted">{current.n} {strings.incidents}</span>
+              <header className="flex flex-col gap-0.5 md:col-span-2 xl:col-span-4">
+                <h3 className="text-[20px] font-semibold">{current.name}</h3>
+                <span className="text-[12.5px] text-muted">
+                  {current.n} {strings.incidents}
+                </span>
               </header>
               {list(strings.topAudience, current.audiences)}
               {list(strings.topTopics, current.topics)}
-              {list(strings.topTypes, current.types)}
-              {current.cities.length ? (
-                <div className="flex flex-col gap-1.5">
-                  <span className="label">{strings.cities}</span>
-                  <span className="flex flex-wrap gap-1.5">
-                    {current.cities.map((c) => (
-                      <span key={c.label} className="chip">
-                        {c.label} <span className="font-mono text-muted">{c.n}</span>
-                      </span>
-                    ))}
-                  </span>
-                </div>
-              ) : null}
+              <div className="flex flex-col gap-4">
+                {list(strings.topTypes, current.types)}
+                {current.cities.length ? (
+                  <div className="flex flex-col gap-1.5">
+                    <span className="label">{strings.cities}</span>
+                    <span className="flex flex-wrap gap-1.5">
+                      {current.cities.map((c) => (
+                        <span key={c.label} className="chip">
+                          {c.label} <span className="font-mono text-muted">{c.n}</span>
+                        </span>
+                      ))}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
               {current.samples.length ? (
-                <div className="flex flex-col gap-1.5 border-t border-line pt-3">
+                <div className="flex flex-col gap-1.5">
                   <span className="label">{strings.samples}</span>
                   <ul className="flex flex-col gap-2">
                     {current.samples.map((s) => (
@@ -248,7 +339,7 @@ export function LiteracyMapView({
       </div>
 
       {ranked.length ? (
-        <div className="card overflow-x-auto">
+        <div className="overflow-x-auto rounded-xl border border-line bg-[color-mix(in_srgb,var(--bg)_55%,transparent)]">
           <table className="w-full min-w-[640px] border-collapse text-[13px]">
             <caption className="label px-3 pt-3 text-left">{strings.table}</caption>
             <thead>
@@ -268,8 +359,18 @@ export function LiteracyMapView({
                     </button>
                   </td>
                   <td className="tnum px-3 py-2 font-mono">{valueOf(s)}</td>
-                  <td className="px-3 py-2 text-soft">{s.audiences.slice(0, 2).map((a) => a.label).join(", ") || "–"}</td>
-                  <td className="px-3 py-2 text-soft">{s.topics.slice(0, 2).map((a) => a.label).join(", ") || "–"}</td>
+                  <td className="px-3 py-2 text-soft">
+                    {s.audiences
+                      .slice(0, 2)
+                      .map((a) => a.label)
+                      .join(", ") || "–"}
+                  </td>
+                  <td className="px-3 py-2 text-soft">
+                    {s.topics
+                      .slice(0, 2)
+                      .map((a) => a.label)
+                      .join(", ") || "–"}
+                  </td>
                 </tr>
               ))}
             </tbody>
