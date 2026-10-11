@@ -268,6 +268,9 @@ const id = {
       early: { title: "Peringatan dini", note: (days: number) => `hasil mesin, ${days} hari terakhir, minimal 2 artikel, trust tinggi/sedang; belum diverifikasi` },
     },
     empty: "Belum ada incident di bagian ini.",
+    showAll: (n: string) => `Tampilkan semua (${n})`,
+    showLess: "Ringkas lagi",
+    stepsCount: (n: string) => `${n} langkah pencegahan`,
     unavailable: "Status peringatan belum tersedia. Terbit setelah run pipeline harian berikutnya.",
   },
   prevention: {
@@ -390,9 +393,6 @@ const id = {
   findings: {
     title: "Temuan dan kelompok berisiko",
     subtitle: (mentions: string, rising: string, groups: string) => `${mentions} penyebutan kelompok sasaran dalam 30 hari terakhir; ${rising} dari ${groups} kelompok meningkat dibanding 30 hari sebelumnya.`,
-    boardTitle: "Peringkat kelompok berisiko",
-    boardNote: "incident unik per kelompok, 30 hari vs 30 hari sebelumnya",
-    columns: { group: "Kelompok", level: "Tingkat", count: "Incident 30 hari", change: "Perubahan", trend: "8 pekan" },
     levels: { high: "Tinggi", medium: "Sedang", low: "Rendah" },
     change: { new: "baru muncul", same: "tetap", up: (p: number) => `+${p}%`, down: (p: number) => `−${p}%` },
     prevention: {
@@ -401,9 +401,8 @@ const id = {
       modes: "Modus teratas",
       report: "Laporkan ke",
       incidents: (n: string) => `${n} incident`,
+      rank: (n: number) => `Peringkat ${n} kelompok paling berisiko`,
     },
-    heatmapTitle: "Kelompok sasaran × jenis serangan",
-    heatmapNote: "30 hari terakhir, warna mengikuti jumlah incident",
     rule: "Tinggi: 20 incident atau lebih, atau 8 atau lebih dengan kenaikan di atas 50 persen. Sedang: 5 sampai 19. Rendah: di bawah 5.",
     empty: "Belum ada kelompok sasaran yang terekstrak pada 60 hari terakhir.",
     samples: "Contoh incident",
@@ -774,6 +773,9 @@ const en: Dict = {
       early: { title: "Early warnings", note: (days) => `machine output, last ${days} days, at least 2 articles, high/medium trust; not verified yet` },
     },
     empty: "No incidents in this section yet.",
+    showAll: (n) => `Show all (${n})`,
+    showLess: "Show fewer",
+    stepsCount: (n) => `${n} preventive steps`,
     unavailable: "Warning status is not available yet. It is published after the next daily pipeline run.",
   },
   prevention: {
@@ -896,9 +898,6 @@ const en: Dict = {
   findings: {
     title: "Findings and at-risk groups",
     subtitle: (mentions, rising, groups) => `${mentions} target-group mentions in the last 30 days; ${rising} of ${groups} groups increased versus the previous 30 days.`,
-    boardTitle: "At-risk group ranking",
-    boardNote: "unique incidents per group, last 30 days vs previous 30 days",
-    columns: { group: "Group", level: "Level", count: "Incidents, 30 days", change: "Change", trend: "8 weeks" },
     levels: { high: "High", medium: "Medium", low: "Low" },
     change: { new: "new", same: "unchanged", up: (p) => `+${p}%`, down: (p) => `−${p}%` },
     prevention: {
@@ -907,9 +906,8 @@ const en: Dict = {
       modes: "Top tactics",
       report: "Report to",
       incidents: (n) => `${n} incidents`,
+      rank: (n) => `Rank ${n} among the most at-risk groups`,
     },
-    heatmapTitle: "Target groups × attack types",
-    heatmapNote: "last 30 days, shade follows incident count",
     rule: "High: 20 incidents or more, or 8 or more with growth above 50 percent. Medium: 5 to 19. Low: below 5.",
     empty: "No target groups extracted in the last 60 days.",
     samples: "Example incidents",
