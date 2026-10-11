@@ -1,7 +1,7 @@
 /* Isi detail incident bersama untuk halaman penuh dan jendela pop-up. */
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getIncident, getIncidentTier, getPublisherDomains, getRelatedIncidents, type DocumentRow } from "@/lib/queries";
+import { getAiPrevention, getIncident, getIncidentTier, getPublisherDomains, getRelatedIncidents, type DocumentRow } from "@/lib/queries";
 import { domainOf, formatters, incidentTitle, publisherOf, severity } from "@/lib/format";
 import { attackLabel, evidenceRole, getDict, groupLabel, L, languageLabel, type Lang } from "@/lib/i18n";
 import { FLOW_TONE, latestByFlow, parseJson, VERDICT_CLASS, verdictOf, type Flow } from "@/lib/flow-view";
@@ -87,7 +87,7 @@ function groupByDay(docs: DocumentRow[], dayKey: (v: string | null) => string): 
 export async function IncidentDetailView({ lang, id, variant = "page" }: { lang: Lang; id: string; variant?: "page" | "modal" }) {
   const t = getDict(lang);
   const f = formatters(lang);
-  const [data, publisherDomains, tier, similar] = await Promise.all([getIncident(id), getPublisherDomains(), getIncidentTier(id), getRelatedIncidents(id)]);
+  const [data, publisherDomains, tier, similar, ai] = await Promise.all([getIncident(id), getPublisherDomains(), getIncidentTier(id), getRelatedIncidents(id), getAiPrevention(id)]);
   if (!data) notFound();
   const { incident, docs, relations, related, ledgerCount, flows } = data;
   const level = severity(incident);
@@ -427,7 +427,7 @@ export async function IncidentDetailView({ lang, id, variant = "page" }: { lang:
         </section>
       </div>
 
-      <FlowCompare lang={lang} incidentId={incident.incident_id} outputs={flows} />
+      <FlowCompare lang={lang} incidentId={incident.incident_id} outputs={flows} ai={ai} />
 
       {similar.length ? (
         <section>

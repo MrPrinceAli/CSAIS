@@ -7,6 +7,7 @@
  * layar dan perencanaan program.
  */
 import Link from "next/link";
+import type { AiAdvice } from "@/lib/queries";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 export type Item = { label: string; n: number };
@@ -24,6 +25,7 @@ export type ProvinceStat = {
   cities: Item[];
   samples: { id: string; title: string; date: string; tier: string | null }[];
   traits: { label: string; reason: string; example: { id: string; title: string; place: string } | null }[];
+  ai: (AiAdvice & { model: string }) | null;
   recAudiences: string[];
   recTopics: string[];
 };
@@ -59,6 +61,7 @@ type Strings = {
   zoomOut: string;
   zoomReset: string;
   zoomHint: string;
+  ai: { badge: string; region: string; targets: string; topics: string; steps: string; key: string; age: string };
 };
 
 type View = { k: number; x: number; y: number };
@@ -255,17 +258,47 @@ export function LiteracyMapView({
         </span>
       </header>
       {current.n === 0 ? <p className="text-[12px] leading-snug text-muted">{strings.noLocal}</p> : null}
-      <div className="flex flex-col gap-2 rounded-lg border border-[color-mix(in_srgb,var(--accent)_35%,var(--line))] bg-[color-mix(in_srgb,var(--accent)_7%,transparent)] p-3">
-        <span className="label text-accent">{strings.recommend}</span>
-        <span className="text-[11.5px] text-muted">{strings.topAudience}</span>
-        {chips(current.recAudiences)}
-        <span className="mt-1 text-[11.5px] text-muted">{strings.topTopics}</span>
-        <ol className="flex list-decimal flex-col gap-0.5 pl-4 text-[12.5px] text-soft">
-          {current.recTopics.map((topic) => (
-            <li key={topic}>{topic}</li>
-          ))}
-        </ol>
-      </div>
+      {current.ai ? (
+        <div className="flex flex-col gap-2 rounded-lg border border-[color-mix(in_srgb,var(--chain)_45%,var(--line))] bg-[color-mix(in_srgb,var(--chain)_7%,transparent)] p-3">
+          <span className="flex items-center justify-between gap-2">
+            <span className="label text-chain">{strings.ai.region}</span>
+            <span className="chip py-0.5 text-[10.5px] text-chain" title={current.ai.model}>
+              ✦ {strings.ai.badge}
+            </span>
+          </span>
+          {current.ai.ringkasan ? <p className="text-[12.5px] leading-snug text-soft">{current.ai.ringkasan}</p> : null}
+          <span className="text-[11.5px] text-muted">{strings.ai.targets}</span>
+          <ul className="flex flex-col gap-1">
+            {current.ai.sasaran.map((t) => (
+              <li key={t.kelompok} className="rounded-md border border-line px-2 py-1 text-[12px]">
+                <span className="block font-semibold leading-snug text-fg">{t.kelompok}</span>
+                {t.usia || t.wilayah ? (
+                  <span className="block text-[11px] text-accent">{[t.usia && `${strings.ai.age} ${t.usia}`, t.wilayah].filter(Boolean).join(" · ")}</span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+          <span className="mt-1 text-[11.5px] text-muted">{strings.ai.topics}</span>
+          <ol className="flex list-decimal flex-col gap-0.5 pl-4 text-[12.5px] text-soft">
+            {current.ai.materi.map((m) => (
+              <li key={m}>{m}</li>
+            ))}
+          </ol>
+          {current.ai.pesan_kunci ? <p className="border-l-2 border-chain pl-2 text-[12.5px] font-semibold leading-snug text-fg">“{current.ai.pesan_kunci}”</p> : null}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2 rounded-lg border border-[color-mix(in_srgb,var(--accent)_35%,var(--line))] bg-[color-mix(in_srgb,var(--accent)_7%,transparent)] p-3">
+          <span className="label text-accent">{strings.recommend}</span>
+          <span className="text-[11.5px] text-muted">{strings.topAudience}</span>
+          {chips(current.recAudiences)}
+          <span className="mt-1 text-[11.5px] text-muted">{strings.topTopics}</span>
+          <ol className="flex list-decimal flex-col gap-0.5 pl-4 text-[12.5px] text-soft">
+            {current.recTopics.map((topic) => (
+              <li key={topic}>{topic}</li>
+            ))}
+          </ol>
+        </div>
+      )}
       {current.traits.length ? (
         <div className="flex flex-col gap-2">
           <span className="label">{strings.profile}</span>

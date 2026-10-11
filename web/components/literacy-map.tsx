@@ -8,7 +8,7 @@
 import Link from "next/link";
 import { geoMercator, geoPath } from "d3-geo";
 import type { FeatureCollection, MultiPolygon } from "geojson";
-import { getLiteracyRows, getRecentCases, type RecentCase } from "@/lib/queries";
+import { getAiRegions, getLiteracyRows, getRecentCases, type RecentCase } from "@/lib/queries";
 import profiles from "@/lib/region-profiles.json";
 import { formatters, incidentTitle } from "@/lib/format";
 import { attackLabel, getDict, L, type Lang } from "@/lib/i18n";
@@ -34,7 +34,7 @@ export async function LiteracyMap({ lang, period, base }: { lang: Lang; period: 
   const t = getDict(lang);
   const m = t.literacyMap;
   const f = formatters(lang);
-  const [rows, recent] = await Promise.all([getLiteracyRows(period), getRecentCases(Math.max(period || 365, 30))]);
+  const [rows, recent, aiRegions] = await Promise.all([getLiteracyRows(period), getRecentCases(Math.max(period || 365, 30)), getAiRegions()]);
   // Contoh kasus per ciri wilayah: incident terbaru paling ramai dengan jenis serangan yang cocok
   const caseFor = (trait: Trait, used: Set<string>): RecentCase | null =>
     recent.find((r) => !used.has(r.incident_id) && (r.attack_type ?? "").split(",").some((t) => trait.types.includes(t.trim()))) ?? null;
@@ -104,6 +104,7 @@ export async function LiteracyMap({ lang, period, base }: { lang: Lang; period: 
         .slice(0, 5)
         .map((k) => text(k, lang) ?? k);
     return {
+      ai: aiRegions[code] ?? null,
       traits,
       recAudiences: recommend(p?.audiences ?? new Map(), "audiences", audienceText),
       recTopics: recommend(p?.topics ?? new Map(), "topics", topicText),
@@ -197,6 +198,7 @@ export async function LiteracyMap({ lang, period, base }: { lang: Lang; period: 
             zoomOut: m.zoomOut,
             zoomReset: m.zoomReset,
             zoomHint: m.zoomHint,
+            ai: { badge: t.ai.badge, region: t.ai.region, targets: t.ai.targets, topics: t.ai.topics, steps: t.ai.steps, key: t.ai.key, age: lang === "en" ? "age" : "usia" },
           }}
         />
         <p className="text-[10.5px] leading-snug text-muted">{m.source}</p>

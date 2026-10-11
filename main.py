@@ -25,6 +25,7 @@ import sys
 from datetime import datetime
 
 from csais import (
+    ai_prevention,
     chain,
     content_fetcher,
     crawler,
@@ -72,6 +73,7 @@ PIPELINE_STEPS = [
     ("Alur D3/D4 - Pernyataan Lembaga", official.run),
     ("V0.7 Verifikasi - Skor Akhir", v07_trust_score.verification_run),
     ("Status Peringatan per Incident", flows.tiers_run),
+    ("Saran Preventif AI (10 Incident Terbesar)", ai_prevention.run),
     ("Incident Terkait (Embedding)", related.run),
     ("Ledger - Batch Merkle Bukti", ledger.run),
     ("Metrik Perbandingan Alur", flow_compare.run),
@@ -277,7 +279,12 @@ def main():
 
     if args.seed_demo:
         only = [x for x in (os.environ.get("DEMO_INSTITUTIONS") or "").split(",") if x]
-        demo.seed(with_survey=not only, institutions=only or None, overlap=os.environ.get("DEMO_OVERLAP") == "1")
+        demo.seed(
+            with_survey=not only,
+            institutions=only or None,
+            overlap=os.environ.get("DEMO_OVERLAP") == "1",
+            top=os.environ.get("DEMO_TOP") == "1",
+        )
         return
 
     if args.llm_check:

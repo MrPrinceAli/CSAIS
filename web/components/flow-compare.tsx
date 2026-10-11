@@ -3,7 +3,8 @@
  * materi literasi, langkah pencegahan, dan alasan lembaga berdampingan. Nilai
  * kolom kartu dan penilaiannya ada di bagian "Klaim terekstrak".
  */
-import type { FlowOutput } from "@/lib/queries";
+import type { AiFlowAdvice, FlowOutput } from "@/lib/queries";
+import { AiAdviceView, AiBadge } from "@/components/ai-advice";
 import { formatters } from "@/lib/format";
 import Link from "next/link";
 import { getDict, L, type Lang } from "@/lib/i18n";
@@ -22,7 +23,7 @@ function hostOf(ref: string | null): string | null {
   }
 }
 
-export function FlowCompare({ lang, incidentId, outputs }: { lang: Lang; incidentId: string; outputs: FlowOutput[] }) {
+export function FlowCompare({ lang, incidentId, outputs, ai = [] }: { lang: Lang; incidentId: string; outputs: FlowOutput[]; ai?: AiFlowAdvice[] }) {
   const t = getDict(lang);
   const f = formatters(lang);
   const latest = latestByFlow(outputs);
@@ -94,6 +95,12 @@ export function FlowCompare({ lang, incidentId, outputs }: { lang: Lang; inciden
     );
   };
 
+  const aiByFlow = Object.fromEntries(ai.map((a) => [a.flow, a]));
+  const aiCell = (flow: (typeof FLOWS)[number], part: "ringkasan" | "sasaran" | "materi" | "langkah" | "pesan_kunci") => {
+    const advice = aiByFlow[flow]?.advice;
+    return advice ? <AiAdviceView advice={advice} lang={lang} compact parts={[part]} /> : empty;
+  };
+
   const row = (label: string, render: (flow: (typeof FLOWS)[number]) => React.ReactNode, last = false) => (
     <tr className={last ? "" : "border-b border-line"}>
       <th className={`${cell} label text-left font-medium`}>{label}</th>
@@ -133,9 +140,21 @@ export function FlowCompare({ lang, incidentId, outputs }: { lang: Lang; inciden
             </tr>
           </thead>
           <tbody>
-            {row(t.flows.audience, (flow) => chips(plans[flow]?.audience, audienceText))}
-            {row(t.flows.topics, (flow) => topicsCell(plans[flow]))}
-            {row(t.flows.rows.prevention, (flow) => stepsCell(plans[flow]))}
+            {ai.length ? (
+              <>
+                {row(t.ai.rows.summary, (flow) => aiCell(flow, "ringkasan"))}
+                {row(t.ai.rows.targets, (flow) => aiCell(flow, "sasaran"))}
+                {row(t.ai.rows.topics, (flow) => aiCell(flow, "materi"))}
+                {row(t.ai.rows.steps, (flow) => aiCell(flow, "langkah"))}
+                {row(t.ai.rows.key, (flow) => aiCell(flow, "pesan_kunci"))}
+              </>
+            ) : (
+              <>
+                {row(t.flows.audience, (flow) => chips(plans[flow]?.audience, audienceText))}
+                {row(t.flows.topics, (flow) => topicsCell(plans[flow]))}
+                {row(t.flows.rows.prevention, (flow) => stepsCell(plans[flow]))}
+              </>
+            )}
             {row(
               t.flows.rows.reason,
               (flow) => {
@@ -162,7 +181,24 @@ export function FlowCompare({ lang, incidentId, outputs }: { lang: Lang; inciden
           </tbody>
         </table>
       </div>
+      {ai.length ? (
+        <details className="card mt-3 overflow-x-auto">
+          <summary className="cursor-pointer px-3 py-2.5 text-[13px] text-soft">{t.ai.rule}</summary>
+          <table className="w-full min-w-[760px] table-fixed border-collapse border-t border-line text-[13px]">
+            <tbody>
+              {row(t.flows.audience, (flow) => chips(plans[flow]?.audience, audienceText))}
+              {row(t.flows.topics, (flow) => topicsCell(plans[flow]))}
+              {row(t.flows.rows.prevention, (flow) => stepsCell(plans[flow]), true)}
+            </tbody>
+          </table>
+        </details>
+      ) : null}
       <p className="mt-2 flex flex-wrap gap-x-3 text-[12px] text-muted">
+        {ai.length ? (
+          <span className="flex items-center gap-2">
+            <AiBadge lang={lang} model={ai[0].model} /> {t.ai.note(ai[0].model)}
+          </span>
+        ) : null}
         {!latest.D2 && !latest.D3 && !latest.D4 ? <span>{t.flows.pending}</span> : null}
         <Link href={L(lang, "/comparison")}>{t.flows.summary}</Link>
       </p>

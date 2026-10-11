@@ -950,6 +950,12 @@ export type SurveyCard = {
 
 /** Kartu inti D1 satu incident untuk survei publik (alur D2); null bila belum ada kartu. */
 /** Calon kartu survei: 300 incident terbaru yang diberitakan minimal dua artikel. */
+/** id 10 incident terbesar saat ini (urutan peringkat); [] bila tahap AI belum berjalan. */
+export async function getAiTopIds(): Promise<string[]> {
+  if (!(await hasTable("ai_top"))) return [];
+  return (await query<{ incident_id: string }>("SELECT incident_id FROM ai_top ORDER BY rank")).map((r) => r.incident_id);
+}
+
 export async function getSurveyCandidates(): Promise<string[]> {
   const rows = await query<{ incident_id: string }>(
     `SELECT incident_id FROM v05_incidents WHERE document_count >= 2
@@ -1214,4 +1220,67 @@ export async function getRecentCases(days = 90, limit = 400): Promise<RecentCase
      ORDER BY i.document_count DESC LIMIT ?`,
     [since, limit],
   );
+}
+
+// --- Saran AI (csais/ai_prevention.py) ---
+export type AiTarget = { kelompok: string; usia: string; wilayah: string; alasan: string };
+export type AiAdvice = { ringkasan: string; sasaran: AiTarget[]; materi: string[]; langkah: string[]; kanal: string[]; pesan_kunci: string };
+export type AiFlowAdvice = { flow: "D1" | "D2" | "D3" | "D4"; model: string; created_at: string; advice: AiAdvice };
+
+function parseAdvice(raw: string | null): AiAdvice | null {
+  if (!raw) return null;
+  try {
+    const value = JSON.parse(raw) as Partial<AiAdvice>;
+    return { ringkasan: value.ringkasan ?? "", sasaran: value.sasaran ?? [], materi: value.materi ?? [], langkah: value.langkah ?? [], kanal: value.kanal ?? [], pesan_kunci: value.pesan_kunci ?? "" };
+  } catch {
+    return null;
+  }
+}
+
+/** Saran AI per alur untuk satu incident (hanya incident yang pernah masuk 10 terbesar). */
+export async function getAiPrevention(id: string): Promise<AiFlowAdvice[]> {
+  if (!(await hasTable("ai_prevention"))) return [];
+  const rows = await query<{ flow: AiFlowAdvice["flow"]; model: string; created_at: string; output: string }>(
+    "SELECT flow, model, created_at, output FROM ai_prevention WHERE incident_id = ? ORDER BY flow",
+    [id],
+  );
+  return rows.flatMap((r) => {
+    const advice = parseAdvice(r.output);
+    return advice ? [{ flow: r.flow, model: r.model, created_at: r.created_at, advice }] : [];
+  });
+}
+
+export type AiTopRow = GlobalSpotlight & { rank: number; advice: AiAdvice | null; model: string | null };
+
+/** 10 incident terbesar saat ini beserta saran AI alur D1-nya; [] bila tahap AI belum berjalan. */
+export async function getAiTop(): Promise<AiTopRow[]> {
+  if (!(await hasTable("ai_top"))) return [];
+  const [platforms, trust, tiers] = await Promise.all([hasTable("incident_platforms"), hasTable("v07_trust"), hasTable("incident_tiers")]);
+  const rows = await query<GlobalSpotlight & { rank: number; output: string | null; model: string | null }>(
+    `SELECT t.rank, i.incident_id, a.title, i.location, i.attack_type, i.target, i.document_count,
+            ${trust ? "tr.domain_count" : "NULL"} AS domains, i.last_published_date,
+            ${tiers ? "it.prevention, it.tier" : "NULL AS prevention, NULL AS tier"},
+            ${platforms ? "(SELECT group_concat(p.platform) FROM incident_platforms p WHERE p.incident_id = i.incident_id)" : "NULL"} AS platforms,
+            NULL AS sector, ap.output, ap.model
+     FROM ai_top t
+     JOIN v05_incidents i ON i.incident_id = t.incident_id
+     LEFT JOIN articles a ON a.article_id = i.anchor_article_id
+     ${trust ? "LEFT JOIN v07_trust tr ON tr.incident_id = i.incident_id" : ""}
+     ${tiers ? "LEFT JOIN incident_tiers it ON it.incident_id = i.incident_id" : ""}
+     LEFT JOIN ai_prevention ap ON ap.incident_id = i.incident_id AND ap.flow = 'D1'
+     ORDER BY t.rank`,
+  );
+  return rows.map((r) => ({ ...r, advice: parseAdvice(r.output) }));
+}
+
+/** Saran AI per provinsi untuk Peta Literasi: kode provinsi -> saran. */
+export async function getAiRegions(): Promise<Record<string, AiAdvice & { model: string }>> {
+  if (!(await hasTable("ai_region_literacy"))) return {};
+  const rows = await query<{ province_code: string; model: string; output: string }>("SELECT province_code, model, output FROM ai_region_literacy");
+  const out: Record<string, AiAdvice & { model: string }> = {};
+  for (const r of rows) {
+    const advice = parseAdvice(r.output);
+    if (advice) out[r.province_code] = { ...advice, model: r.model };
+  }
+  return out;
 }

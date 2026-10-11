@@ -98,6 +98,10 @@ jobs:
           SURVEY_AUTH_TOKEN: ${{ secrets.SURVEY_AUTH_TOKEN }}
           # off (default) atau fill_unknown: isi kolom V0.3 yang kosong dari hasil LLM lokal
           LLM_MERGE: ${{ vars.LLM_MERGE }}
+          # saran preventif AI untuk 10 incident terbesar dan Peta Literasi; kosong = dilewati
+          AI_BASE_URL: ${{ secrets.AI_BASE_URL }}
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          AI_MODEL: ${{ secrets.AI_MODEL }}
         run: |
           # Terbitkan hanya bila rahasia Turso sudah diisi; tanpa itu pipeline
           # tetap berjalan dan database tetap tersimpan di cache.

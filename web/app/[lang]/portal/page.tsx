@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getPortalCardsById, getPortalQueue, type PortalCard } from "@/lib/queries";
+import { getAiTopIds, getPortalCardsById, getPortalQueue, type PortalCard } from "@/lib/queries";
 import { formatters, incidentTitle } from "@/lib/format";
 import { attackLabel, attackOptions, getDict, isLang, L, type Lang } from "@/lib/i18n";
 import { AUDIENCE_KEYS, audienceText, candidateSteps, TOPIC_KEYS, tipText, topicText } from "@/lib/prevention";
@@ -74,11 +74,16 @@ export default async function PortalPage({ params, searchParams }: { params: Pro
   const page = Math.max(0, Number.parseInt(sp.page ?? "0", 10) || 0);
   const reviewed = await reviewsBy(inst);
   let cards: PortalCard[];
+  let priority: PortalCard[] = [];
   if (tab === "done") {
     cards = await getPortalCardsById([...reviewed.keys()].slice(-100).reverse());
   } else {
+    // Prioritas: 10 incident terbesar (saran AI D1 - D4 dibandingkan pada incident ini), lalu antrean mandat
+    const topIds = page === 0 ? await getAiTopIds() : [];
+    priority = (await getPortalCardsById(topIds.filter((id) => !reviewed.has(id)))).sort((a, b) => topIds.indexOf(a.incident_id) - topIds.indexOf(b.incident_id));
+    const shown = new Set(priority.map((c) => c.incident_id));
     const pool = await getPortalQueue(MANDATE[inst], POOL, page * POOL);
-    cards = pool.filter((c) => !reviewed.has(c.incident_id)).slice(0, PAGE);
+    cards = pool.filter((c) => !reviewed.has(c.incident_id) && !shown.has(c.incident_id)).slice(0, PAGE);
   }
   const base = L(lang, "/portal");
   const types = attackOptions(lang);
@@ -139,14 +144,17 @@ export default async function PortalPage({ params, searchParams }: { params: Pro
         ))}
       </nav>
 
-      {!cards.length ? <p className="card p-5 text-[14px] text-soft">{p.empty}</p> : null}
+      {!cards.length && !priority.length ? <p className="card p-5 text-[14px] text-soft">{p.empty}</p> : null}
+      {priority.length ? <p className="text-[12.5px] text-muted">{p.priorityNote}</p> : null}
 
       <ol className="flex flex-col gap-3">
-        {cards.map((c) => {
+        {[...priority, ...cards].map((c, index) => {
           const done = reviewed.get(c.incident_id);
+          const isTop = index < priority.length;
           return (
             <li key={c.incident_id} className="card flex flex-col gap-3 p-4">
               <div className="flex flex-wrap items-center gap-2 text-[12.5px] text-muted">
+                {isTop ? <span className="chip chip-accent">{p.top(index + 1)}</span> : null}
                 <TypeChip attackType={c.card.attack_type} lang={lang} />
                 {c.indonesia ? <span className="chip chip-accent">{p.indonesia}</span> : null}
                 <span>{f.date(c.anchor_published_date)}</span>

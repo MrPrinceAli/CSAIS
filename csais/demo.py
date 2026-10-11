@@ -77,6 +77,19 @@ CARDS_SQL = """
 """
 
 
+# 10 incident terbesar (tabel ai_top dari csais/ai_prevention.py), urut peringkat
+TOP_CARDS_SQL = """
+    SELECT o.incident_id, o.output_id, o.attack_type, o.target, o.threat_actor, o.attack_date, o.location,
+           o.target_group
+    FROM flow_outputs o
+    JOIN (SELECT incident_id, MAX(output_id) AS last_id FROM flow_outputs WHERE flow = 'D1' GROUP BY incident_id) m
+      ON m.last_id = o.output_id
+    JOIN ai_top t ON t.incident_id = o.incident_id
+    ORDER BY t.rank
+"""
+TOP_PLAN = [("dikonfirmasi", "laporan_diterima", True), ("dibantah", "hoaks", False), ("sebagian", "diselidiki", False), ("dikonfirmasi", "ditangani", False)]
+
+
 def _remote(sql, url_env="TURSO_DATABASE_URL", token_env="TURSO_AUTH_TOKEN"):
     from csais.survey import fetch_file, fetch_remote
 
@@ -204,10 +217,19 @@ def literacy_plan(inst, card, status):
     }
 
 
-def seed(log=print, with_survey=True, institutions=None, overlap=False):
+def seed(log=print, with_survey=True, institutions=None, overlap=False, top=False):
     """Isi data uji; ``with_survey=False`` dan ``institutions`` untuk melanjutkan sebagian,
-    ``overlap`` untuk keputusan lembaga pada incident yang sudah disurvei."""
+    ``overlap`` untuk keputusan lembaga pada incident yang sudah disurvei, ``top``
+    untuk survei dan keputusan pada 10 incident terbesar (perbandingan saran AI)."""
     rng = random.Random(SEED)
+    if top:
+        cards = _remote(TOP_CARDS_SQL)
+        log(f"10 incident terbesar: {len(cards)}")
+        seed_survey(cards, rng, log)
+        institutions_cycle = list(MANDATE)
+        picks = [(institutions_cycle[i % len(institutions_cycle)], card, TOP_PLAN[i % len(TOP_PLAN)]) for i, card in enumerate(cards)]
+        seed_reviews(cards, institutions, log, picks=picks)
+        return
     cards = _remote(CARDS_SQL)
     log(f"Kartu D1 kandidat dari Turso: {len(cards)}")
     if with_survey and not overlap:
@@ -217,7 +239,8 @@ def seed(log=print, with_survey=True, institutions=None, overlap=False):
 
 def seed_survey(cards, rng, log=print):
     now = get_timestamp()
-    rows = survey_rows(cards[:SURVEY_INCIDENTS], rng, now)
+    cards = cards[:SURVEY_INCIDENTS]
+    rows = survey_rows(cards, rng, now)
     _ensure_survey_table()
     insert = (
         "INSERT INTO survey_responses (submission_id, incident_id, card_output_id, field, shown_value, answer,"
@@ -225,7 +248,7 @@ def seed_survey(cards, rng, log=print):
     )
     for start in range(0, len(rows), 200):
         _write_input([(insert, list(r)) for r in rows[start : start + 200]])
-    log(f"Survei: {len(rows)} jawaban untuk {SURVEY_INCIDENTS} incident")
+    log(f"Survei: {len(rows)} jawaban untuk {len(cards)} incident")
 
 
 OVERLAP_PLAN = [("dikonfirmasi", "laporan_diterima", True), ("dibantah", "hoaks", False)]
@@ -240,7 +263,7 @@ def pick_overlap(cards):
     return picks
 
 
-def seed_reviews(cards, institutions=None, log=print, overlap=False):
+def seed_reviews(cards, institutions=None, log=print, overlap=False, picks=None):
     passwords = json.loads(os.environ.get("PORTAL_PASSWORDS") or "{}")
     if not passwords:
         log("PORTAL_PASSWORDS kosong; keputusan lembaga dilewati.")
@@ -252,7 +275,7 @@ def seed_reviews(cards, institutions=None, log=print, overlap=False):
     _write_input([(REVIEWS_SCHEMA, [])])  # tabel kosong bila web belum pernah menyimpan keputusan
     done = {row[0] for row in fetch_rows(f"SELECT incident_id FROM official_reviews WHERE reason_text LIKE '{DEMO_NOTE}%'") or []}
     pool = alternatives(cards)
-    picks = pick_overlap(cards) if overlap else pick_reviews(cards[SURVEY_INCIDENTS:])
+    picks = picks or (pick_overlap(cards) if overlap else pick_reviews(cards[SURVEY_INCIDENTS:]))
     for inst, card, (status, reason, target_wrong) in picks:
         if (institutions and inst not in institutions) or card[0] in done:
             continue
